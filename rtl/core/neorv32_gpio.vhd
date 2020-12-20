@@ -1,7 +1,7 @@
 -- #################################################################################################
 -- # << NEORV32 - General Purpose Parallel Input/Output Port (GPIO) >>                             #
 -- # ********************************************************************************************* #
--- # 16-bit parallel input & output unit. Any pin-change (HI->LO or LO->HI) triggers the IRQ.      #
+-- # 32-bit parallel input & output unit. Any pin change (HI->LO or LO->HI) triggers an IRQ.       #
 -- # ********************************************************************************************* #
 -- # BSD 3-Clause License                                                                          #
 -- #                                                                                               #
@@ -48,13 +48,12 @@ entity neorv32_gpio is
     addr_i : in  std_ulogic_vector(31 downto 0); -- address
     rden_i : in  std_ulogic; -- read enable
     wren_i : in  std_ulogic; -- write enable
-    ben_i  : in  std_ulogic_vector(03 downto 0); -- byte write enable
     data_i : in  std_ulogic_vector(31 downto 0); -- data in
     data_o : out std_ulogic_vector(31 downto 0); -- data out
     ack_o  : out std_ulogic; -- transfer acknowledge
     -- parallel io --
-    gpio_o : out std_ulogic_vector(15 downto 0);
-    gpio_i : in  std_ulogic_vector(15 downto 0);
+    gpio_o : out std_ulogic_vector(31 downto 0);
+    gpio_i : in  std_ulogic_vector(31 downto 0);
     -- interrupt --
     irq_o  : out std_ulogic
   );
@@ -71,11 +70,12 @@ architecture neorv32_gpio_rtl of neorv32_gpio is
   signal addr   : std_ulogic_vector(31 downto 0); -- access address
 
   -- accessible regs --
-  signal din  : std_ulogic_vector(15 downto 0); -- r/w
-  signal dout : std_ulogic_vector(15 downto 0); -- r/w
+  signal din    : std_ulogic_vector(31 downto 0); -- r/-
+  signal dout   : std_ulogic_vector(31 downto 0); -- r/w
+  signal irq_en : std_ulogic_vector(31 downto 0); -- -/w, uses the same address as data_in
 
   -- misc --
-  signal in_buf, din2 : std_ulogic_vector(15 downto 0);
+  signal in_buf : std_ulogic_vector(31 downto 0);
 
 begin
 
@@ -93,21 +93,19 @@ begin
       ack_o <= acc_en and (rden_i or wren_i);
       -- write access --
       if ((acc_en and wren_i) = '1') then
-        if (addr = gpio_out_addr_c) then
-          for i in 0 to 1 loop
-            if (ben_i(i) = '1') then
-              dout(7+i*8 downto 0+i*8) <= data_i(7+i*8 downto 0+i*8);
-            end if;
-          end loop;
+        if (addr = gpio_in_addr_c) then
+          irq_en <= data_i; -- pin change IRQ enable
+        else -- gpio_out_addr_c
+          dout <= data_i; -- data output port
         end if;
       end if;
       -- read access --
       data_o <= (others => '0');
       if ((acc_en and rden_i) = '1') then
         if (addr = gpio_in_addr_c) then
-          data_o(15 downto 0) <= din;
+          data_o <= din; -- data input port
         else -- gpio_out_addr_c
-          data_o(15 downto 0) <= dout;
+          data_o <= dout; -- data output port
         end if;
       end if;
     end if;
@@ -125,9 +123,8 @@ begin
       -- input synchronizer --
       in_buf <= gpio_i;
       din    <= in_buf;
-      din2   <= din;
       -- IRQ --
-      irq_o <= or_all_f(din xor din2); -- any transition triggers an interrupt
+      irq_o <= or_all_f((in_buf xor din) and irq_en); -- any enabled pin transition triggers an interrupt
     end if;
   end process irq_detector;
 

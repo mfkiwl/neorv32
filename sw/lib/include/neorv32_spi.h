@@ -46,10 +46,11 @@
 
 // prototypes
 int neorv32_spi_available(void);
-void neorv32_spi_setup(uint8_t prsc, uint8_t clk_polarity, uint8_t dir, uint8_t data_size, uint8_t irq_en);
+void neorv32_spi_setup(uint8_t prsc, uint8_t clk_polarity, uint8_t data_size, uint8_t irq_en);
 void neorv32_spi_disable(void);
 void neorv32_spi_cs_en(uint8_t cs);
 void neorv32_spi_cs_dis(uint8_t cs);
 uint32_t neorv32_spi_trans(uint32_t tx_data);
+int neorv32_spi_busy(void);
 
 #endif // neorv32_spi_h

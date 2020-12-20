@@ -55,7 +55,6 @@ entity neorv32_mtime is
     addr_i    : in  std_ulogic_vector(31 downto 0); -- address
     rden_i    : in  std_ulogic; -- read enable
     wren_i    : in  std_ulogic; -- write enable
-    ben_i     : in  std_ulogic_vector(03 downto 0); -- byte write enable
     data_i    : in  std_ulogic_vector(31 downto 0); -- data in
     data_o    : out std_ulogic_vector(31 downto 0); -- data out
     ack_o     : out std_ulogic; -- transfer acknowledge
@@ -96,7 +95,7 @@ begin
   -- -------------------------------------------------------------------------------------------
   acc_en <= '1' when (addr_i(hi_abb_c downto lo_abb_c) = mtime_base_c(hi_abb_c downto lo_abb_c)) else '0';
   addr   <= mtime_base_c(31 downto lo_abb_c) & addr_i(lo_abb_c-1 downto 2) & "00"; -- word aligned
-  wren   <= acc_en and wren_i and and_all_f(ben_i);
+  wren   <= acc_en and wren_i;
 
 
   -- Write Access ---------------------------------------------------------------------------
@@ -104,14 +103,14 @@ begin
   wr_access: process(clk_i)
   begin
     if rising_edge(clk_i) then
-      -- mtimecmp --
-      if (wren = '1') then
-        if (addr = mtime_cmp_lo_addr_c) then -- low
-          mtimecmp_lo <= data_i;
-        end if;
-        if (addr = mtime_cmp_hi_addr_c) then -- high
-          mtimecmp_hi <= data_i;
-        end if;
+      -- mtimecmp low --
+      if (wren = '1') and (addr = mtime_cmp_lo_addr_c) then
+        mtimecmp_lo <= data_i;
+      end if;
+
+      -- mtimecmp high --
+      if (wren = '1') and (addr = mtime_cmp_hi_addr_c) then
+        mtimecmp_hi <= data_i;
       end if;
 
       -- mtime low --
@@ -141,20 +140,21 @@ begin
       ack_o  <= acc_en and (rden_i or wren_i);
       data_o <= (others => '0'); -- default
       if (rden_i = '1') and (acc_en = '1') then
-        if (addr = mtime_time_lo_addr_c) then -- mtime LOW
-          data_o <= mtime_lo(31 downto 00);
-        elsif (addr = mtime_time_hi_addr_c) then -- mtime HIGH
-          data_o <= mtime_hi;
-        elsif (addr = mtime_cmp_lo_addr_c) then -- mtimecmp LOW
-          data_o <= mtimecmp_lo;
-        else -- (addr = mtime_cmp_hi_addr_c) then -- mtimecmp HIGH
-          data_o <= mtimecmp_hi;
-        end if;
+        case addr is
+          when mtime_time_lo_addr_c => -- mtime LOW
+            data_o <= mtime_lo(31 downto 00);
+          when mtime_time_hi_addr_c => -- mtime HIGH
+            data_o <= mtime_hi;
+          when mtime_cmp_lo_addr_c => -- mtimecmp LOW
+            data_o <= mtimecmp_lo;
+          when others => -- mtime_cmp_hi_addr_c -  mtimecmp HIGH
+            data_o <= mtimecmp_hi;
+        end case;
       end if;
     end if;
   end process rd_access;
 
-  -- time output for cpu --
+  -- system time output for cpu --
   time_o <= mtime_hi & mtime_lo(31 downto 00);
 
 

@@ -1,8 +1,10 @@
 -- #################################################################################################
--- # << NEORV32 - CPU Register File >>                                                             #
+-- # << NEORV32 - CPU Data Register File >>                                                        #
 -- # ********************************************************************************************* #
--- # General purpose data registers. 32 entries for normal mode, 16 entries for embedded mode when #
--- # RISC-V M extension is enabled. x0 output is allways set to zero.                              #
+-- # General purpose data register file. 32 entries for normal mode (I), 16 entries for embedded   #
+-- # mode (E) when RISC-V "E" extension is enabled. Register zero (r0) is a "normal" physical reg  #
+-- # that has to be initialized to zero by the CPU control system. For normal operations r0 cannot #
+-- # be written. The register file uses synchronous reads so it can be mapped to FPGA block RAM.   #
 -- # ********************************************************************************************* #
 -- # BSD 3-Clause License                                                                          #
 -- #                                                                                               #
@@ -54,7 +56,6 @@ entity neorv32_cpu_regfile is
     mem_i  : in  std_ulogic_vector(data_width_c-1 downto 0); -- memory read data
     alu_i  : in  std_ulogic_vector(data_width_c-1 downto 0); -- ALU result
     csr_i  : in  std_ulogic_vector(data_width_c-1 downto 0); -- CSR read data
-    pc_i   : in  std_ulogic_vector(data_width_c-1 downto 0); -- current pc
     -- data output --
     rs1_o  : out std_ulogic_vector(data_width_c-1 downto 0); -- operand 1
     rs2_o  : out std_ulogic_vector(data_width_c-1 downto 0)  -- operand 2
@@ -68,46 +69,13 @@ architecture neorv32_cpu_regfile_rtl of neorv32_cpu_regfile is
   type   reg_file_emb_t is array (15 downto 0) of std_ulogic_vector(data_width_c-1 downto 0);
   signal reg_file      : reg_file_t;
   signal reg_file_emb  : reg_file_emb_t;
+  signal rf_mux_data   : std_ulogic_vector(data_width_c-1 downto 0);
   signal rf_write_data : std_ulogic_vector(data_width_c-1 downto 0); -- actual write-back data
-  signal valid_wr      : std_ulogic; -- writing not to r0
-  signal rs1_read      : std_ulogic_vector(data_width_c-1 downto 0); -- internal operand rs1
-  signal rs2_read      : std_ulogic_vector(data_width_c-1 downto 0); -- internal operand rs2
-
-  -- reading from r0? --
-  signal rs1_clear, rs2_clear : std_ulogic;
-
-
-  -- attributes - these are *NOT mandatory*; just for footprint / timing optimization --
-  -- -------------------------------------------------------------------------------- --
-
-  -- lattice radiant --
-  attribute syn_ramstyle : string;
-  attribute syn_ramstyle of reg_file     : signal is "no_rw_check";
-  attribute syn_ramstyle of reg_file_emb : signal is "no_rw_check";
-
-  -- intel quartus prime --
-  attribute ramstyle : string;
-  attribute ramstyle of reg_file     : signal is "no_rw_check";
-  attribute ramstyle of reg_file_emb : signal is "no_rw_check";
+  signal rd_is_r0      : std_ulogic; -- writing to r0?
+  signal rf_we         : std_ulogic;
+  signal dst_addr      : std_ulogic_vector(4 downto 0); -- destination address
 
 begin
-
-  -- Input mux ------------------------------------------------------------------------------
-  -- -------------------------------------------------------------------------------------------
-  input_mux: process(ctrl_i, mem_i, alu_i, pc_i, csr_i)
-  begin
-    case ctrl_i(ctrl_rf_in_mux_msb_c downto ctrl_rf_in_mux_lsb_c) is
-      when "00"   => rf_write_data <= alu_i;
-      when "01"   => rf_write_data <= mem_i;
-      when "10"   => rf_write_data <= pc_i;
-      when others => rf_write_data <= csr_i;
-    end case;
-  end process input_mux;
-
-  -- only write if destination is not x0 (pretty irrelevant, but might save some power) --
-  valid_wr <= or_all_f(ctrl_i(ctrl_rf_rd_adr4_c downto ctrl_rf_rd_adr0_c)) when (CPU_EXTENSION_RISCV_E = false) else
-              or_all_f(ctrl_i(ctrl_rf_rd_adr3_c downto ctrl_rf_rd_adr0_c));
-
 
   -- Register file read/write access --------------------------------------------------------
   -- -------------------------------------------------------------------------------------------
@@ -115,49 +83,37 @@ begin
   begin
     if rising_edge(clk_i) then -- sync read and write
       if (CPU_EXTENSION_RISCV_E = false) then -- normal register file with 32 entries
-        -- check if reading from r0 --
-        rs1_clear <= '0';
-        rs2_clear <= '0';
-        if (ctrl_i(ctrl_rf_rs1_adr4_c downto ctrl_rf_rs1_adr0_c) = "00000") then
-          rs1_clear <= '1';
+        if (rf_we = '1') then
+          reg_file(to_integer(unsigned(dst_addr(4 downto 0)))) <= rf_write_data;
+        else
+          rs1_o <= reg_file(to_integer(unsigned(ctrl_i(ctrl_rf_rs1_adr4_c downto ctrl_rf_rs1_adr0_c))));
+          rs2_o <= reg_file(to_integer(unsigned(ctrl_i(ctrl_rf_rs2_adr4_c downto ctrl_rf_rs2_adr0_c))));
         end if;
-        if (ctrl_i(ctrl_rf_rs2_adr4_c downto ctrl_rf_rs2_adr0_c) = "00000") then
-          rs2_clear <= '1';
-        end if;
-        -- write --
-        if (ctrl_i(ctrl_rf_wb_en_c) = '1') and (valid_wr = '1') then -- valid write-back
-          reg_file(to_integer(unsigned(ctrl_i(ctrl_rf_rd_adr4_c downto ctrl_rf_rd_adr0_c)))) <= rf_write_data;
-        end if;
-        -- read --
-        rs1_read <= reg_file(to_integer(unsigned(ctrl_i(ctrl_rf_rs1_adr4_c downto ctrl_rf_rs1_adr0_c))));
-        rs2_read <= reg_file(to_integer(unsigned(ctrl_i(ctrl_rf_rs2_adr4_c downto ctrl_rf_rs2_adr0_c))));
-
       else -- embedded register file with 16 entries
-        -- check if reading from r0 --
-        rs1_clear <= '0';
-        rs2_clear <= '0';
-        if (ctrl_i(ctrl_rf_rs1_adr3_c downto ctrl_rf_rs1_adr0_c) = "0000") then
-          rs1_clear <= '1';
+        if (rf_we = '1') then
+          reg_file_emb(to_integer(unsigned(dst_addr(3 downto 0)))) <= rf_write_data;
+        else
+          rs1_o <= reg_file_emb(to_integer(unsigned(ctrl_i(ctrl_rf_rs1_adr3_c downto ctrl_rf_rs1_adr0_c))));
+          rs2_o <= reg_file_emb(to_integer(unsigned(ctrl_i(ctrl_rf_rs2_adr3_c downto ctrl_rf_rs2_adr0_c))));
         end if;
-        if (ctrl_i(ctrl_rf_rs2_adr3_c downto ctrl_rf_rs2_adr0_c) = "0000") then
-          rs2_clear <= '1';
-        end if;
-        -- write --
-        if (ctrl_i(ctrl_rf_wb_en_c) = '1') and (valid_wr = '1') then -- valid write-back
-          reg_file_emb(to_integer(unsigned(ctrl_i(ctrl_rf_rd_adr3_c downto ctrl_rf_rd_adr0_c)))) <= rf_write_data;
-        end if;
-        -- read --
-        rs1_read <= reg_file_emb(to_integer(unsigned(ctrl_i(ctrl_rf_rs1_adr3_c downto ctrl_rf_rs1_adr0_c))));
-        rs2_read <= reg_file_emb(to_integer(unsigned(ctrl_i(ctrl_rf_rs2_adr3_c downto ctrl_rf_rs2_adr0_c))));
       end if;
     end if;
   end process rf_access;
 
+  -- data input mux --
+  rf_write_data <= alu_i when (ctrl_i(ctrl_rf_in_mux_msb_c) = '0') else rf_mux_data;
+  rf_mux_data   <= mem_i when (ctrl_i(ctrl_rf_in_mux_lsb_c) = '0') else csr_i;
 
-  -- Check if reading from r0 ---------------------------------------------------------------
-  -- -------------------------------------------------------------------------------------------
-  rs1_o <= (others => '0') when ((rs1_clear or ctrl_i(ctrl_rf_clear_rs1_c)) = '1') else rs1_read;
-  rs2_o <= (others => '0') when ((rs2_clear or ctrl_i(ctrl_rf_clear_rs2_c)) = '1') else rs2_read;
+  -- check if we are writing to x0 --
+  rd_is_r0 <= not or_all_f(ctrl_i(ctrl_rf_rd_adr4_c downto ctrl_rf_rd_adr0_c)) when (CPU_EXTENSION_RISCV_E = false) else
+              not or_all_f(ctrl_i(ctrl_rf_rd_adr3_c downto ctrl_rf_rd_adr0_c));
+
+  -- valid RF write access --
+  rf_we <= (ctrl_i(ctrl_rf_wb_en_c) and (not rd_is_r0)) or ctrl_i(ctrl_rf_r0_we_c);
+
+  -- destination address --
+  dst_addr <= ctrl_i(ctrl_rf_rd_adr4_c downto ctrl_rf_rd_adr0_c) when (ctrl_i(ctrl_rf_r0_we_c) = '0') else (others => '0'); -- force dst=r0?
+
 
 
 end neorv32_cpu_regfile_rtl;

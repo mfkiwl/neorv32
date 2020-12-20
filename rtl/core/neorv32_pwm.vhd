@@ -49,7 +49,6 @@ entity neorv32_pwm is
     addr_i      : in  std_ulogic_vector(31 downto 0); -- address
     rden_i      : in  std_ulogic; -- read enable
     wren_i      : in  std_ulogic; -- write enable
-    ben_i       : in  std_ulogic_vector(03 downto 0); -- byte write enable
     data_i      : in  std_ulogic_vector(31 downto 0); -- data in
     data_o      : out std_ulogic_vector(31 downto 0); -- data out
     ack_o       : out std_ulogic; -- transfer acknowledge
@@ -91,9 +90,8 @@ architecture neorv32_pwm_rtl of neorv32_pwm is
   -- prescaler clock generator --
   signal prsc_tick : std_ulogic;
 
-  -- pwm counter --
+  -- pwm core counter --
   signal pwm_cnt : std_ulogic_vector(7 downto 0);
-  signal pwm_out : std_ulogic_vector(3 downto 0);
 
 begin
 
@@ -114,16 +112,12 @@ begin
       -- write access --
       if (wren = '1') then
         if (addr = pwm_ctrl_addr_c) then -- control register
-          if (ben_i(0) = '1') then
-            enable <= data_i(ctrl_enable_c);
-            prsc   <= data_i(ctrl_prsc2_bit_c downto ctrl_prsc0_bit_c);
-          end if;
+          enable <= data_i(ctrl_enable_c);
+          prsc   <= data_i(ctrl_prsc2_bit_c downto ctrl_prsc0_bit_c);
         end if;
         if (addr = pwm_duty_addr_c) then -- duty cycle register
           for i in 0 to 3 loop
-            if (ben_i(i) = '1') then
-              pwm_ch(i) <= data_i(7+i*8 downto 0+i*8);
-            end if;
+            pwm_ch(i) <= data_i(7+i*8 downto 0+i*8);
           end loop;
         end if;
       end if;
@@ -162,19 +156,13 @@ begin
       -- channels --
       for i in 0 to num_pwm_channels_c-1 loop
         if (unsigned(pwm_cnt) >= unsigned(pwm_ch(i))) or (enable = '0') then
-          pwm_out(i) <= '0';
+          pwm_o(i) <= '0';
         else
-          pwm_out(i) <= '1';
+          pwm_o(i) <= '1';
         end if;
       end loop; -- i, pwm channel
     end if;
   end process pwm_core;
-
-  -- output --
-  pwm_o(0) <= pwm_out(0);
-  pwm_o(1) <= pwm_out(1);
-  pwm_o(2) <= pwm_out(2);
-  pwm_o(3) <= pwm_out(3);
 
 
 end neorv32_pwm_rtl;

@@ -59,6 +59,7 @@ entity neorv32_busswitch is
     ca_bus_we_i     : in  std_ulogic; -- write enable
     ca_bus_re_i     : in  std_ulogic; -- read enable
     ca_bus_cancel_i : in  std_ulogic; -- cancel current bus transaction
+    ca_bus_lock_i   : in  std_ulogic; -- locked/exclusive access
     ca_bus_ack_o    : out std_ulogic; -- bus transfer acknowledge
     ca_bus_err_o    : out std_ulogic; -- bus transfer error
     -- controller interface b --
@@ -69,9 +70,11 @@ entity neorv32_busswitch is
     cb_bus_we_i     : in  std_ulogic; -- write enable
     cb_bus_re_i     : in  std_ulogic; -- read enable
     cb_bus_cancel_i : in  std_ulogic; -- cancel current bus transaction
+    cb_bus_lock_i   : in  std_ulogic; -- locked/exclusive access
     cb_bus_ack_o    : out std_ulogic; -- bus transfer acknowledge
     cb_bus_err_o    : out std_ulogic; -- bus transfer error
     -- peripheral bus --
+    p_bus_src_o     : out std_ulogic; -- access source: 0 = A, 1 = B
     p_bus_addr_o    : out std_ulogic_vector(data_width_c-1 downto 0); -- bus access address
     p_bus_rdata_i   : in  std_ulogic_vector(data_width_c-1 downto 0); -- bus read data
     p_bus_wdata_o   : out std_ulogic_vector(data_width_c-1 downto 0); -- bus write data
@@ -79,6 +82,7 @@ entity neorv32_busswitch is
     p_bus_we_o      : out std_ulogic; -- write enable
     p_bus_re_o      : out std_ulogic; -- read enable
     p_bus_cancel_o  : out std_ulogic; -- cancel current bus transaction
+    p_bus_lock_o    : out std_ulogic; -- locked/exclusive access
     p_bus_ack_i     : in  std_ulogic; -- bus transfer acknowledge
     p_bus_err_i     : in  std_ulogic  -- bus transfer error
   );
@@ -188,12 +192,15 @@ begin
     arbiter.bus_sel   <= '0';
     arbiter.we_trig   <= '0';
     arbiter.re_trig   <= '0';
+    --
+    p_bus_src_o <= '0';
 
     -- state machine --
     case arbiter.state is
 
       when IDLE => -- Controller a has full bus access
       -- ------------------------------------------------------------
+        p_bus_src_o <= '0'; -- access from port A
         if (ca_req_current = '1') then -- current request?
           arbiter.bus_sel   <= '0';
           arbiter.state_nxt <= BUSY;
@@ -210,6 +217,7 @@ begin
 
       when BUSY => -- transaction in progress
       -- ------------------------------------------------------------
+        p_bus_src_o     <= '0'; -- access from port A
         arbiter.bus_sel <= '0';
         if (ca_bus_cancel_i = '1') or -- controller cancels access
            (p_bus_err_i = '1') or -- peripheral cancels access
@@ -219,6 +227,7 @@ begin
 
       when RETIRE => -- retire pending access
       -- ------------------------------------------------------------
+        p_bus_src_o     <= '0'; -- access from port A
         arbiter.bus_sel <= '0';
         if (PORT_CA_READ_ONLY = false) then
           arbiter.we_trig <= ca_wr_req_buf;
@@ -228,6 +237,7 @@ begin
 
       when BUSY_SWITCHED => -- switched transaction in progress
       -- ------------------------------------------------------------
+        p_bus_src_o     <= '1'; -- access from port B
         arbiter.bus_sel <= '1';
         if (cb_bus_cancel_i = '1') or -- controller cancels access
            (p_bus_err_i = '1') or -- peripheral cancels access
@@ -237,6 +247,7 @@ begin
 
       when RETIRE_SWITCHED => -- retire pending switched access
       -- ------------------------------------------------------------
+        p_bus_src_o     <= '1'; -- access from port B
         arbiter.bus_sel <= '1';
         if (PORT_CB_READ_ONLY = false) then
           arbiter.we_trig <= cb_wr_req_buf;
@@ -250,16 +261,17 @@ begin
 
   -- Peripheral Bus Switch ------------------------------------------------------------------
   -- -------------------------------------------------------------------------------------------
-  p_bus_addr_o   <= ca_bus_addr_i   when (arbiter.bus_sel = '0') else cb_bus_addr_i;
-  p_bus_wdata_o  <= cb_bus_wdata_i  when (PORT_CA_READ_ONLY = true) else ca_bus_wdata_i  when (PORT_CB_READ_ONLY = true) else
-                    ca_bus_wdata_i  when (arbiter.bus_sel = '0') else cb_bus_wdata_i;
-  p_bus_ben_o    <= cb_bus_ben_i    when (PORT_CA_READ_ONLY = true) else ca_bus_ben_i    when (PORT_CB_READ_ONLY = true) else
-                    ca_bus_ben_i    when (arbiter.bus_sel = '0') else cb_bus_ben_i;
-  p_bus_we       <= ca_bus_we_i     when (arbiter.bus_sel = '0') else cb_bus_we_i;
-  p_bus_re       <= ca_bus_re_i     when (arbiter.bus_sel = '0') else cb_bus_re_i;
-  p_bus_cancel_o <= ca_bus_cancel_i when (arbiter.bus_sel = '0') else cb_bus_cancel_i;
+  p_bus_addr_o   <= ca_bus_addr_i   when (arbiter.bus_sel = '0')    else cb_bus_addr_i;
+  p_bus_wdata_o  <= cb_bus_wdata_i  when (PORT_CA_READ_ONLY = true) else ca_bus_wdata_i when (PORT_CB_READ_ONLY = true) else
+                    ca_bus_wdata_i  when (arbiter.bus_sel = '0')    else cb_bus_wdata_i;
+  p_bus_ben_o    <= cb_bus_ben_i    when (PORT_CA_READ_ONLY = true) else ca_bus_ben_i   when (PORT_CB_READ_ONLY = true) else
+                    ca_bus_ben_i    when (arbiter.bus_sel = '0')    else cb_bus_ben_i;
+  p_bus_we       <= ca_bus_we_i     when (arbiter.bus_sel = '0')    else cb_bus_we_i;
+  p_bus_re       <= ca_bus_re_i     when (arbiter.bus_sel = '0')    else cb_bus_re_i;
+  p_bus_cancel_o <= ca_bus_cancel_i when (arbiter.bus_sel = '0')    else cb_bus_cancel_i;
   p_bus_we_o     <= (p_bus_we or arbiter.we_trig);
   p_bus_re_o     <= (p_bus_re or arbiter.re_trig);
+  p_bus_lock_o   <= ca_bus_lock_i or cb_bus_lock_i;
 
   ca_bus_rdata_o <= p_bus_rdata_i;
   cb_bus_rdata_o <= p_bus_rdata_i;

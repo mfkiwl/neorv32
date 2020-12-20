@@ -1,17 +1,18 @@
 // #################################################################################################
 // # << NEORV32 - Bootloader >>                                                                    #
 // # ********************************************************************************************* #
-// # THE BOOTLOADER SHOULD BE COMPILED USING THE BASE ISA ONLY (rv32i or rv32e)!                   #
+// # In order to run the bootloader on any CPU configuration, the bootloader should be compiled    #
+// # unsing the base ISA (rv32i/rv32e) only.                                                       #
 // # ********************************************************************************************* #
 // # Boot from (internal) instruction memory, UART or SPI Flash.                                   #
 // #                                                                                               #
-// # UART configuration: 8N1 at 19200 baud                                                         #
+// # UART configuration: 8 data bits, no parity bit, 1 stop bit, 19200 baud                        #
 // # Boot Flash: 8-bit SPI, 24-bit addresses (like Micron N25Q032A) @ neorv32.spi_csn_o(0)         #
-// # neorv32.gpio_o(0) is used as high-active status LED.                                          #
+// # neorv32.gpio_o(0) is used as high-active status LED (can be disabled via #STATUS_LED_EN).     #
 // #                                                                                               #
-// # Auto boot sequence after timeout:                                                             #
+// # Auto boot sequence (can be disabled via #AUTOBOOT_EN) after timeout (via #AUTOBOOT_TIMEOUT):  #
 // #  -> Try booting from SPI flash at spi_csn_o(0).                                               #
-// #  -> Permanently light up status led and freeze if SPI flash booting attempt fails.            #
+// #  -> Permanently light up status led and stall CPU if SPI flash booting attempt fails.         #
 // # ********************************************************************************************* #
 // # BSD 3-Clause License                                                                          #
 // #                                                                                               #
@@ -48,7 +49,7 @@
 /**********************************************************************//**
  * @file bootloader.c
  * @author Stephan Nolting
- * @brief Default NEORV32 bootloader. Compile only for rv32i or rv32e (better).
+ * @brief Default NEORV32 bootloader.
  **************************************************************************/
 
 // Libraries
@@ -62,18 +63,26 @@
 /**@{*/
 /** UART BAUD rate */
 #define BAUD_RATE              (19200)
+/** Enable auto-boot sequence if != 0 */
+#define AUTOBOOT_EN            (1)
 /** Time until the auto-boot sequence starts (in seconds) */
 #define AUTOBOOT_TIMEOUT       8
-/** Bootloader status LED at GPIO output port (0..15) */
+/** Set to 0 to disable bootloader status LED */
+#define STATUS_LED_EN          (1)
+/** SPI_DIRECT_BOOT_EN: Define/uncomment to enable SPI direct boot (disables the entire user console!) */
+//#define SPI_DIRECT_BOOT_EN
+/** Bootloader status LED at GPIO output port */
 #define STATUS_LED             (0)
-/** SPI flash boot image base address */
+/** SPI flash boot image base address (warning! address might wrap-around!) */
 #define SPI_FLASH_BOOT_ADR     (0x00800000)
-/** SPI flash chip select at spi_csn_o */
+/** SPI flash chip select line at spi_csn_o */
 #define SPI_FLASH_CS           (0)
-/** Default SPI flash clock prescaler for serial peripheral interface */
+/** Default SPI flash clock prescaler */
 #define SPI_FLASH_CLK_PRSC     (CLK_PRSC_8)
-/** SPI flash sector size in bytes */
+/** SPI flash sector size in bytes (default = 64kb) */
 #define SPI_FLASH_SECTOR_SIZE  (64*1024)
+/** ASCII char to start fast executable upload process (for use with automatic upload scripts) */
+#define FAST_UPLOAD_CMD        '#'
 /**@}*/
 
 
@@ -140,8 +149,16 @@ enum NEORV32_EXECUTABLE {
 /**@}*/
 
 
+/**********************************************************************//**
+ * This global variable keeps the size of the available executable in bytes.
+ * If =0 no executable is available (yet).
+ **************************************************************************/
+uint32_t exe_available = 0;
+
+
 // Function prototypes
-void __attribute__((__interrupt__)) mtime_irq_handler(void);
+void __attribute__((__interrupt__)) bootloader_trap_handler(void);
+void fast_upload(int src);
 void print_help(void);
 void start_app(void);
 void get_exe(int src);
@@ -150,13 +167,13 @@ uint32_t get_exe_word(int src, uint32_t addr);
 void system_error(uint8_t err_code);
 void print_hex_word(uint32_t num);
 
-// SPI flash access
+// SPI flash driver functions
 uint8_t spi_flash_read_byte(uint32_t addr);
 void spi_flash_write_byte(uint32_t addr, uint8_t wdata);
 void spi_flash_write_word(uint32_t addr, uint32_t wdata);
 void spi_flash_erase_sector(uint32_t addr);
-uint8_t spi_flash_read_status(void);
 uint8_t spi_flash_read_1st_id(void);
+void spi_flash_write_wait(void);
 void spi_flash_write_enable(void);
 void spi_flash_write_addr(uint32_t addr);
 
@@ -166,30 +183,41 @@ void spi_flash_write_addr(uint32_t addr);
  **************************************************************************/
 int main(void) {
 
+#ifdef __riscv_compressed
+  #warning In order to allow the bootloader to run on any CPU configuration it should be compiled using the base ISA (rv32i/e) only.
+#endif
+
+  // global variable for executable size; 0 means there is no exe available
+  exe_available = 0;
+
   // ------------------------------------------------
-  // Processor hardware initialization
+  // Minimal CPU hardware initialization
+  // - all IO devices are reset and disabled by the crt0 code
   // ------------------------------------------------
 
-  // reset system time
-  MTIME_LO = 0;
-  MTIME_HI = 0;
+  // confiure trap handler (bare-metal, no neorv32 rte available)
+  neorv32_cpu_csr_write(CSR_MTVEC, (uint32_t)(&bootloader_trap_handler));
 
-  // deactivate unused IO devices
-  neorv32_wdt_disable();
-  neorv32_pwm_disable();
-  neorv32_spi_disable();
-  neorv32_trng_disable();
-  neorv32_twi_disable();
+
+  // ------------------------------------------------
+  // Minimal processor hardware initialization
+  // - all IO devices are reset and disabled by the crt0 code
+  // ------------------------------------------------
 
   // get clock speed (in Hz)
   uint32_t clock_speed = SYSINFO_CLK;
 
-  // init SPI for 8-bit, clock-mode 0, MSB-first, no interrupt
+  // init SPI for 8-bit, clock-mode 0, no interrupt
   if (clock_speed < 40000000) {
-    neorv32_spi_setup(SPI_FLASH_CLK_PRSC, 0, 0, 0, 0);
+    neorv32_spi_setup(SPI_FLASH_CLK_PRSC, 0, 0, 0);
   }
   else {
-    neorv32_spi_setup(CLK_PRSC_128, 0, 0, 0, 0);
+    neorv32_spi_setup(CLK_PRSC_128, 0, 0, 0);
+  }
+
+  if (STATUS_LED_EN == 1) {
+    // activate status LED, clear all others
+    neorv32_gpio_port_set(1 << STATUS_LED);
   }
 
   // init UART (no interrupts)
@@ -198,18 +226,28 @@ int main(void) {
   // Configure machine system timer interrupt for ~2Hz
   neorv32_mtime_set_timecmp(neorv32_mtime_get_time() + (clock_speed/4));
 
-  // confiure interrupt vector (bare-metal, no neorv32 rte)
-  neorv32_cpu_csr_write(CSR_MTVEC, (uint32_t)(&mtime_irq_handler));
   neorv32_cpu_csr_write(CSR_MIE, 1 << CPU_MIE_MTIE); // activate MTIME IRQ source
-
   neorv32_cpu_eint(); // enable global interrupts
 
-  // init GPIO
-  neorv32_gpio_port_set(1 << STATUS_LED); // activate status LED, clear all others
 
-  // abuse mscratch CSR as global variable to store the size of the last uploaded executable
-  // this CSR must not be used by the bootloader's crt0.S!
-  neorv32_cpu_csr_write(CSR_MSCRATCH, 0);
+  // ------------------------------------------------
+  // Fast boot mode: Direct SPI boot
+  // Bootloader will directly boot and execute image from SPI memory.
+  // No user UART console is available in this mode!
+  // ------------------------------------------------
+#ifdef SPI_DIRECT_BOOT_EN
+  #warning Compiling bootloader in 'SPI direct boot mode'. Bootloader will directly boot from SPI memory. No user UART console will be available.
+
+  neorv32_uart_print("\nNEORV32 bootloader\nAccessing SPI flash at ");
+  print_hex_word((uint32_t)SPI_FLASH_BOOT_ADR);
+  neorv32_uart_print("\n");
+
+  get_exe(EXE_STREAM_FLASH);
+  neorv32_uart_print("\n");
+  start_app();
+
+  return 0;
+#endif
 
 
   // ------------------------------------------------
@@ -217,21 +255,21 @@ int main(void) {
   // ------------------------------------------------
   neorv32_uart_print("\n\n\n\n<< NEORV32 Bootloader >>\n\n"
                      "BLDV: "__DATE__"\nHWV:  ");
-  neorv32_rte_print_hw_version();
+  print_hex_word(neorv32_cpu_csr_read(CSR_MIMPID));
   neorv32_uart_print("\nCLK:  ");
   print_hex_word(SYSINFO_CLK);
   neorv32_uart_print(" Hz\nUSER: ");
   print_hex_word(SYSINFO_USER_CODE);
   neorv32_uart_print("\nMISA: ");
   print_hex_word(neorv32_cpu_csr_read(CSR_MISA));
-  neorv32_uart_print("\nCONF: ");
+  neorv32_uart_print("\nPROC: ");
   print_hex_word(SYSINFO_FEATURES);
   neorv32_uart_print("\nIMEM: ");
-  print_hex_word(SYSINFO_ISPACE_SIZE);
+  print_hex_word(SYSINFO_IMEM_SIZE);
   neorv32_uart_print(" bytes @ ");
   print_hex_word(SYSINFO_ISPACE_BASE);
   neorv32_uart_print("\nDMEM: ");
-  print_hex_word(SYSINFO_DSPACE_SIZE);
+  print_hex_word(SYSINFO_DMEM_SIZE);
   neorv32_uart_print(" bytes @ ");
   print_hex_word(SYSINFO_DSPACE_BASE);
 
@@ -239,19 +277,27 @@ int main(void) {
   // ------------------------------------------------
   // Auto boot sequence
   // ------------------------------------------------
+#if (AUTOBOOT_EN != 0)
   neorv32_uart_print("\n\nAutoboot in "xstr(AUTOBOOT_TIMEOUT)"s. Press key to abort.\n");
 
   uint64_t timeout_time = neorv32_mtime_get_time() + (uint64_t)(AUTOBOOT_TIMEOUT * clock_speed);
 
-  while ((UART_DATA & (1 << UART_DATA_AVAIL)) == 0) { // wait for any key to be pressed or timeout
+  while ((UART_DATA & (1 << UART_DATA_AVAIL)) == 0) { // wait for any key to be pressed
 
     if (neorv32_mtime_get_time() >= timeout_time) { // timeout? start auto boot sequence
-      get_exe(EXE_STREAM_FLASH); // try loading from spi flash
-      neorv32_uart_print("\n");
-      start_app();
+      fast_upload(EXE_STREAM_FLASH); // try booting from flash
     }
   }
   neorv32_uart_print("Aborted.\n\n");
+
+  // fast executable upload?
+  if (neorv32_uart_char_received_get() == FAST_UPLOAD_CMD) {
+    fast_upload(EXE_STREAM_UART);
+  }
+#else
+  neorv32_uart_print("\n\n");
+#endif
+
   print_help();
 
 
@@ -265,11 +311,11 @@ int main(void) {
     neorv32_uart_putc(c); // echo
     neorv32_uart_print("\n");
 
-    if (c == 'r') { // restart bootloader
-      neorv32_cpu_dint(); // disable global interrupts
-      // jump to beginning of boot ROM
-      asm volatile ("li t0, %[input_i]; jr t0" :  : [input_i] "i" (BOOTLOADER_BASE_ADDRESS));
-      while(1); // just for the compiler
+    if (c == FAST_UPLOAD_CMD) { // fast executable upload
+      fast_upload(EXE_STREAM_UART);
+    }
+    else if (c == 'r') { // restart bootloader
+      asm volatile ("li t0, %[input_i]; jr t0" :  : [input_i] "i" (BOOTLOADER_BASE_ADDRESS)); // jump to beginning of boot ROM
     }
     else if (c == 'h') { // help menu
       print_help();
@@ -277,7 +323,7 @@ int main(void) {
     else if (c == 'u') { // get executable via UART
       get_exe(EXE_STREAM_UART);
     }
-    else if (c == 's') { // program EEPROM from RAM
+    else if (c == 's') { // program flash from memory (IMEM)
       save_exe();
     }
     else if (c == 'l') { // get executable from flash
@@ -286,7 +332,7 @@ int main(void) {
     else if (c == 'e') { // start application program
       start_app();
     }
-    else if (c == '?') { // credits
+    else if (c == '?') {
       neorv32_uart_print("by Stephan Nolting");
     }
     else { // unknown command
@@ -295,6 +341,20 @@ int main(void) {
   }
 
   return 0; // bootloader should never return
+}
+
+
+/**********************************************************************//**
+ * Get executable stream and execute it.
+ *
+ * @param src Source of executable stream data. See #EXE_STREAM_SOURCE.
+ **************************************************************************/
+void fast_upload(int src) {
+
+  get_exe(src);
+  neorv32_uart_print("\n");
+  start_app();
+  while(1);
 }
 
 
@@ -319,28 +379,22 @@ void print_help(void) {
 void start_app(void) {
 
   // executable available?
-  if (neorv32_cpu_csr_read(CSR_MSCRATCH) == 0) {
+  if (exe_available == 0) {
     neorv32_uart_print("No executable available.");
     return;
   }
 
-  // no need to shutdown or reset the used peripherals
-  // -> this will be done by application's crt0
+  // no need to shut down/reset the used peripherals
+  // no need to disable interrupt sources
+  // -> crt0 will do a clean CPU/processor reset/setup
 
-  // deactivate IRQs and IRQ sources
+  // deactivate global IRQs
   neorv32_cpu_dint();
-  neorv32_cpu_csr_write(CSR_MIE, 0);
 
   neorv32_uart_print("Booting...\n\n");
 
   // wait for UART to finish transmitting
   while ((UART_CT & (1<<UART_CT_TX_BUSY)) != 0);
-
-  // reset performance counters (to benchmark actual application)
-  asm volatile ("csrw mcycle,    zero"); // will also clear 'cycle'
-  asm volatile ("csrw mcycleh,   zero"); // will also clear 'cycleh'
-  asm volatile ("csrw minstret,  zero"); // will also clear 'instret'
-  asm volatile ("csrw minstreth, zero"); // will also clear 'instreth'
 
   // start app at instruction space base address
   register uint32_t app_base = SYSINFO_ISPACE_BASE;
@@ -350,26 +404,32 @@ void start_app(void) {
 
 
 /**********************************************************************//**
- * Machine system timer (MTIME) interrupt handler.
+ * Bootloader trap handler. Used for the MTIME tick and to capture any other traps.
  * @warning Since we have no runtime environment, we have to use the interrupt attribute here. Here, and only here!
  **************************************************************************/
-void __attribute__((__interrupt__)) mtime_irq_handler(void) {
+void __attribute__((__interrupt__)) bootloader_trap_handler(void) {
 
   // make sure this was caused by MTIME IRQ
   uint32_t cause = neorv32_cpu_csr_read(CSR_MCAUSE);
-  if (cause != TRAP_CODE_MTI) { // raw exception code for MTI
-    neorv32_uart_print("\n\nEXCEPTION: ");
-    print_hex_word(cause);
-    neorv32_uart_print(" @ 0x");
-    print_hex_word(neorv32_cpu_csr_read(CSR_MEPC));
-    system_error(ERROR_SYSTEM);
-    while(1); // freeze
-  }
-  else {
-    // toggle status LED
-    neorv32_gpio_pin_toggle(STATUS_LED);
+  if (cause == TRAP_CODE_MTI) { // raw exception code for MTI
+    if (STATUS_LED_EN == 1) {
+      // toggle status LED
+      neorv32_gpio_pin_toggle(STATUS_LED);
+    }
     // set time for next IRQ
     neorv32_mtime_set_timecmp(neorv32_mtime_get_time() + (SYSINFO_CLK/4));
+  }
+
+  else if (cause == TRAP_CODE_S_ACCESS) { // seems like executable is too large
+    system_error(ERROR_SIZE);
+  }
+
+  else {
+    neorv32_uart_print("\n\nEXC (");
+    print_hex_word(cause);
+    neorv32_uart_print(") @ 0x");
+    print_hex_word(neorv32_cpu_csr_read(CSR_MEPC));
+    system_error(ERROR_SYSTEM);
   }
 }
 
@@ -381,8 +441,9 @@ void __attribute__((__interrupt__)) mtime_irq_handler(void) {
  **************************************************************************/
 void get_exe(int src) {
 
-  // is instruction memory (actually, the IMEM) read-only?
-  if (SYSINFO_FEATURES & (1 << SYSINFO_FEATURES_MEM_INT_IMEM_ROM)) {
+  // is MEM implemented and read-only?
+  if ((SYSINFO_FEATURES & (1 << SYSINFO_FEATURES_MEM_INT_IMEM_ROM)) &&
+      (SYSINFO_FEATURES & (1 << SYSINFO_FEATURES_MEM_INT_IMEM)))  {
     system_error(ERROR_ROM);
   }
 
@@ -412,12 +473,6 @@ void get_exe(int src) {
   uint32_t size  = get_exe_word(src, addr + EXE_OFFSET_SIZE); // size in bytes
   uint32_t check = get_exe_word(src, addr + EXE_OFFSET_CHECKSUM); // complement sum checksum
 
-  // executable too large?
-  uint32_t imem_size = SYSINFO_ISPACE_SIZE;
-  if (size > imem_size) {
-    system_error(ERROR_SIZE);
-  }
-
   // transfer program data
   uint32_t *pnt = (uint32_t*)SYSINFO_ISPACE_BASE;
   uint32_t checksum = 0;
@@ -430,26 +485,13 @@ void get_exe(int src) {
     addr += 4;
   }
 
-/*
-  // Debugging stuff
-  neorv32_uart_putc('.');
-  print_hex_word(signature);
-  neorv32_uart_putc('.');
-  print_hex_word(imem_size);
-  neorv32_uart_putc('.');
-  print_hex_word(check);
-  neorv32_uart_putc('.');
-  print_hex_word(checksum);
-  neorv32_uart_putc('.');
-*/
-
   // error during transfer?
   if ((checksum + check) != 0) {
     system_error(ERROR_CHECKSUM);
   }
   else {
     neorv32_uart_print("OK");
-    neorv32_cpu_csr_write(CSR_MSCRATCH, size); // store exe size in "global variable"
+    exe_available = size; // store exe size
   }
 }
 
@@ -460,7 +502,7 @@ void get_exe(int src) {
 void save_exe(void) {
 
   // size of last uploaded executable
-  uint32_t size = neorv32_cpu_csr_read(CSR_MSCRATCH);
+  uint32_t size = exe_available;
 
   if (size == 0) {
     neorv32_uart_print("No executable available.");
@@ -514,9 +556,6 @@ void save_exe(void) {
     spi_flash_write_word(addr, d);
     addr += 4;
     i++;
-//  if ((i & 0x000000FF) == 0) {
-//    neorv32_uart_putc('.');
-//  }
   }
 
   // write checksum (sum complement)
@@ -562,18 +601,14 @@ uint32_t get_exe_word(int src, uint32_t addr) {
  **************************************************************************/
 void system_error(uint8_t err_code) {
 
-  neorv32_uart_print("\a\nERR_"); // output error code with annoying bell sound
-  if (err_code <= ERROR_SYSTEM) {
-    neorv32_uart_putc('0' + ((char)err_code));
-  }
-  else {
-    neorv32_uart_print("unknown");
-  }
+  neorv32_uart_print("\a\nERROR_"); // output error code with annoying bell sound
+  neorv32_uart_putc('0' + ((char)err_code)); // FIXME err_code should/must be below 10
 
   neorv32_cpu_dint(); // deactivate IRQs
-  neorv32_gpio_port_set(1 << STATUS_LED); // permanently light up status LED
+  if (STATUS_LED_EN == 1) {
+    neorv32_gpio_port_set(1 << STATUS_LED); // permanently light up status LED
+  }
 
-  asm volatile ("wfi"); // power-down
   while(1); // freeze
 }
 
@@ -599,7 +634,7 @@ void print_hex_word(uint32_t num) {
 
 
 // -------------------------------------------------------------------------------------
-// SPI flash functions
+// SPI flash driver functions
 // -------------------------------------------------------------------------------------
 
 /**********************************************************************//**
@@ -640,12 +675,7 @@ void spi_flash_write_byte(uint32_t addr, uint8_t wdata) {
 
   neorv32_spi_cs_dis(SPI_FLASH_CS);
 
-  while (1) {
-    uint8_t tmp = spi_flash_read_status();
-    if ((tmp & 0x01) == 0) { // write in progress flag cleared?
-      break;
-    }
-  }
+  spi_flash_write_wait(); // wait for write operation to finish
 }
 
 
@@ -664,7 +694,7 @@ void spi_flash_write_word(uint32_t addr, uint32_t wdata) {
 
   data.uint32 = wdata;
 
-  uint32_t i;
+  int i;
   for (i=0; i<4; i++) {
     spi_flash_write_byte(addr + i, data.uint8[3-i]);
   }
@@ -687,30 +717,7 @@ void spi_flash_erase_sector(uint32_t addr) {
 
   neorv32_spi_cs_dis(SPI_FLASH_CS);
 
-  while (1) {
-    uint8_t tmp = spi_flash_read_status();
-    if ((tmp & 0x01) == 0) { // write in progress flag cleared?
-      break;
-    }
-  }
-}
-
-
-/**********************************************************************//**
- * Read status register.
- *
- * @return Status register.
- **************************************************************************/
-uint8_t spi_flash_read_status(void) {
-
-  neorv32_spi_cs_en(SPI_FLASH_CS);
-
-  neorv32_spi_trans(SPI_FLASH_CMD_READ_STATUS);
-  uint8_t status = (uint8_t)neorv32_spi_trans(0);
-
-  neorv32_spi_cs_dis(SPI_FLASH_CS);
-
-  return status;
+  spi_flash_write_wait(); // wait for write operation to finish
 }
 
 
@@ -731,6 +738,27 @@ uint8_t spi_flash_read_1st_id(void) {
   neorv32_spi_cs_dis(SPI_FLASH_CS);
 
   return id;
+}
+
+
+/**********************************************************************//**
+ * Wait for flash write operation to finisch.
+ **************************************************************************/
+void spi_flash_write_wait(void) {
+
+  while(1) {
+
+    neorv32_spi_cs_en(SPI_FLASH_CS);
+
+    neorv32_spi_trans(SPI_FLASH_CMD_READ_STATUS);
+    uint8_t status = (uint8_t)neorv32_spi_trans(0);
+
+    neorv32_spi_cs_dis(SPI_FLASH_CS);
+
+    if ((status & 0x01) == 0) { // write in progress flag cleared?
+      break;
+    }
+  }
 }
 
 
@@ -759,8 +787,8 @@ void spi_flash_write_addr(uint32_t addr) {
 
   address.uint32 = addr;
 
-  neorv32_spi_trans(address.uint8[2]);
-  neorv32_spi_trans(address.uint8[1]);
-  neorv32_spi_trans(address.uint8[0]);
+  int i;
+  for (i=2; i>=0; i--) {
+    neorv32_spi_trans(address.uint8[i]);
+  }
 }
-

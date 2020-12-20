@@ -217,23 +217,26 @@ uint64_t neorv32_cpu_get_systime(void) {
 
 
 /**********************************************************************//**
- * Simple delay function (not very precise) using busy wait.
+ * Simple delay function using busy wait.
+ *
+ * @warning This function requires the cycle CSR(s). Hence, the Zicsr extension is mandatory.
  *
  * @param[in] time_ms Time in ms to wait.
  **************************************************************************/
 void neorv32_cpu_delay_ms(uint32_t time_ms) {
 
-  uint32_t clock_speed = SYSINFO_CLK >> 10; // fake divide by 1000
-  clock_speed = clock_speed >> 5; // divide by loop execution time (~30 cycles)
-  uint32_t cnt = clock_speed * time_ms;
+  uint64_t time_resume = neorv32_cpu_get_cycle();
 
-  // one iteration = ~30 cycles
-  while (cnt) {
-    asm volatile("nop");
-    asm volatile("nop");
-    asm volatile("nop");
-    asm volatile("nop");
-    cnt--;
+  uint32_t clock = SYSINFO_CLK; // clock ticks per second
+  clock = clock / 1000; // clock ticks per ms
+
+  uint64_t wait_cycles = ((uint64_t)clock) * ((uint64_t)time_ms);
+  time_resume += wait_cycles;
+
+  while(1) {
+    if (neorv32_cpu_get_cycle() >= time_resume) {
+      break;
+    }
   }
 }
 
@@ -241,16 +244,174 @@ void neorv32_cpu_delay_ms(uint32_t time_ms) {
 /**********************************************************************//**
  * Switch from privilege mode MACHINE to privilege mode USER.
  *
- * @note This function requires the U extension to be implemented.
- * @note Maybe you should do a fence.i after this.
+ * @warning This function requires the U extension to be implemented.
  **************************************************************************/
 void __attribute__((naked)) neorv32_cpu_goto_user_mode(void) {
 
-  register uint32_t mask = (1<<CPU_MSTATUS_MPP_H) | (1<<CPU_MSTATUS_MPP_L);
-  asm volatile ("csrrc zero, mstatus, %[input_j]" :  : [input_j] "r" (mask));
+  // make sure to use NO registers in here! -> naked
 
-  // return switching to user mode
-  asm volatile ("csrw mepc, ra");
-  asm volatile ("mret");
+  asm volatile ("csrw mepc, ra           \n\t" // move return address to mepc so we can return using "mret". also, we can now use ra as general purpose register in here
+                "li ra, %[input_imm]     \n\t" // bit mask to clear the two MPP bits
+                "csrrc zero, mstatus, ra \n\t" // clear MPP bits -> MPP=u-mode
+                "mret                    \n\t" // return and switch to user mode
+                :  : [input_imm] "i" ((1<<CPU_MSTATUS_MPP_H) | (1<<CPU_MSTATUS_MPP_L)));
 }
 
+
+/**********************************************************************//**
+ * Atomic compare-and-swap operation (for implemeneting semaphores and mutexes).
+ *
+ * @warning This function requires the A (atomic) CPU extension.
+ *
+ * @param[in] addr Address of memory location.
+ * @param[in] expected Expected value (for comparison).
+ * @param[in] desired Desired value (new value).
+ * @return Returns 0 on success, 1 on failure.
+ **************************************************************************/
+int __attribute__ ((noinline)) neorv32_cpu_atomic_cas(uint32_t addr, uint32_t expected, uint32_t desired) {
+#ifdef __riscv_atomic
+
+  register uint32_t addr_reg = addr;
+  register uint32_t des_reg = desired;
+  register uint32_t tmp_reg;
+
+  // load original value + reservation (lock)
+  asm volatile ("lr.w %[result], (%[input])" : [result] "=r" (tmp_reg) : [input] "r" (addr_reg));
+
+  if (tmp_reg != expected) {
+    asm volatile ("lw x0, 0(%[input])" : : [input] "r" (addr_reg)); // clear reservation lock
+    return 1;
+  }
+
+  // store-conditional
+  asm volatile ("sc.w %[result], %[input_i], (%[input_j])" : [result] "=r" (tmp_reg) : [input_i] "r" (des_reg), [input_j] "r" (addr_reg));
+
+  if (tmp_reg) {
+    return 1;
+  }
+
+  return 0;
+#else
+  return 1; // A extension not implemented -Y always fail
+#endif
+}
+
+
+/**********************************************************************//**
+ * Physical memory protection (PMP): Get minimal region size (granularity). 
+ *
+ * @warning This function overrides PMPCFG0[0] and PMPADDR0 CSRs.
+ *
+ * @warning This function requires the PMP CPU extension.
+ *
+ * @return Returns minimal region size in bytes; Returns 0 on failure.
+ **************************************************************************/
+uint32_t neorv32_cpu_pmp_get_granularity(void) {
+
+  if ((neorv32_cpu_csr_read(CSR_MZEXT) & (1<<CPU_MZEXT_PMP)) == 0) {
+    return 0; // PMP not implemented
+  }
+
+  // check min granulartiy
+  uint32_t tmp = neorv32_cpu_csr_read(CSR_PMPCFG0);
+  tmp &= 0xffffff00; // disable entry 0
+  neorv32_cpu_csr_write(CSR_PMPCFG0, tmp);
+  neorv32_cpu_csr_write(CSR_PMPADDR0, 0xffffffff);
+  uint32_t tmp_a = neorv32_cpu_csr_read(CSR_PMPADDR0);
+
+  uint32_t i;
+
+  // find least-significat set bit
+  for (i=31; i!=0; i--) {
+    if (((tmp_a >> i) & 1) == 0) {
+      break;
+    }
+  }
+
+  return (uint32_t)(1 << (i+1+2));
+}
+
+
+/**********************************************************************//**
+ * Physical memory protection (PMP): Configure region.
+ *
+ * @note Using NAPOT mode - page base address has to be naturally aligned.
+ *
+ * @warning This function requires the PMP CPU extension.
+ *
+ * @param[in] index Region number (index, 0..max_regions-1).
+ * @param[in] base Region base address (has to be naturally aligned!).
+ * @param[in] size Region size, has to be a power of 2 (min 8 bytes or according to HW's PMP.granularity configuration).
+ * @param[in] config Region configuration (attributes) byte (for PMPCFGx).
+ * @return Returns 0 on success, 1 on failure.
+ **************************************************************************/
+int neorv32_cpu_pmp_configure_region(uint32_t index, uint32_t base, uint32_t size, uint8_t config) {
+
+  if ((neorv32_cpu_csr_read(CSR_MZEXT) & (1<<CPU_MZEXT_PMP)) == 0) {
+    return 1; // PMP not implemented
+  }
+
+  if (size < 8) {
+    return 1; // minimal region size is 8 bytes
+  }
+
+  if ((size & (size - 1)) != 0) {
+    return 1; // region size is not a power of two
+  }
+
+  // setup configuration
+  uint32_t tmp;
+  uint32_t config_int  = ((uint32_t)config) << ((index%4)*8);
+  uint32_t config_mask = ((uint32_t)0xFF)   << ((index%4)*8);
+  config_mask = ~config_mask;
+
+  // clear old configuration
+  if (index < 3) {
+    tmp = neorv32_cpu_csr_read(CSR_PMPCFG0);
+    tmp &= config_mask; // clear old config
+    neorv32_cpu_csr_write(CSR_PMPCFG0, tmp);
+  }
+  else {
+    tmp = neorv32_cpu_csr_read(CSR_PMPCFG1);
+    tmp &= config_mask; // clear old config
+    neorv32_cpu_csr_write(CSR_PMPCFG1, tmp);
+  }
+
+  // set base address and region size
+  uint32_t addr_mask = ~((size - 1) >> 2);
+  uint32_t size_mask = (size - 1) >> 3;
+
+  tmp = base & addr_mask;
+  tmp = tmp | size_mask;
+
+  switch(index & 7) {
+    case 0: neorv32_cpu_csr_write(CSR_PMPADDR0, tmp); break;
+    case 1: neorv32_cpu_csr_write(CSR_PMPADDR1, tmp); break;
+    case 2: neorv32_cpu_csr_write(CSR_PMPADDR2, tmp); break;
+    case 3: neorv32_cpu_csr_write(CSR_PMPADDR3, tmp); break;
+    case 4: neorv32_cpu_csr_write(CSR_PMPADDR4, tmp); break;
+    case 5: neorv32_cpu_csr_write(CSR_PMPADDR5, tmp); break;
+    case 6: neorv32_cpu_csr_write(CSR_PMPADDR6, tmp); break;
+    case 7: neorv32_cpu_csr_write(CSR_PMPADDR7, tmp); break;
+    default: break;
+  }
+
+  // wait for HW to computer PMP-internal stuff (address masks)
+  for (tmp=0; tmp<16; tmp++) {
+    asm volatile ("nop");
+  }
+
+  // set new configuration
+  if (index < 3) {
+    tmp = neorv32_cpu_csr_read(CSR_PMPCFG0);
+    tmp |= config_int; // set new config
+    neorv32_cpu_csr_write(CSR_PMPCFG0, tmp);
+  }
+  else {
+    tmp = neorv32_cpu_csr_read(CSR_PMPCFG1);
+    tmp |= config_int; // set new config
+    neorv32_cpu_csr_write(CSR_PMPCFG1, tmp);
+  }
+
+  return 0;
+}

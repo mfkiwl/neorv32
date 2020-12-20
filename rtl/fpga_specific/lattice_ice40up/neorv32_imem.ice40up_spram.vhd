@@ -56,7 +56,6 @@ entity neorv32_imem is
     rden_i : in  std_ulogic; -- read enable
     wren_i : in  std_ulogic; -- write enable
     ben_i  : in  std_ulogic_vector(03 downto 0); -- byte write enable
-    upen_i : in  std_ulogic; -- update enable
     addr_i : in  std_ulogic_vector(31 downto 0); -- address
     data_i : in  std_ulogic_vector(31 downto 0); -- data in
     data_o : out std_ulogic_vector(31 downto 0); -- data out
@@ -69,6 +68,10 @@ architecture neorv32_imem_rtl of neorv32_imem is
   -- advanced configuration --------------------------------------------------------------------------------
   constant spram_sleep_mode_en_c : boolean := false; -- put IMEM into sleep mode when idle (for low power)
   -- -------------------------------------------------------------------------------------------------------
+
+  -- IO space: module base address --
+  constant hi_abb_c : natural := 31; -- high address boundary bit
+  constant lo_abb_c : natural := index_size_f(64*1024); -- low address boundary bit
 
   -- local signals --
   signal acc_en  : std_ulogic;
@@ -93,7 +96,7 @@ begin
 
   -- Access Control -------------------------------------------------------------------------
   -- -------------------------------------------------------------------------------------------
-  acc_en <= '1' when (unsigned(addr_i) >= unsigned(IMEM_BASE)) and (unsigned(addr_i) < unsigned(IMEM_BASE) + IMEM_SIZE) else '0';
+  acc_en <= '1' when (addr_i(hi_abb_c downto lo_abb_c) = IMEM_BASE(hi_abb_c downto lo_abb_c)) else '0';
   mem_cs <= acc_en and (rden_i or wren_i);
 
 
@@ -132,7 +135,7 @@ begin
   spram_addr  <= std_logic_vector(addr_i(13+2 downto 0+2));
   spram_di_lo <= std_logic_vector(data_i(15 downto 00));
   spram_di_hi <= std_logic_vector(data_i(31 downto 16));
-  spram_we    <= '1' when ((acc_en and upen_i and wren_i) = '1') else '0'; -- global write enable
+  spram_we    <= '1' when ((acc_en and wren_i) = '1') else '0'; -- global write enable
   spram_cs    <= std_logic(mem_cs);
   spram_be_lo <= std_logic(ben_i(1)) & std_logic(ben_i(1)) & std_logic(ben_i(0)) & std_logic(ben_i(0)); -- low byte write enable
   spram_be_hi <= std_logic(ben_i(3)) & std_logic(ben_i(3)) & std_logic(ben_i(2)) & std_logic(ben_i(2)); -- high byte write enable

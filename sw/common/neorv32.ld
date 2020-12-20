@@ -44,22 +44,25 @@
 OUTPUT_FORMAT("elf32-littleriscv", "elf32-littleriscv", "elf32-littleriscv")
 OUTPUT_ARCH(riscv)
 ENTRY(_start)
-SEARCH_DIR("=/opt/riscv/riscv64-unknown-linux-gnu/lib"); SEARCH_DIR("=/usr/local/lib"); SEARCH_DIR("=/lib"); SEARCH_DIR("=/usr/lib");
+SEARCH_DIR("/opt/riscv/riscv32-unknown-elf/lib"); SEARCH_DIR("=/opt/riscv/riscv64-unknown-linux-gnu/lib"); SEARCH_DIR("=/usr/local/lib"); SEARCH_DIR("=/lib"); SEARCH_DIR("=/usr/lib");
 
-/* ************************************************* */
-/* NEORV32 memory configuration.                     */
-/* Make sure this is sync with your processor/       */
-/* memory hardware configuration.                    */
-/* ************************************************* */
+/* ************************************************************************* */
+/* NEORV32 memory configuration.                                             */
+/* Make sure this is sync with your processor/memory hardware configuration. */
+/* ************************************************************************* */
 MEMORY
 {
-  rom  (rx) : ORIGIN = 0x00000000, LENGTH = 16*1024
-  ram (rwx) : ORIGIN = 0x80000000, LENGTH =  8*1024
+/* "rom" section: first value of ORIGIN/LENGHT => bootloader ROM; second value of ORIGIN/LENGHT => instruction memory */
+
+  rom  (rx) : ORIGIN = DEFINED(make_bootloader) ? 0xFFFF0000 : 0x00000000, LENGTH = DEFINED(make_bootloader) ? 4*1024 : 16*1024
+  ram (rwx) : ORIGIN = 0x80000000, LENGTH = 8*1024
 }
-/* ************************************************* */
+/* ************************************************************************* */
 
 SECTIONS
 {
+  /* stack pointer init: last 32-bit entry in data memory */
+  __crt0_stack_begin = (ORIGIN(ram) + LENGTH(ram)) - 4;
 
   /* start section on WORD boundary */
   . = ALIGN(4);
@@ -95,17 +98,16 @@ SECTIONS
     PROVIDE(__text_start = .);
     PROVIDE(__textstart = .);
 
-
-
     PROVIDE_HIDDEN (__rela_iplt_start = .);
     *(.rela.iplt)
     PROVIDE_HIDDEN (__rela_iplt_end = .);
 
     *(.rela.plt)
 
+    KEEP(*(.text.boot)); /* keep start-up code at the beginning of rom */
+
     KEEP (*(SORT_NONE(.init)))
 
-    KEEP(crt0.elf(.text)); /* NEORV32-SPECIFIC start-up code */
     *(.text.unlikely .text.*_unlikely .text.unlikely.*)
     *(.text.exit .text.exit.*)
     *(.text.startup .text.startup.*)
@@ -171,7 +173,6 @@ SECTIONS
   } > rom
 
 
-
   /* initialized read/write data, accessed in RAM, placed in ROM, copied during boot */
   .jcr            : { KEEP (*(.jcr)) }
   .data.rel.ro : { *(.data.rel.ro.local* .gnu.linkonce.d.rel.ro.local.*) *(.data.rel.ro .data.rel.ro.* .gnu.linkonce.d.rel.ro.*) }
@@ -186,7 +187,6 @@ SECTIONS
 
     *(.data .data.* .gnu.linkonce.d.*)
     SORT(CONSTRUCTORS)
-
 
     /* We want the small data sections together, so single-instruction offsets
        can access them all, and initialized data all before uninitialized, so
@@ -208,11 +208,10 @@ SECTIONS
   } > ram AT > rom
 
 
-
   /* zero/non-initialized read/write data placed in RAM */
   .sbss2          : { *(.sbss2 .sbss2.* .gnu.linkonce.sb2.*) }
   .tbss		  : { *(.tbss .tbss.* .gnu.linkonce.tb.*) *(.tcommon) }
-  .bss :
+  .bss (NOLOAD):
   {
     __bss_start = .;
     *(.dynsbss)
@@ -221,7 +220,6 @@ SECTIONS
 
     *(.dynbss)
     *(.bss .bss.* .gnu.linkonce.b.*)
-
 
     PROVIDE_HIDDEN (__preinit_array_start = .);
     KEEP (*(.preinit_array))
@@ -241,7 +239,6 @@ SECTIONS
 		            MAX(__DATA_BEGIN__ + 0x800, __BSS_END__ - 0x800));
     _end = .; PROVIDE (end = .);
   } > ram
-
 
 
   /* Stabs debugging sections.  */
@@ -288,10 +285,9 @@ SECTIONS
   /DISCARD/ : { *(.note.GNU-stack) *(.gnu_debuglink) *(.gnu.lto_*) }
 
 
-
   /* Provide further symbols for neorv32 crt0.elf */
-  PROVIDE(__crt0_bss_start = __bss_start);
-  PROVIDE(__crt0_bss_end   = __BSS_END__);
+  PROVIDE(__crt0_bss_start   = __bss_start);
+  PROVIDE(__crt0_bss_end     = __BSS_END__);
   PROVIDE(__crt0_copy_data_src_begin = __etext + SIZEOF(.rodata));
   PROVIDE(__crt0_copy_data_dst_begin = __DATA_BEGIN__);
   PROVIDE(__crt0_copy_data_dst_end   = __DATA_BEGIN__ + SIZEOF(.data));

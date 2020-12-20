@@ -71,6 +71,9 @@ int neorv32_uart_available(void) {
 /**********************************************************************//**
  * Enable and configure UART.
  *
+ * @warning The 'UART_SIM_MODE' compiler flag will configure UART for simulation mode: all UART TX data will be redirected to simulation output. Use this for simulations only!
+ * @warning To enable simulation mode add <USER_FLAGS+=-DUART_SIM_MODE> when compiling.
+ *
  * @param[in] baudrate Targeted BAUD rate (e.g. 9600).
  * @param[in] rx_irq Enable RX interrupt (data received) when 1.
  * @param[in] tx_irq Enable TX interrupt (transmission done) when 1.
@@ -79,14 +82,21 @@ void neorv32_uart_setup(uint32_t baudrate, uint8_t rx_irq, uint8_t tx_irq) {
 
   UART_CT = 0; // reset
 
-  // raw baud rate prescaler
   uint32_t clock = SYSINFO_CLK;
   uint16_t i = 0; // BAUD rate divisor
-  uint8_t p = 0; // prsc = CLK/2
+  uint8_t p = 0; // initial prsc = CLK/2
+
+  // raw clock prescaler
+#ifdef __riscv_div
+  // use div instructions
+  i = (uint16_t)(clock / (2*baudrate));
+#else
+  // division via repeated subtraction
   while (clock >= 2*baudrate) {
     clock -= 2*baudrate;
     i++;
   }
+#endif
 
   // find clock prsc
   while (i >= 0x0fff) {
@@ -112,7 +122,16 @@ void neorv32_uart_setup(uint32_t baudrate, uint8_t rx_irq, uint8_t tx_irq) {
   uint32_t tx_irq_en = (uint32_t)(tx_irq & 1);
   tx_irq_en = tx_irq_en << UART_CT_TX_IRQ;
 
-  UART_CT = prsc | baud | uart_en | rx_irq_en | tx_irq_en;
+  /* Enable the UART for SIM mode. */
+  /* Only use this for simulation! */
+#ifdef UART_SIM_MODE
+  #warning UART_SIM_MODE enabled! Sending all UART.TX data to text.io simulation output instead of real UART transmitter. Use this for simulations only!
+  uint32_t sim_mode = 1 << UART_CT_SIM_MODE;
+#else
+  uint32_t sim_mode = 0;
+#endif
+
+  UART_CT = prsc | baud | uart_en | rx_irq_en | tx_irq_en | sim_mode;
 }
 
 
@@ -125,26 +144,38 @@ void neorv32_uart_disable(void) {
 }
 
 
-
 /**********************************************************************//**
  * Send single char via UART.
  *
  * @note This function is blocking.
- * @warning The 'DEVNULL_UART_OVERRIDE' compiler user flag will forward all UART TX data to the DEVNULL simulation console output.
  *
  * @param[in] c Char to be send.
  **************************************************************************/
 void neorv32_uart_putc(char c) {
 
-#ifdef DEVNULL_UART_OVERRIDE
-  #warning UART OVERRIDE! Sending all UART.TX data to DEVNULL simulation output instead of UART transmitter. Use this for simulations only!
-  DEVNULL_DATA = (uint32_t)c;
+#ifdef UART_SIM_MODE
+  UART_DATA = ((uint32_t)c) << UART_DATA_LSB;
 #else
   // wait for previous transfer to finish
   while ((UART_CT & (1<<UART_CT_TX_BUSY)) != 0);
   UART_DATA = ((uint32_t)c) << UART_DATA_LSB;
 #endif
+}
 
+
+/**********************************************************************//**
+ * Check if UART TX is busy.
+ *
+ * @note This function is blocking.
+ *
+ * @return 0 if idle, 1 if busy
+ **************************************************************************/
+int neorv32_uart_tx_busy(void) {
+
+  if ((UART_CT & (1<<UART_CT_TX_BUSY)) != 0) {
+    return 1;
+  }
+  return 0;
 }
 
 
@@ -207,7 +238,7 @@ char neorv32_uart_char_received_get(void) {
  *
  * @param[in] s Pointer to string.
  **************************************************************************/
-void neorv32_uart_print(char *s) {
+void neorv32_uart_print(const char *s) {
 
   char c = 0;
   while ((c = *s++)) {
@@ -227,7 +258,7 @@ void neorv32_uart_print(char *s) {
  **************************************************************************/
 static void __neorv32_uart_itoa(uint32_t x, char *res) {
 
-  static const char numbers[10] = "0123456789";
+  static const char numbers[] = "0123456789";
   char buffer1[11];
   uint16_t i, j;
 
@@ -267,7 +298,7 @@ static void __neorv32_uart_itoa(uint32_t x, char *res) {
  **************************************************************************/
 static void __neorv32_uart_tohex(uint32_t x, char *res) {
 
-  static const char symbols[16] = "0123456789abcdef";
+  static const char symbols[] = "0123456789abcdef";
 
   int i;
   for (i=0; i<8; i++) { // nibble by bibble
@@ -294,7 +325,7 @@ static void __neorv32_uart_tohex(uint32_t x, char *res) {
  * <TR><TD>%x</TD><TD>32-bit number, printed as 8-char hexadecimal</TD></TR>
  * </TABLE>
  **************************************************************************/
-void neorv32_uart_printf(char *format, ...) {
+void neorv32_uart_printf(const char *format, ...) {
 
   char c, string_buf[11];
   int32_t n;

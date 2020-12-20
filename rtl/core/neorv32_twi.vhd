@@ -50,7 +50,6 @@ entity neorv32_twi is
     addr_i      : in  std_ulogic_vector(31 downto 0); -- address
     rden_i      : in  std_ulogic; -- read enable
     wren_i      : in  std_ulogic; -- write enable
-    ben_i       : in  std_ulogic_vector(03 downto 0); -- byte write enable
     data_i      : in  std_ulogic_vector(31 downto 0); -- data in
     data_o      : out std_ulogic_vector(31 downto 0); -- data out
     ack_o       : out std_ulogic; -- transfer acknowledge
@@ -75,11 +74,12 @@ architecture neorv32_twi_rtl of neorv32_twi is
   constant ctrl_twi_en_c     : natural := 0; -- r/w: TWI enable
   constant ctrl_twi_start_c  : natural := 1; -- -/w: Generate START condition
   constant ctrl_twi_stop_c   : natural := 2; -- -/w: Generate STOP condition
-  constant ctrl_twi_irq_en_c : natural := 3; -- r/w: transmission done interrupt
+  constant ctrl_twi_irq_en_c : natural := 3; -- r/w: Enable transmission done interrupt
   constant ctrl_twi_prsc0_c  : natural := 4; -- r/w: CLK prsc bit 0
   constant ctrl_twi_prsc1_c  : natural := 5; -- r/w: CLK prsc bit 1
   constant ctrl_twi_prsc2_c  : natural := 6; -- r/w: CLK prsc bit 2
   constant ctrl_twi_mack_c   : natural := 7; -- r/w: generate ACK by controller for transmission
+  constant ctrl_twi_cksten_c : natural := 8; -- r/w: enable clock stretching by peripheral
   --
   constant ctrl_twi_ack_c    : natural := 30; -- r/-: Set if ACK received
   constant ctrl_twi_busy_c   : natural := 31; -- r/-: Set if TWI unit is busy
@@ -99,7 +99,7 @@ architecture neorv32_twi_rtl of neorv32_twi is
   signal twi_clk_halt : std_ulogic;
 
   -- twi transceiver core --
-  signal ctrl         : std_ulogic_vector(7 downto 0); -- unit's control register
+  signal ctrl         : std_ulogic_vector(8 downto 0); -- unit's control register
   signal arbiter      : std_ulogic_vector(2 downto 0);
   signal twi_bitcnt   : std_ulogic_vector(3 downto 0);
   signal twi_rtx_sreg : std_ulogic_vector(8 downto 0); -- main rx/tx shift reg
@@ -129,9 +129,7 @@ begin
       -- write access --
       if (wr_en = '1') then
         if (addr = twi_ctrl_addr_c) then
-          if (ben_i(0) = '1') then
-            ctrl(07 downto 00) <= data_i(07 downto 00);
-          end if;
+          ctrl <= data_i(ctrl'left downto 0);
         end if;
       end if;
       -- read access --
@@ -144,6 +142,7 @@ begin
           data_o(ctrl_twi_prsc1_c)  <= ctrl(ctrl_twi_prsc1_c);
           data_o(ctrl_twi_prsc2_c)  <= ctrl(ctrl_twi_prsc2_c);
           data_o(ctrl_twi_mack_c)   <= ctrl(ctrl_twi_mack_c);
+          data_o(ctrl_twi_cksten_c) <= ctrl(ctrl_twi_cksten_c);
           --
           data_o(ctrl_twi_ack_c)    <= not twi_rtx_sreg(0);
           data_o(ctrl_twi_busy_c)   <= arbiter(1) or arbiter(0);
@@ -213,10 +212,8 @@ begin
             elsif (addr = twi_rtx_addr_c) then -- start a data transmission
               -- one bit extra for ack, issued by controller if ctrl_twi_mack_c is set,
               -- sampled from peripheral if ctrl_twi_mack_c is cleared
-              if (ben_i(0) = '1') then
-                twi_rtx_sreg <= data_i(7 downto 0) & (not ctrl(ctrl_twi_mack_c));
-                arbiter(1 downto 0) <= "11";
-              end if;
+              twi_rtx_sreg <= data_i(7 downto 0) & (not ctrl(ctrl_twi_mack_c));
+              arbiter(1 downto 0) <= "11";
             end if;
           end if;
 
@@ -277,12 +274,13 @@ begin
 
   -- Clock Stretching Detector --------------------------------------------------------------
   -- -------------------------------------------------------------------------------------------
-  clock_stretching: process(arbiter, twi_scl_o, twi_scl_i_ff1)
+  clock_stretching: process(ctrl, arbiter, twi_scl_o, twi_scl_i_ff1)
   begin
     -- clock stretching by the peripheral can happen at "any time"
-    if (arbiter(2) = '1') and     -- module enabled
-       (twi_scl_o = '1') and      -- controller wants to pull scl high
-       (twi_scl_i_ff1 = '0') then -- but scl is pulled low by peripheral
+    if (arbiter(2) = '1') and              -- module enabled
+       (ctrl(ctrl_twi_cksten_c) = '1') and -- clock stretching enabled
+       (twi_scl_o = '1') and               -- controller wants to pull scl high
+       (twi_scl_i_ff1 = '0') then          -- but scl is pulled low by peripheral
       twi_clk_halt <= '1';
     else
       twi_clk_halt <= '0';

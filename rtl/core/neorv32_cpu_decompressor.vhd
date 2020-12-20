@@ -116,10 +116,10 @@ begin
 
           when "000" => -- Illegal_instruction, C.ADDI4SPN
           -- ----------------------------------------------------------------------------------------------------------
-            if (ci_instr16_i(12 downto 2) = "00000000000") then -- "official" illegal instruction
+            if (ci_instr16_i(12 downto 2) = "00000000000") then -- "official illegal instruction"
               ci_illegal_o <= '1';
-
-            else -- C.ADDI4SPN
+            else
+              -- C.ADDI4SPN
               ci_instr32_o(instr_opcode_msb_c downto instr_opcode_lsb_c) <= opcode_alui_c;
               ci_instr32_o(instr_rs1_msb_c downto instr_rs1_lsb_c)       <= "00010"; -- stack pointer
               ci_instr32_o(instr_rd_msb_c downto instr_rd_lsb_c)         <= "01" & ci_instr16_i(ci_rd_3_msb_c downto ci_rd_3_lsb_c);

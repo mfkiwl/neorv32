@@ -52,11 +52,12 @@ int neorv32_uart_available(void);
 void neorv32_uart_setup(uint32_t baudrate, uint8_t rx_irq, uint8_t tx_irq);
 void neorv32_uart_disable(void);
 void neorv32_uart_putc(char c);
+int neorv32_uart_tx_busy(void);
 char neorv32_uart_getc(void);
 int neorv32_uart_char_received(void);
 char neorv32_uart_char_received_get(void);
-void neorv32_uart_print(char *s);
-void neorv32_uart_printf(char *format, ...);
+void neorv32_uart_print(const char *s);
+void neorv32_uart_printf(const char *format, ...);
 int neorv32_uart_scan(char *buffer, int max_size, int echo);
 
 #endif // neorv32_uart_h

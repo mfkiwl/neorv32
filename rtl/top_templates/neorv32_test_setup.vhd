@@ -60,7 +60,7 @@ end neorv32_test_setup;
 architecture neorv32_test_setup_rtl of neorv32_test_setup is
 
   -- gpio output --
-  signal gpio_out : std_ulogic_vector(15 downto 0);
+  signal gpio_out : std_ulogic_vector(31 downto 0);
 
 begin
 
@@ -72,35 +72,29 @@ begin
     CLOCK_FREQUENCY              => 100000000,   -- clock frequency of clk_i in Hz
     BOOTLOADER_USE               => true,        -- implement processor-internal bootloader?
     USER_CODE                    => x"00000000", -- custom user code
+    HW_THREAD_ID                 => x"00000000", -- hardware thread id (hartid)
     -- RISC-V CPU Extensions --
+    CPU_EXTENSION_RISCV_A        => true,   -- implement atomic extension?
     CPU_EXTENSION_RISCV_C        => true,   -- implement compressed extension?
     CPU_EXTENSION_RISCV_E        => false,  -- implement embedded RF extension?
-    CPU_EXTENSION_RISCV_M        => false,  -- implement muld/div extension?
-    CPU_EXTENSION_RISCV_U        => false,  -- implement user mode extension?
+    CPU_EXTENSION_RISCV_M        => true,   -- implement muld/div extension?
+    CPU_EXTENSION_RISCV_U        => true,   -- implement user mode extension?
     CPU_EXTENSION_RISCV_Zicsr    => true,   -- implement CSR system?
     CPU_EXTENSION_RISCV_Zifencei => true,   -- implement instruction stream sync.?
     -- Extension Options --
-    CSR_COUNTERS_USE             => true,  -- implement RISC-V perf. counters ([m]instret[h], [m]cycle[h], time[h])?
     FAST_MUL_EN                  => false, -- use DSPs for M extension's multiplier
+    FAST_SHIFT_EN                => false, -- use barrel shifter for shift operations
     -- Physical Memory Protection (PMP) --
-    PMP_USE                      => false,  -- implement PMP?
-    PMP_NUM_REGIONS              => 4,      -- number of regions (max 16)
-    PMP_GRANULARITY              => 14,     -- region granularity (1=8B, 2=16B, 3=32B, ...) default is 64k
-    -- Memory configuration: Instruction memory --
-    MEM_ISPACE_BASE              => x"00000000", -- base address of instruction memory space
-    MEM_ISPACE_SIZE              => 16*1024, -- total size of instruction memory space in byte
+    PMP_USE                      => true,  -- implement PMP?
+    -- Internal Instruction memory --
     MEM_INT_IMEM_USE             => true,    -- implement processor-internal instruction memory
     MEM_INT_IMEM_SIZE            => 16*1024, -- size of processor-internal instruction memory in bytes
     MEM_INT_IMEM_ROM             => false,   -- implement processor-internal instruction memory as ROM
-    -- Memory configuration: Data memory --
-    MEM_DSPACE_BASE              => x"80000000", -- base address of data memory space
-    MEM_DSPACE_SIZE              => 8*1024, -- total size of data memory space in byte
+    -- Internal Data memory --
     MEM_INT_DMEM_USE             => true,   -- implement processor-internal data memory
     MEM_INT_DMEM_SIZE            => 8*1024, -- size of processor-internal data memory in bytes
-    -- Memory configuration: External memory interface --
+    -- External memory interface --
     MEM_EXT_USE                  => false,  -- implement external memory bus interface?
-    MEM_EXT_REG_STAGES           => 2,      -- number of interface register stages (0,1,2)
-    MEM_EXT_TIMEOUT              => 15,     -- cycles after which a valid bus access will timeout
     -- Processor peripherals --
     IO_GPIO_USE                  => true,  -- implement general purpose input/output port unit (GPIO)?
     IO_MTIME_USE                 => true,  -- implement machine system timer (MTIME)?
@@ -110,44 +104,50 @@ begin
     IO_PWM_USE                   => false, -- implement pulse-width modulation unit (PWM)?
     IO_WDT_USE                   => true,  -- implement watch dog timer (WDT)?
     IO_TRNG_USE                  => false, -- implement true random number generator (TRNG)?
-    IO_DEVNULL_USE               => true   -- implement dummy device (DEVNULL)?
+    IO_CFU0_USE                  => false, -- implement custom functions unit 0 (CFU0)?
+    IO_CFU1_USE                  => false  -- implement custom functions unit 1 (CFU1)?
   )
   port map (
     -- Global control --
-    clk_i      => clk_i,           -- global clock, rising edge
-    rstn_i     => rstn_i,          -- global reset, low-active, async
+    clk_i       => clk_i,           -- global clock, rising edge
+    rstn_i      => rstn_i,          -- global reset, low-active, async
     -- Wishbone bus interface --
-    wb_adr_o   => open,            -- address
-    wb_dat_i   => (others => '0'), -- read data
-    wb_dat_o   => open,            -- write data
-    wb_we_o    => open,            -- read/write
-    wb_sel_o   => open,            -- byte enable
-    wb_stb_o   => open,            -- strobe
-    wb_cyc_o   => open,            -- valid cycle
-    wb_ack_i   => '0',             -- transfer acknowledge
-    wb_err_i   => '0',             -- transfer error
+    wb_tag_o    => open,            -- tag
+    wb_adr_o    => open,            -- address
+    wb_dat_i    => (others => '0'), -- read data
+    wb_dat_o    => open,            -- write data
+    wb_we_o     => open,            -- read/write
+    wb_sel_o    => open,            -- byte enable
+    wb_stb_o    => open,            -- strobe
+    wb_cyc_o    => open,            -- valid cycle
+    wb_lock_o   => open,            -- locked/exclusive bus access
+    wb_ack_i    => '0',             -- transfer acknowledge
+    wb_err_i    => '0',             -- transfer error
     -- Advanced memory control signals --
-    fence_o    => open,            -- indicates an executed FENCE operation
-    fencei_o   => open,            -- indicates an executed FENCEI operation
+    fence_o     => open,            -- indicates an executed FENCE operation
+    fencei_o    => open,            -- indicates an executed FENCEI operation
     -- GPIO --
-    gpio_o     => gpio_out,        -- parallel output
-    gpio_i     => (others => '0'), -- parallel input
+    gpio_o      => gpio_out,        -- parallel output
+    gpio_i      => (others => '0'), -- parallel input
     -- UART --
-    uart_txd_o => uart_txd_o,      -- UART send data
-    uart_rxd_i => uart_rxd_i,      -- UART receive data
+    uart_txd_o  => uart_txd_o,      -- UART send data
+    uart_rxd_i  => uart_rxd_i,      -- UART receive data
     -- SPI --
-    spi_sck_o  => open,            -- SPI serial clock
-    spi_sdo_o  => open,            -- controller data out, peripheral data in
-    spi_sdi_i  => '0',             -- controller data in, peripheral data out
-    spi_csn_o  => open,            -- SPI CS
+    spi_sck_o   => open,            -- SPI serial clock
+    spi_sdo_o   => open,            -- controller data out, peripheral data in
+    spi_sdi_i   => '0',             -- controller data in, peripheral data out
+    spi_csn_o   => open,            -- SPI CS
     -- TWI --
-    twi_sda_io => open,            -- twi serial data line
-    twi_scl_io => open,            -- twi serial clock line
+    twi_sda_io  => open,            -- twi serial data line
+    twi_scl_io  => open,            -- twi serial clock line
     -- PWM --
-    pwm_o      => open,            -- pwm channels
+    pwm_o       => open,            -- pwm channels
+    -- system time input from external MTIME (available if IO_MTIME_USE = false) --
+    mtime_i     => (others => '0'), -- current system time
     -- Interrupts --
-    msw_irq_i  => '0',             -- machine software interrupt
-    mext_irq_i => '0'              -- machine external interrupt
+    mtime_irq_i => '0',             -- machine timer interrupt, available if IO_MTIME_USE = false
+    msw_irq_i   => '0',             -- machine software interrupt
+    mext_irq_i  => '0'              -- machine external interrupt
   );
 
   -- output --

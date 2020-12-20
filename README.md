@@ -1,154 +1,160 @@
-# [The NEORV32 Processor](https://github.com/stnolting/neorv32) (RISC-V)
+[![NEORV32](https://raw.githubusercontent.com/stnolting/neorv32/master/docs/figures/neorv32_logo.png)](https://github.com/stnolting/neorv32)
+
+# The NEORV32 RISC-V Processor
 
 [![Build Status](https://travis-ci.com/stnolting/neorv32.svg?branch=master)](https://travis-ci.com/stnolting/neorv32)
 [![license](https://img.shields.io/github/license/stnolting/neorv32)](https://github.com/stnolting/neorv32/blob/master/LICENSE)
 [![release](https://img.shields.io/github/v/release/stnolting/neorv32)](https://github.com/stnolting/neorv32/releases)
 
-
-## Table of Content
-
-* [Introduction](#Introduction)
+* [Overview](#Overview)
+* [Project Status](#Status)
 * [Features](#Features)
 * [FPGA Implementation Results](#FPGA-Implementation-Results)
 * [Performance](#Performance)
-* [Top Entity](#Top-Entity)
+* [Top Entities](#Top-Entities)
 * [**Getting Started**](#Getting-Started)
-* [Contribute](#Contribute)
+* [Contribute/Feedback/Questions](#ContributeFeedbackQuestions)
 * [Legal](#Legal)
 
 
 
-## Introduction
+## Overview
 
-The **NEORV32 processor** is a customizable full-scale mikrocontroller-like processor system based on the RISC-V-compliant
-`rv32i` NEORV32 CPU with optional `M`, `E`, `C` and `U`, `Zicsr` and `Zifencei` extensions and optional physical memory protection (PMP).
-The CPU was built from scratch and is compliant to the *Unprivileged ISA Specification Version 2.2* and a subset of the *Privileged Architecture
-Specification Version 1.12-draft*.
+The NEORV32 Processor is a customizable microcontroller-like system on chip (SoC) that is based
+on the RISC-V-compliant NEORV32 CPU. The processor is intended as *ready-to-go* auxiliary processor within a larger SoC
+designs or as stand-alone custom microcontroller.
 
-The **processor** is intended as auxiliary processor within a larger SoC designs or as stand-alone
-custom microcontroller. Its top entity can be directly synthesized for any FPGA without modifications and
-provides a full-scale RISC-V based microcontroller with common peripherals like GPIO, serial interfaces for
-UART, I²C and SPI, timers, external bus interface and embedded memories. All optional features beyond the
-base CPU can be enabled and configured via VHDL generics.
-
-Alternatively, you can use the **NEORV32 CPU** as stand-alone central processing unit and build your own microcontroller
-or processor system around it.
-
-This project comes with a complete software ecosystem that features core libraries for high-level
-usage of the provided functions and peripherals, application makefiles, a runtime environment and
-several example programs. All software source files provide a doxygen-based documentary.
-
-The project is intended to work "out of the box". Just synthesize the test setup from this project,
-upload it to your FPGA board of choice and start playing with the NEORV32. If you do not want to
-[compile the GCC toolchains](https://github.com/riscv/riscv-gnu-toolchain) by yourself, you can also
-download [pre-compiled toolchains](https://github.com/stnolting/riscv_gcc_prebuilt) for Linux.
-
-For more information take a look a the [![NEORV32 datasheet](https://raw.githubusercontent.com/stnolting/neorv32/master/docs/figures/PDF_32.png) NEORV32 datasheet](https://raw.githubusercontent.com/stnolting/neorv32/master/docs/NEORV32.pdf).
-
-This project is hosted on [GitHub](https://github.com/stnolting/neorv32) and [opencores.org](https://opencores.org/projects/neorv32).
-A not-so-complete project log can be found on [hackaday.io](https://hackaday.io/project/174167-the-neorv32-risc-v-processor).
+The project’s change log is available in the [CHANGELOG.md](https://github.com/stnolting/neorv32/blob/master/CHANGELOG.md) file in the root directory of this repository.
+To see the changes between releases visit the project's [release page](https://github.com/stnolting/neorv32/releases).
+For more detailed information take a look at the [:page_facing_up: NEORV32 data sheet](https://raw.githubusercontent.com/stnolting/neorv32/master/docs/NEORV32.pdf) (pdf).
 
 
-###  Key Features
+### Key Features
 
-- RISC-V-compliant `rv32i` CPU with optional `C`, `E`, `M`, `U`, `Zicsr`, `Zifencei` and PMP (physical memory protection) extensions
-- GCC-based toolchain ([pre-compiled rv32i and rv32e toolchains available](https://github.com/stnolting/riscv_gcc_prebuilt))
-- Application compilation based on [GNU makefiles](https://github.com/stnolting/neorv32/blob/master/sw/example/blink_led/makefile)
-- [Doxygen-based](https://github.com/stnolting/neorv32/blob/master/docs/doxygen_makefile_sw) documentation of the software framework: available on [GitHub pages](https://stnolting.github.io/neorv32/files.html)
-- Detailed [datasheet](https://raw.githubusercontent.com/stnolting/neorv32/master/docs/NEORV32.pdf) (pdf)
-- Completely described in behavioral, platform-independent VHDL – no primitives, macros, etc.
-- Fully synchronous design, no latches, no gated clocks
-- Small hardware footprint and high operating frequency
-- Highly configurable CPU and processor setup
+* RISC-V-[compliant](#Status) 32-bit `rv32i` [**NEORV32 CPU**](#NEORV32-CPU-Features), compliant to
+  * Subset of the *Unprivileged ISA Specification* [(Version 2.2)](https://github.com/stnolting/neorv32/blob/master/docs/riscv-privileged.pdf)
+  * Subset of the *Privileged Architecture Specification* [(Version 1.12-draft)](https://github.com/stnolting/neorv32/blob/master/docs/riscv-spec.pdf)
+* Optional RISC-V CPU extensions
+  * `A` - atomic memory access instructions
+  * `C` - compressed instructions (16-bit)
+  * `E` - embedded CPU (reduced register file)
+  * `M` - integer multiplication and division hardware
+  * `U` - less-privileged *user mode*
+  * `Zicsr` - control and status register access instructions (+ exception/irq system)
+  * `Zifencei` - instruction stream synchronization
+  * `PMP` - physical memory protection
+* Full-scale RISC-V microcontroller system / **SoC** [**NEORV32 Processor**](#NEORV32-Processor-Features) with optional submodules
+  * optional embedded memories (instructions/data/bootloader, RAM/ROM)
+  * timers (watch dog, RISC-V-compliant machine timer)
+  * serial interfaces (SPI, TWI, UART) and general purpose IO
+  * external bus interface (Wishbone / [AXI4](#AXI4-Connectivity))
+  * [more ...](#NEORV32-Processor-Features)
+* Software framework
+  * core libraries for high-level usage of the provided functions and peripherals
+  * application compilation based on [GNU makefiles](https://github.com/stnolting/neorv32/blob/master/sw/example/blink_led/makefile)
+  * GCC-based toolchain ([pre-compiled toolchains available](https://github.com/stnolting/riscv_gcc_prebuilt))
+  * runtime environment
+  * several example programs
+  * [doxygen-based](https://github.com/stnolting/neorv32/blob/master/docs/doxygen_makefile_sw) documentation: available on [GitHub pages](https://stnolting.github.io/neorv32/files.html)
+  * [FreeRTOS port](https://github.com/stnolting/neorv32/blob/master/sw/example/demo_freeRTOS) available
+* [**Full-blown data sheet**](https://raw.githubusercontent.com/stnolting/neorv32/master/docs/NEORV32.pdf) (pdf)
+* Completely described in behavioral, platform-independent VHDL - no primitives, macros, etc.
+* Fully synchronous design, no latches, no gated clocks
+* Small hardware footprint and high operating frequency
+
 
 ### Design Principles
 
- * From zero to main(): Completely open source and documented.
+ * From zero to *hello_world*: Completely open source and documented.
  * Plain VHDL without technology-specific parts like attributes, macros or primitives.
  * Easy to use – working out of the box.
  * Clean synchronous design, no wacky combinatorial interfaces.
- * Be as small as possible – but with a reasonable size-speed tradeoff.
- * The processor has to fit in a Lattice iCE40 UltraPlus 5k FPGA running at 20+ MHz.
+ * Be as small as possible – but with a reasonable size-performance tradeoff.
+ * Be as RISC-V-compliant as possible.
+ * The processor has to fit in a Lattice iCE40 UltraPlus 5k low-power FPGA running at 20+ MHz.
 
 
 ### Status
 
-The processor is synthesizable (tested with Intel Quartus Prime, Xilinx Vivado and Lattice Radiant/LSE) and can successfully execute
-all the [provided example programs](https://github.com/stnolting/neorv32/tree/master/sw/example) including the CoreMark benchmark.
+The processor is [synthesizable](#FPGA-Implementation-Results) (tested on *real hardware* using Intel Quartus Prime, Xilinx Vivado and Lattice Radiant/Synplify Pro) and can successfully execute
+all the [provided example programs](https://github.com/stnolting/neorv32/tree/master/sw/example) including the [CoreMark benchmark](#CoreMark-Benchmark).
 
-The processor passes the official `rv32i`, `rv32im`, `rv32imc`, `rv32Zicsr` and `rv32Zifencei` [RISC-V compliance tests](https://github.com/riscv/riscv-compliance).
+The processor passes the official `rv32_m/C`, `rv32_m/I`, `rv32_m/M`, `rv32_m/privilege` and `rv32_m/Zifencei`
+[RISC-V compliance tests (new framework v2)](https://github.com/riscv/riscv-compliance). 
 
-| Project component                                                               | CI status | Note     |
-|:--------------------------------------------------------------------------------|:----------|:---------|
-| [NEORV32 processor](https://github.com/stnolting/neorv32)                       | [![Build Status](https://travis-ci.com/stnolting/neorv32.svg?branch=master)](https://travis-ci.com/stnolting/neorv32) | [![sw doc](https://img.shields.io/badge/SW%20documentation-gh--pages-blue)](https://stnolting.github.io/neorv32/files.html) |
-| [Pre-built toolchain](https://github.com/stnolting/riscv_gcc_prebuilt)          | [![Build Status](https://travis-ci.com/stnolting/riscv_gcc_prebuilt.svg?branch=master)](https://travis-ci.com/stnolting/riscv_gcc_prebuilt) | |
-| [RISC-V compliance test](https://github.com/stnolting/neorv32_riscv_compliance) | [![Build Status](https://travis-ci.com/stnolting/neorv32_riscv_compliance.svg?branch=master)](https://travis-ci.com/stnolting/neorv32_riscv_compliance) | |
-
-
-### Non RISC-V-Compliant Issues
-
-* No exception is triggered for the `E` CPU extension when using registers above `x15` (*needs fixing*)
-* `misa` CSR is read-only - no dynamic enabling/disabling of implemented CPU extensions during runtime
-* `mcause` CSR is read-only
-* The `[m]cycleh` and `[m]instreth` CSR counters are only 20-bit wide (in contrast to original 32-bit)
-* The physical memory protection (**PMP**) only supports `NAPOT` mode, a minimal granularity of 8 bytes and only up to 8 regions
+| Project component | CI status | Note     |
+|:----------------- |:----------|:---------|
+| [NEORV32 processor](https://github.com/stnolting/neorv32) | [![Build Status](https://travis-ci.com/stnolting/neorv32.svg?branch=master)](https://travis-ci.com/stnolting/neorv32) | [![sw doc](https://img.shields.io/badge/SW%20documentation-gh--pages-blue)](https://stnolting.github.io/neorv32/files.html) |
+| [Pre-built toolchain](https://github.com/stnolting/riscv_gcc_prebuilt) | [![Build Status](https://travis-ci.com/stnolting/riscv_gcc_prebuilt.svg?branch=master)](https://travis-ci.com/stnolting/riscv_gcc_prebuilt) | |
+| RISC-V compliance test | | See [riscv-compliance/README.md](https://github.com/stnolting/neorv32/blob/master/riscv-compliance/README.md) |
 
 
-### Custom CPU Extensions
+### To-Do / Wish List / Help Wanted
 
-The custom extensions are always enabled and are indicated via the `X` bit in the `misa` CSR.
-
-* Four *fast interrupt* request channels with according control/status bits in `mie` and `mip` and custom exception codes in `mcause`
-
-
-### To-Do / Wish List
-
-- Add AXI(-Lite) bridges
-- Synthesis results for more platforms
-- Port Dhrystone benchmark
-- Implement atomic operations (`A` extension) and floating-point operations (`F` extension)
-- Maybe port an RTOS (like [Zephyr](https://github.com/zephyrproject-rtos/zephyr), [freeRTOS](https://www.freertos.org) or [RIOT](https://www.riot-os.org))
+* Use LaTeX for data sheet
+* Further size and performance optimization *(work in progress)*
+* A cache for the external memory/bus interface *(work in progress)*
+* Burst mode for the external memory/bus interface
+* RISC-V `B` extension ([bitmanipulation](https://github.com/riscv/riscv-bitmanip)) *(shelved)*
+* Synthesis results (+ wrappers?) for more/specific platforms
+* More support for FreeRTOS
+* Port additional RTOSs (like [Zephyr](https://github.com/zephyrproject-rtos/zephyr) or [RIOT](https://www.riot-os.org))
+* Single-precision floating point unit (`F`) *(planned)*
+* Implement further RISC-V (or custom?) CPU extensions
+* Add debugger ([RISC-V debug spec](https://github.com/riscv/riscv-debug-spec))
+* Add memory-mapped trigger to testbench to quit simulation (using VHDL2008's `use std.env.finish;`) - but how? :thinking:
+* ...
+* [Ideas?](#ContributeFeedbackQuestions)
 
 
 
 ## Features
 
-### Processor Features
+The full-blown data sheet of the NEORV32 Processor and CPU is available as pdf file:
+[:page_facing_up: NEORV32 data sheet](https://raw.githubusercontent.com/stnolting/neorv32/master/docs/NEORV32.pdf).
+
+### NEORV32 Processor Features
 
 ![neorv32 Overview](https://raw.githubusercontent.com/stnolting/neorv32/master/docs/figures/neorv32_processor.png)
 
-Highly customizable processor configuration:
-- Optional processor-internal data and instruction memories (DMEM/IMEM)
-- Optional internal bootloader with UART console and automatic SPI flash boot option
-- Optional machine system timer (MTIME), RISC-V-compliant
-- Optional universal asynchronous receiver and transmitter (UART)
-- Optional 8/16/24/32-bit serial peripheral interface controller (SPI) with 8 dedicated chip select lines
-- Optional two wire serial interface controller (TWI), compatible to the I²C standard
-- Optional general purpose parallel IO port (GPIO), 16xOut & 16xIn, with pin-change interrupt
-- Optional 32-bit external bus interface, Wishbone b4 compliant (WISHBONE)
-- Optional watchdog timer (WDT)
-- Optional PWM controller with 4 channels and 8-bit duty cycle resolution (PWM)
-- Optional GARO-based true random number generator (TRNG)
-- Optional dummy device (DEVNULL) (can be used for *fast* simulation console output)
-- System configuration information memory to check hardware configuration by software (SYSINFO)
+The NEORV32 Processor provides a full-scale microcontroller-like SoC based on the NEORV32 CPU. The setup
+is highly customizable via the processor's top generics and already provides the following *optional* modules:
 
-### CPU Features
+* processor-internal data and instruction memories (**DMEM** / **IMEM**)
+* internal **Bootloader** with UART console and automatic application boot from SPI flash option
+* machine system timer (**MTIME**), RISC-V-compliant
+* watchdog timer (**WDT**)
+* universal asynchronous receiver and transmitter (**UART**) with simulation output option via text.io
+* 8/16/24/32-bit serial peripheral interface controller (**SPI**) with 8 dedicated chip select lines
+* two wire serial interface controller (**TWI**), with optional clock-stretching, compatible to the I²C standard
+* general purpose parallel IO port (**GPIO**), 32xOut & 32xIn, with pin-change interrupt
+* 32-bit external bus interface, Wishbone b4 compliant (**WISHBONE**), *standard* or *pipelined* handshake/transactions mode
+* wrapper for **AXI4-Lite Master Interface** (see [AXI Connectivity](#AXI4-Connectivity))
+* PWM controller with 4 channels and 8-bit duty cycle resolution (**PWM**)
+* GARO-based true random number generator (**TRNG**)
+* custom functions units (**CFU0** and **CFU1**) for tightly-coupled custom co-processors
+* system configuration information memory to check hardware configuration by software (**SYSINFO**, mandatory - not *optional*)
 
-![neorv32 Overview](https://raw.githubusercontent.com/stnolting/neorv32/master/docs/figures/neorv32_cpu.png)
+### NEORV32 CPU Features
 
-The CPU is [compliant](https://github.com/stnolting/neorv32_riscv_compliance) to the
+The NEORV32 CPU is **compliant** to the
 [official RISC-V specifications (2.2)](https://raw.githubusercontent.com/stnolting/neorv32/master/docs/riscv-spec.pdf) including a subset of the 
-[RISC-V privileged architecture specifications (1.12-draft)](https://raw.githubusercontent.com/stnolting/neorv32/master/docs/riscv-spec.pdf).
+[RISC-V privileged architecture specifications (1.12-draft)](https://raw.githubusercontent.com/stnolting/neorv32/master/docs/riscv-spec.pdf)
+tested via the [official RISC-V Compliance Test Framework](https://github.com/riscv/riscv-compliance)
+(see [`riscv-compliance/README`](https://github.com/stnolting/neorv32/blob/master/riscv-compliance/README.md)).
 
 More information regarding the CPU including a detailed list of the instruction set and the available CSRs can be found in
-the [![NEORV32 datasheet](https://raw.githubusercontent.com/stnolting/neorv32/master/docs/figures/PDF_32.png) NEORV32 datasheet](https://raw.githubusercontent.com/stnolting/neorv32/master/docs/NEORV32.pdf).
+the [:page_facing_up: NEORV32 data sheet](https://raw.githubusercontent.com/stnolting/neorv32/master/docs/NEORV32.pdf).
 
 
 **General**:
-  * Modified Harvard architecture (separate CPU interfaces for data and instructions; single processor-bus via bus switch)
+  * Modified Harvard architecture (separate CPU interfaces for data and instructions; NEORV32 processor: Single processor-internal bus via I/D mux)
   * Two stages in-order pipeline (FETCH, EXECUTE); each stage uses a multi-cycle processing scheme
   * No hardware support of unaligned accesses - they will trigger an exception
+  * BIG-ENDIAN byte-order, processor's external memory interface allows endianness configuration to connect to system with different endianness
+  * All reserved or unimplemented instructions will raise an illegal instruction exception
   * Privilege levels: `machine` mode, `user` mode (if enabled via `U` extension)
+  * Official [RISC-V open-source architecture ID](https://github.com/riscv/riscv-isa-manual/blob/master/marchid.md)
 
 
 **RV32I base instruction set** (`I` extension):
@@ -156,12 +162,14 @@ the [![NEORV32 datasheet](https://raw.githubusercontent.com/stnolting/neorv32/ma
   * Jump and branch instructions: `JAL` `JALR` `BEQ` `BNE` `BLT` `BGE` `BLTU` `BGEU` 
   * Memory instructions: `LB` `LH` `LW` `LBU` `LHU` `SB` `SH` `SW`
   * System instructions: `ECALL` `EBREAK` `FENCE`
+  * Pseudo-instructions are not listed
 
 **Compressed instructions** (`C` extension):
   * ALU instructions: `C.ADDI4SPN` `C.ADDI` `C.ADD` `C.ADDI16SP` `C.LI` `C.LUI` `C.SLLI` `C.SRLI` `C.SRAI` `C.ANDI` `C.SUB` `C.XOR` `C.OR` `C.AND` `C.MV` `C.NOP`
   * Jump and branch instructions: `C.J` `C.JAL` `C.JR` `C.JALR` `C.BEQZ` `C.BNEZ`
   * Memory instructions: `C.LW` `C.SW` `C.LWSP` `C.SWSP`
-  * Misc instructions: `C.EBREAK` (only with `Zicsr` extension)
+  * System instructions: `C.EBREAK` (only with `Zicsr` extension)
+  * Pseudo-instructions are not listed
 
 **Embedded CPU version** (`E` extension):
   * Reduced register file (only the 16 lowest registers)
@@ -172,23 +180,28 @@ the [![NEORV32 datasheet](https://raw.githubusercontent.com/stnolting/neorv32/ma
   * By default, the multiplier and divider cores use an iterative bit-serial processing scheme
   * Multiplications can be mapped to DSPs via the `FAST_MUL_EN` generic to increase performance
 
+**Atomic memory access** (`A` extension):
+  * Supported instructions: `LR.W` (load-reservate) `SC.W` (store-conditional)
+
 **Privileged architecture / CSR access** (`Zicsr` extension):
   * Privilege levels: `M-mode` (Machine mode)
   * CSR access instructions: `CSRRW` `CSRRS` `CSRRC` `CSRRWI` `CSRRSI` `CSRRCI`
   * System instructions: `MRET` `WFI`
-  * Counter CSRs: `[m]cycle[h]` `[m]instret[h]` `time[h]`
-  * Machine CSRs: `mstatus` `misa`(read-only!) `mie` `mtvec` `mscratch` `mepc` `mcause`(read-only!) `mtval` `mip` `mvendorid` `marchid` `mimpid` `mhartid`
+  * Pseudo-instructions are not listed
+  * Counter CSRs: `cycle` `cycleh` `instret` `instreth` `time` `timeh` `mcycle` `mcycleh` `minstret` `minstreth`
+  * Machine CSRs: `mstatus` `mstatush` `misa`(read-only!) `mie` `mtvec` `mscratch` `mepc` `mcause` `mtval` `mip` `mvendorid` [`marchid`](https://github.com/riscv/riscv-isa-manual/blob/master/marchid.md) `mimpid` `mhartid` `mzext`(custom)
   * Supported exceptions and interrupts:
     * Misaligned instruction address
-    * Instruction access fault
+    * Instruction access fault (via unacknowledged bus access after timeout)
     * Illegal instruction
     * Breakpoint (via `ebreak` instruction)
     * Load address misaligned
-    * Load access fault
+    * Load access fault (via unacknowledged bus access after timeout)
     * Store address misaligned
-    * Store access fault
-    * Environment call from M-mode (via `ecall` instruction)
-    * Machine timer interrupt `mti` (via processor's MTIME unit)
+    * Store access fault (via unacknowledged bus access after timeout)
+    * Environment call from U-mode (via `ecall` instruction in user mode)
+    * Environment call from M-mode (via `ecall` instruction in machine mode)
+    * Machine timer interrupt `mti` (via processor's MTIME unit / external signal)
     * Machine software interrupt `msi` (via external signal)
     * Machine external interrupt `mei` (via external signal)
     * Four fast interrupt requests (custom extension)
@@ -196,75 +209,103 @@ the [![NEORV32 datasheet](https://raw.githubusercontent.com/stnolting/neorv32/ma
 **Privileged architecture / User mode** (`U` extension, requires `Zicsr` extension):
   * Privilege levels: `M-mode` (Machine mode) + `U-mode` (User mode)
 
-**Privileged architecture / FENCE.I** (`Zifencei` extension):
+**Privileged architecture / instruction stream synchronization** (`Zifencei` extension):
   * System instructions: `FENCE.I`
 
 **Privileged architecture / Physical memory protection** (`PMP`, requires `Zicsr` extension):
-  * Additional machine CSRs: `pmpcfgx` `pmpaddrx`
+  * Additional machine CSRs: `pmpcfg0` `pmpcfg1` `pmpaddr0` `pmpaddr1` `pmpaddr2` `pmpaddr3` `pmpaddr4` `pmpaddr5` `pmpaddr6` `pmpaddr7`
+
+
+### Non-RISC-V-Compliant Issues
+
+* CPU and Processor are BIG-ENDIAN, but this should be no problem as the external memory bus interface provides big- and little-endian configurations
+* `misa` CSR is read-only - no dynamic enabling/disabling of synthesized CPU extensions during runtime; for compatibility: write accesses (in m-mode) are ignored and do not cause an exception
+* The physical memory protection (**PMP**) only supports `NAPOT` mode, a minimal granularity of 8 bytes and only up to 8 regions
+* The `A` extension only implements `lr.w` and `sc.w` instructions yet. However, these instructions are sufficient to emulate all further AMO operations
+* The `mcause` trap code `0x80000000` (originally reserved in the RISC-V specs) is used to indicate a hardware reset (non-maskable reset).
+
+
+### NEORV32-Specific CPU Extensions
+
+The NEORV32-specific extensions are always enabled and are indicated via the `X` bit in the `misa` CSR.
+
+* Four *fast interrupt* request channels with according control/status bits in `mie` and `mip` and custom exception codes in `mcause`
+* `mzext` CSR to check for implemented `Z*` CPU extensions (like `Zifencei`)
+* All undefined/umimplemented/malformed/illegal instructions do raise an illegal instruction exception
+
 
 
 ## FPGA Implementation Results
 
-This chapter shows exemplary implementation results of the NEORV32 processor for an **Intel Cyclone IV EP4CE22F17C6N FPGA** on
-a DE0-nano board. The design was synthesized using **Intel Quartus Prime Lite 19.1** ("balanced implementation"). The timing
+### NEORV32 CPU
+
+This chapter shows exemplary implementation results of the NEORV32 CPU for an **Intel Cyclone IV EP4CE22F17C6N FPGA** on
+a DE0-nano board. The design was synthesized using **Intel Quartus Prime Lite 20.1** ("balanced implementation"). The timing
 information is derived from the Timing Analyzer / Slow 1200mV 0C Model. If not otherwise specified, the default configuration
-of the CPU's generics is assumed (e.g., no PMP). No constraints were used at all.
+of the CPU's generics is assumed (for example no PMP). No constraints were used at all. The `u` and `Zifencei` extensions have
+a negligible impact on the hardware requirements.
 
-### CPU
+Results generated for hardware version [`1.4.9.0`](https://github.com/stnolting/neorv32/blob/master/CHANGELOG.md).
 
-Results generated for hardware version: `1.3.6.5`
+| CPU Configuration                       | LEs        | FFs      | Memory bits | DSPs | f_max   |
+|:----------------------------------------|:----------:|:--------:|:-----------:|:----:|:-------:|
+| `rv32i`                                 |       1190 |      512 |       2048  |    0 | 120 MHz |
+| `rv32i`    + `u` + `Zicsr` + `Zifencei` |       1927 |      903 |       2048  |    0 | 123 MHz |
+| `rv32im`   + `u` + `Zicsr` + `Zifencei` |       2471 |     1148 |       2048  |    0 | 120 MHz |
+| `rv32imc`  + `u` + `Zicsr` + `Zifencei` |       2716 |     1165 |       2048  |    0 | 120 MHz |
+| `rv32imac` + `u` + `Zicsr` + `Zifencei` |       2736 |     1168 |       2048  |    0 | 122 MHz |
 
-| CPU Configuration                | LEs        | FFs      | Memory bits | DSPs | f_max   |
-|:---------------------------------|:----------:|:--------:|:-----------:|:----:|:-------:|
-| `rv32i`                          |       1113 |      479 |       2048  |    0 | 109 MHz |
-| `rv32i`   + `Zicsr` + `Zifencei` |       1851 |      817 |       2048  |    0 | 100 MHz |
-| `rv32im`  + `Zicsr` + `Zifencei` |       2462 |     1065 |       2048  |    0 | 100 MHz |
-| `rv32imc` + `Zicsr` + `Zifencei` |       2714 |     1064 |       2048  |    0 | 100 MHz |
-| `rv32emc` + `Zicsr` + `Zifencei` |       2717 |     1064 |       1024  |    0 | 100 MHz |
-
-### Processor-Internal Peripherals and Memories
-
-Results generated for hardware version: `1.3.6.5`
-
-| Module    | Description                                     | LEs | FFs | Memory bits | DSPs |
-|:----------|:------------------------------------------------|:---:|:---:|:-----------:|:----:|
-| BOOT ROM  | Bootloader ROM (4kB)                            |   4 |   1 |      32 768 |    0 |
-| BUSSWITCH | Mux for CPU I & D interfaces                    |  62 |   8 |           0 |    0 |
-| DEVNULL   | Dummy device                                    |   3 |   1 |           0 |    0 |
-| DMEM      | Processor-internal data memory (8kB)            |  12 |   2 |      65 536 |    0 |
-| GPIO      | General purpose input/output ports              |  40 |  33 |           0 |    0 |
-| IMEM      | Processor-internal instruction memory (16kb)    |   7 |   2 |     131 072 |    0 |
-| MTIME     | Machine system timer                            | 266 | 166 |           0 |    0 |
-| PWM       | Pulse-width modulation controller               |  72 |  69 |           0 |    0 |
-| SPI       | Serial peripheral interface                     | 198 | 125 |           0 |    0 |
-| SYSINFO   | System configuration information memory         |  10 |   9 |           0 |    0 |
-| TRNG      | True random number generator                    | 105 |  93 |           0 |    0 |
-| TWI       | Two-wire interface                              |  75 |  44 |           0 |    0 |
-| UART      | Universal asynchronous receiver/transmitter     | 153 | 108 |           0 |    0 |
-| WDT       | Watchdog timer                                  |  59 |  45 |           0 |    0 |
+Setups with enabled "embedded CPU extension" `E` show the same LUT and FF utilization and identical f_max. However, the size of the register file is cut in half. 
 
 
-### Exemplary FPGA Setups
+### NEORV32 Processor-Internal Peripherals and Memories
 
-Exemplary implementation results for different FPGA platforms. The processor setup uses *all provided peripherals*,
-no external memory interface, no PMP and only internal instruction and data memories. IMEM uses 16kB and DMEM uses 8kB memory space. The setup's top entity connects most of the
+Results generated for hardware version [`1.4.9.0`](https://github.com/stnolting/neorv32/blob/master/CHANGELOG.md).
+
+| Module    | Description                                          | LEs | FFs | Memory bits | DSPs |
+|:----------|:-----------------------------------------------------|----:|----:|------------:|-----:|
+| BOOT ROM  | Bootloader ROM (default 4kB)                         |   3 |   1 |      32 768 |    0 |
+| BUSSWITCH | Mux for CPU I & D interfaces                         |  65 |   8 |           0 |    0 |
+| CFU0      | Custom functions unit 0                              |   - |   - |           - |    - |
+| CFU1      | Custom functions unit 1                              |   - |   - |           - |    - |
+| DMEM      | Processor-internal data memory (default 8kB)         |   6 |   2 |      65 536 |    0 |
+| GPIO      | General purpose input/output ports                   |  67 |  65 |           0 |    0 |
+| IMEM      | Processor-internal instruction memory (default 16kb) |   6 |   2 |     131 072 |    0 |
+| MTIME     | Machine system timer                                 | 274 | 166 |           0 |    0 |
+| PWM       | Pulse-width modulation controller                    |  71 |  69 |           0 |    0 |
+| SPI       | Serial peripheral interface                          | 138 | 124 |           0 |    0 |
+| SYSINFO   | System configuration information memory              |  11 |  10 |           0 |    0 |
+| TRNG      | True random number generator                         | 132 | 105 |           0 |    0 |
+| TWI       | Two-wire interface                                   |  77 |  46 |           0 |    0 |
+| UART      | Universal asynchronous receiver/transmitter          | 176 | 132 |           0 |    0 |
+| WDT       | Watchdog timer                                       |  60 |  45 |           0 |    0 |
+| WISHBONE  | External memory interface                            | 129 | 104 |           0 |    0 |
+
+
+### NEORV32 Processor - Exemplary FPGA Setups
+
+Exemplary processor implementation results for different FPGA platforms. The processor setup uses *the default peripheral configuration* (like no _CFUs_ and no _TRNG_),
+no external memory interface and only internal instruction and data memories. IMEM uses 16kB and DMEM uses 8kB memory space. The setup's top entity connects most of the
 processor's [top entity](https://github.com/stnolting/neorv32/blob/master/rtl/core/neorv32_top.vhd) signals
-to FPGA pins - except for the Wishbone bus and the interrupt signals.
+to FPGA pins - except for the Wishbone bus and the interrupt signals. The "default" strategy of each toolchain is used.
 
-Results generated for hardware version: `1.3.6.5`
+Results generated for hardware version [`1.4.9.0`](https://github.com/stnolting/neorv32/blob/master/CHANGELOG.md).
 
-| Vendor  | FPGA                              | Board            | Toolchain               | Impl. strategy |CPU                                | LUT / LE   | FF / REG   | DSP    | Memory Bits  | BRAM / EBR | SPRAM    | Frequency      |
-|:--------|:----------------------------------|:-----------------|:------------------------|:---------------|:----------------------------------|:-----------|:-----------|:-------|:-------------|:-----------|:---------|---------------:|
-| Intel   | Cyclone IV `EP4CE22F17C6N`        | Terasic DE0-Nano | Quartus Prime Lite 19.1 | balanced       | `rv32imcu` + `Zicsr` + `Zifencei` | 3800 (17%) | 1706  (8%) | 0 (0%) | 231424 (38%) |          - |        - |        100 MHz |
-| Lattice | iCE40 UltraPlus `iCE40UP5K-SG48I` | Upduino v2.0     | Radiant 2.1 (LSE)       | timing         | `rv32icu`  + `Zicsr` + `Zifencei` | 4950 (93%) | 1641 (31%) | 0 (0%) |            - |   12 (40%) | 4 (100%) | *c* 22.875 MHz |
-| Xilinx  | Artix-7 `XC7A35TICSG324-1L`       | Arty A7-35T      | Vivado 2019.2           | default        | `rv32imcu` + `Zicsr` + `Zifencei` | 2445 (12%) | 1893  (4%) | 0 (0%) |            - |    8 (16%) |        - |    *c* 100 MHz |
+| Vendor  | FPGA                              | Board            | Toolchain                  | CPU Configuration                              | LUT / LE   | FF / REG   | DSP    | Memory Bits  | BRAM / EBR | SPRAM    | Frequency     |
+|:--------|:----------------------------------|:-----------------|:---------------------------|:-----------------------------------------------|:-----------|:-----------|:-------|:-------------|:-----------|:---------|--------------:|
+| Intel   | Cyclone IV `EP4CE22F17C6N`        | Terasic DE0-Nano | Quartus Prime Lite 20.1    | `rv32imc` + `u` + `Zicsr` + `Zifencei`         | 3813 (17%) | 1904  (8%) | 0 (0%) | 231424 (38%) |          - |        - |       119 MHz |
+| Lattice | iCE40 UltraPlus `iCE40UP5K-SG48I` | Upduino v2.0     | Radiant 2.1 (Synplify Pro) | `rv32ic`  + `u` + `Zicsr` + `Zifencei`         | 4397 (83%) | 1679 (31%) | 0 (0%) |            - |   12 (40%) | 4 (100%) | *c* 22.15 MHz |
+| Xilinx  | Artix-7 `XC7A35TICSG324-1L`       | Arty A7-35T      | Vivado 2019.2              | `rv32imc` + `u` + `Zicsr` + `Zifencei` + `PMP` | 2465 (12%) | 1912  (5%) | 0 (0%) |            - |    8 (16%) |        - |   *c* 100 MHz |
 
-**Notes**
+**_Notes_**
 * The Lattice iCE40 UltraPlus setup uses the FPGA's SPRAM memory primitives for the internal IMEM and DMEM (each 64kb).
 The FPGA-specific memory components can be found in [`rtl/fpga_specific`](https://github.com/stnolting/neorv32/blob/master/rtl/fpga_specific/lattice_ice40up).
 * The clock frequencies marked with a "c" are constrained clocks. The remaining ones are _f_max_ results from the place and route timing reports.
 * The Upduino and the Arty board have on-board SPI flash memories for storing the FPGA configuration. These device can also be used by the default NEORV32
 bootloader to store and automatically boot an application program after reset (both tested successfully).
+* The setups with `PMP` implement 2 regions with a minimal granularity of 64kB.
+
+
 
 ## Performance
 
@@ -274,24 +315,30 @@ The [CoreMark CPU benchmark](https://www.eembc.org/coremark) was executed on the
 [sw/example/coremark](https://github.com/stnolting/neorv32/blob/master/sw/example/coremark) project folder. This benchmark
 tests the capabilities of a CPU itself rather than the functions provided by the whole system / SoC.
 
-Results generated for hardware version: `1.3.7.0`
+Results generated for hardware version [`1.4.7.0`](https://github.com/stnolting/neorv32/blob/master/CHANGELOG.md).
 
 ~~~
 **Configuration**
-Hardware:    32kB IMEM, 16kB DMEM, 100MHz clock
-CoreMark:    2000 iterations, MEM_METHOD is MEM_STACK
-Compiler:    RISCV32-GCC 10.1.0
-Peripherals: UART for printing the results
+Hardware:       32kB IMEM, 16kB DMEM, 100MHz clock
+CoreMark:       2000 iterations, MEM_METHOD is MEM_STACK
+Compiler:       RISCV32-GCC 10.1.0 (rv32i toolchain)
+Compiler flags: default, see makefile
+Peripherals:    UART for printing the results
 ~~~
 
-| CPU                  | Executable Size | Optimization | CoreMark Score | CoreMarks/MHz |
-|:---------------------|:---------------:|:------------:|:--------------:|:-------------:|
-| `rv32i`              |    26 748 bytes |        `-O3` |          28.98 |        0.2898 |
-| `rv32im`             |    25 580 bytes |        `-O3` |          60.60 |        0.6060 |
-| `rv32imc`            |    19 636 bytes |        `-O3` |          62.50 |        0.6250 |
-| `rv32imc` + FAST_MUL |    19 636 bytes |        `-O3` |          74.07 |        0.7407 |
+| CPU                                         | Executable Size | Optimization | CoreMark Score | CoreMarks/MHz |
+|:--------------------------------------------|:---------------:|:------------:|:--------------:|:-------------:|
+| `rv32i`                                     |    27 424 bytes |        `-O3` |          35.71 |    **0.3571** |
+| `rv32im`                                    |    26 232 bytes |        `-O3` |          66.66 |    **0.6666** |
+| `rv32imc`                                   |    20 876 bytes |        `-O3` |          66.66 |    **0.6666** |
+| `rv32imc` + `FAST_MUL_EN`                   |    20 876 bytes |        `-O3` |          83.33 |    **0.8333** |
+| `rv32imc` + `FAST_MUL_EN` + `FAST_SHIFT_EN` |    20 876 bytes |        `-O3` |          86.96 |    **0.8696** |
 
-The _FAST_MUL_ configuration uses DSPs for the multiplier of the `M` extension (enabled via the `FAST_MUL_EN` generic).
+The `FAST_MUL_EN` configuration uses DSPs for the multiplier of the `M` extension (enabled via the `FAST_MUL_EN` generic). The `FAST_SHIFT_EN` configuration
+uses a barrel shifter for CPU shift operations (enabled via the `FAST_SHIFT_EN` generic).
+
+When the `C` extension is enabled, branches to an unaligned uncompressed instruction require additional instruction fetch cycles.
+
 
 ### Instruction Cycles
 
@@ -300,7 +347,7 @@ each instruction requires several clock cycles to execute (2 cycles for ALU oper
 The average CPI (cycles per instruction) depends on the instruction mix of a specific applications and also on the available
 CPU extensions.
 
-Please note that the CPU-internal shifter (e.g. for the `SLL` instruction) as well as the multiplier and divider of the
+Please note that by default the CPU-internal shifter (e.g. for the `SLL` instruction) as well as the multiplier and divider of the
 `M` extension use a bit-serial approach and require several cycles for completion.
 
 The following table shows the performance results for successfully running 2000 CoreMark
@@ -308,183 +355,73 @@ iterations, which reflects a pretty good "real-life" work load. The average CPI 
 dividing the total number of required clock cycles (only the timed core to avoid distortion due to IO wait cycles; sampled via the `cycle[h]` CSRs)
 by the number of executed instructions (`instret[h]` CSRs). The executables were generated using optimization `-O3`.
 
-Results generated for hardware version: `1.3.7.0`
+Results generated for hardware version [`1.4.7.0`](https://github.com/stnolting/neorv32/blob/master/CHANGELOG.md).
 
-| CPU                  | Required Clock Cycles | Executed Instructions | Average CPI |
-|:---------------------|----------------------:|----------------------:|:-----------:|
-| `rv32i`              |         6 955 817 507 |         1 468 927 290 |        4.73 |
-| `rv32im`             |         3 376 961 507 |           601 565 750 |        5.61 |
-| `rv32imc`            |         3 274 832 513 |           601 565 964 |        5.44 |
-| `rv32imc` + FAST_MUL |         2 711 072 513 |           601 566 024 |        4.51 |
+| CPU                                         | Required Clock Cycles | Executed Instructions | Average CPI |
+|:--------------------------------------------|----------------------:|----------------------:|:-----------:|
+| `rv32i`                                     |         5 648 997 774 |         1 469 233 238 |    **3.84** |
+| `rv32im`                                    |         3 036 749 774 |           601 871 338 |    **5.05** |
+| `rv32imc`                                   |         3 036 959 882 |           615 034 616 |    **4.94** |
+| `rv32imc` + `FAST_MUL_EN`                   |         2 454 407 882 |           615 034 588 |    **3.99** |
+| `rv32imc` + `FAST_MUL_EN` + `FAST_SHIFT_EN` |         2 320 308 322 |           615 034 676 |    **3.77** |
 
-The _FAST_MUL_ configuration uses DSPs for the multiplier of the `M` extension (enabled via the `FAST_MUL_EN` generic).
+
+The `FAST_MUL_EN` configuration uses DSPs for the multiplier of the `M` extension (enabled via the `FAST_MUL_EN` generic). The `FAST_SHIFT_EN` configuration
+uses a barrel shifter for CPU shift operations (enabled via the `FAST_SHIFT_EN` generic).
+
+When the `C` extension is enabled branches to an unaligned uncompressed instruction require additional instruction fetch cycles.
+
 
 
 ## Top Entities
 
-The top entity of the **processor** is [**neorv32_top.vhd**](https://github.com/stnolting/neorv32/blob/master/rtl/core/neorv32_top.vhd) (from the `rtl/core` folder).
-Just instantiate this file in your project and you are ready to go! All signals of this top entity are of type *std_ulogic* or *std_ulogic_vector*, respectively
-(except for the TWI signals, which are of type *std_logic*).
+The top entity of the **NEORV32 Processor** (SoC) is [`rtl/core/neorv32_top.vhd`](https://github.com/stnolting/neorv32/blob/master/rtl/core/neorv32_top.vhd).
 
-The top entity of the **CPU** is [**neorv32_cpu.vhd**](https://github.com/stnolting/neorv32/blob/master/rtl/core/neorv32_cpu.vhd) (from the `rtl/core` folder).
-All signals of this top entity are of type *std_ulogic* or *std_ulogic_vector*, respectively.
+All signals of the top entity are of type *std_ulogic* or *std_ulogic_vector*, respectively
+(except for the processor's TWI signals, which are of type *std_logic*). Leave all unused output ports unconnected (`open`) and tie all unused
+input ports to zero (`'0'` or `(others => '0')`, respectively).
 
-Use the generics to configure the processor/CPU according to your needs. Each generic is initilized with the default configuration.
-Detailed information regarding the signals and configuration generics can be found in the [NEORV32 documentary](https://raw.githubusercontent.com/stnolting/neorv32/master/docs/NEORV32.pdf).
+Use the top's generics to configure the system according to your needs. Each generic is initilized with the default configuration.
+Detailed information regarding the interface signals and configuration generics can be found in
+the [:page_facing_up: NEORV32 data sheet](https://raw.githubusercontent.com/stnolting/neorv32/master/docs/NEORV32.pdf) (pdf).
 
-Alternative top entities can be found in [`rtl/top_templates`](https://github.com/stnolting/neorv32/blob/master/rtl/top_templates) folder.
 
-### Processor
+### Using the CPU in Stand-Alone Mode
 
-```vhdl
-entity neorv32_top is
-  generic (
-    -- General --
-    CLOCK_FREQUENCY              : natural := 0;      -- clock frequency of clk_i in Hz
-    BOOTLOADER_USE               : boolean := true;   -- implement processor-internal bootloader?
-    USER_CODE                    : std_ulogic_vector(31 downto 0) := x"00000000"; -- custom user code
-    -- RISC-V CPU Extensions --
-    CPU_EXTENSION_RISCV_C        : boolean := false;  -- implement compressed extension?
-    CPU_EXTENSION_RISCV_E        : boolean := false;  -- implement embedded RF extension?
-    CPU_EXTENSION_RISCV_M        : boolean := false;  -- implement muld/div extension?
-    CPU_EXTENSION_RISCV_U        : boolean := false;  -- implement user mode extension?
-    CPU_EXTENSION_RISCV_Zicsr    : boolean := true;   -- implement CSR system?
-    CPU_EXTENSION_RISCV_Zifencei : boolean := true;   -- implement instruction stream sync.?
-    -- Extension Options --
-    CSR_COUNTERS_USE             : boolean := true;  -- implement RISC-V perf. counters ([m]instret[h], [m]cycle[h], time[h])?
-    FAST_MUL_EN                  : boolean := false; -- use DSPs for M extension's multiplier
-    -- Physical Memory Protection (PMP) --
-    PMP_USE                      : boolean := false; -- implement PMP?
-    PMP_NUM_REGIONS              : natural := 4;     -- number of regions (max 8)
-    PMP_GRANULARITY              : natural := 14;    -- minimal region granularity (1=8B, 2=16B, 3=32B, ...) default is 64k
-    -- Memory configuration: Instruction memory --
-    MEM_ISPACE_BASE              : std_ulogic_vector(31 downto 0) := x"00000000"; -- base address of instruction memory space
-    MEM_ISPACE_SIZE              : natural := 16*1024; -- total size of instruction memory space in byte
-    MEM_INT_IMEM_USE             : boolean := true;   -- implement processor-internal instruction memory
-    MEM_INT_IMEM_SIZE            : natural := 16*1024; -- size of processor-internal instruction memory in bytes
-    MEM_INT_IMEM_ROM             : boolean := false;  -- implement processor-internal instruction memory as ROM
-    -- Memory configuration: Data memory --
-    MEM_DSPACE_BASE              : std_ulogic_vector(31 downto 0) := x"80000000"; -- base address of data memory space
-    MEM_DSPACE_SIZE              : natural := 8*1024; -- total size of data memory space in byte
-    MEM_INT_DMEM_USE             : boolean := true;   -- implement processor-internal data memory
-    MEM_INT_DMEM_SIZE            : natural := 8*1024; -- size of processor-internal data memory in bytes
-    -- Memory configuration: External memory interface --
-    MEM_EXT_USE                  : boolean := false;  -- implement external memory bus interface?
-    MEM_EXT_REG_STAGES           : natural := 2;      -- number of interface register stages (0,1,2)
-    MEM_EXT_TIMEOUT              : natural := 15;     -- cycles after which a valid bus access will timeout
-    -- Processor peripherals --
-    IO_GPIO_USE                  : boolean := true;   -- implement general purpose input/output port unit (GPIO)?
-    IO_MTIME_USE                 : boolean := true;   -- implement machine system timer (MTIME)?
-    IO_UART_USE                  : boolean := true;   -- implement universal asynchronous receiver/transmitter (UART)?
-    IO_SPI_USE                   : boolean := true;   -- implement serial peripheral interface (SPI)?
-    IO_TWI_USE                   : boolean := true;   -- implement two-wire interface (TWI)?
-    IO_PWM_USE                   : boolean := true;   -- implement pulse-width modulation unit (PWM)?
-    IO_WDT_USE                   : boolean := true;   -- implement watch dog timer (WDT)?
-    IO_TRNG_USE                  : boolean := false;  -- implement true random number generator (TRNG)?
-    IO_DEVNULL_USE               : boolean := true    -- implement dummy device (DEVNULL)?
-  );
-  port (
-    -- Global control --
-    clk_i      : in  std_ulogic := '0'; -- global clock, rising edge
-    rstn_i     : in  std_ulogic := '0'; -- global reset, low-active, async
-    -- Wishbone bus interface (available if MEM_EXT_USE = true) --
-    wb_adr_o   : out std_ulogic_vector(31 downto 0); -- address
-    wb_dat_i   : in  std_ulogic_vector(31 downto 0) := (others => '0'); -- read data
-    wb_dat_o   : out std_ulogic_vector(31 downto 0); -- write data
-    wb_we_o    : out std_ulogic; -- read/write
-    wb_sel_o   : out std_ulogic_vector(03 downto 0); -- byte enable
-    wb_stb_o   : out std_ulogic; -- strobe
-    wb_cyc_o   : out std_ulogic; -- valid cycle
-    wb_ack_i   : in  std_ulogic := '0'; -- transfer acknowledge
-    wb_err_i   : in  std_ulogic := '0'; -- transfer error
-    -- Advanced memory control signals (available if MEM_EXT_USE = true) --
-    fence_o    : out std_ulogic; -- indicates an executed FENCE operation
-    fencei_o   : out std_ulogic; -- indicates an executed FENCEI operation
-    -- GPIO (available if IO_GPIO_USE = true) --
-    gpio_o     : out std_ulogic_vector(15 downto 0); -- parallel output
-    gpio_i     : in  std_ulogic_vector(15 downto 0) := (others => '0'); -- parallel input
-    -- UART (available if IO_UART_USE = true) --
-    uart_txd_o : out std_ulogic; -- UART send data
-    uart_rxd_i : in  std_ulogic := '0'; -- UART receive data
-    -- SPI (available if IO_SPI_USE = true) --
-    spi_sck_o  : out std_ulogic; -- SPI serial clock
-    spi_sdo_o  : out std_ulogic; -- controller data out, peripheral data in
-    spi_sdi_i  : in  std_ulogic := '0'; -- controller data in, peripheral data out
-    spi_csn_o  : out std_ulogic_vector(07 downto 0); -- SPI CS
-    -- TWI (available if IO_TWI_USE = true) --
-    twi_sda_io : inout std_logic := 'H'; -- twi serial data line
-    twi_scl_io : inout std_logic := 'H'; -- twi serial clock line
-    -- PWM (available if IO_PWM_USE = true) --
-    pwm_o      : out std_ulogic_vector(03 downto 0); -- pwm channels
-    -- Interrupts --
-    msw_irq_i  : in  std_ulogic := '0'; -- machine software interrupt
-    mext_irq_i : in  std_ulogic := '0'  -- machine external interrupt
-  );
-end neorv32_top;
-```
+If you do not want to use the NEORV32 processor setup, you can also use the CPU in stand-alone mode and build your own system around it.
+The top entity of the stand-alone **NEORV32 CPU** is [`rtl/core/neorv32_cpu.vhd`](https://github.com/stnolting/neorv32/blob/master/rtl/core/neorv32_cpu.vhd).
+Note that the CPU uses a proprietary interface for accessing data and instruction memory. More information can be found in the
+[:page_facing_up: NEORV32 data sheet](https://raw.githubusercontent.com/stnolting/neorv32/master/docs/NEORV32.pdf).
 
-### CPU
+:warning: It is recommended to use the processor setup even if you only want to use the CPU. Simply disable all the processor-internal modules via the generics
+and you will get a "CPU wrapper" that provides a minimal CPU environment and an external memory interface (like AXI4). This setup also allows to further use the default
+bootloader and application makefiles. From this base you can start building your own processor system.
 
-```vhdl
-entity neorv32_cpu is
-  generic (
-    -- General --
-    HW_THREAD_ID                 : std_ulogic_vector(31 downto 0):= (others => '0'); -- hardware thread id
-    CPU_BOOT_ADDR                : std_ulogic_vector(31 downto 0):= (others => '0'); -- cpu boot address
-    -- RISC-V CPU Extensions --
-    CPU_EXTENSION_RISCV_C        : boolean := false; -- implement compressed extension?
-    CPU_EXTENSION_RISCV_E        : boolean := false; -- implement embedded RF extension?
-    CPU_EXTENSION_RISCV_M        : boolean := false; -- implement muld/div extension?
-    CPU_EXTENSION_RISCV_U        : boolean := false; -- implement user mode extension?
-    CPU_EXTENSION_RISCV_Zicsr    : boolean := true;  -- implement CSR system?
-    CPU_EXTENSION_RISCV_Zifencei : boolean := true;  -- implement instruction stream sync.?
-    -- Extension Options --
-    CSR_COUNTERS_USE             : boolean := true;  -- implement RISC-V perf. counters ([m]instret[h], [m]cycle[h], time[h])?
-    FAST_MUL_EN                  : boolean := false; -- use DSPs for M extension's multiplier
-    -- Physical Memory Protection (PMP) --
-    PMP_USE                      : boolean := false; -- implement PMP?
-    PMP_NUM_REGIONS              : natural := 4;     -- number of regions (max 8)
-    PMP_GRANULARITY              : natural := 14;    -- minimal region granularity (1=8B, 2=16B, 3=32B, ...) default is 64k
-    -- Bus Interface --
-    BUS_TIMEOUT                  : natural := 15     -- cycles after which a valid bus access will timeout
-  );
-  port (
-    -- global control --
-    clk_i          : in  std_ulogic := '0'; -- global clock, rising edge
-    rstn_i         : in  std_ulogic := '0'; -- global reset, low-active, async
-    -- instruction bus interface --
-    i_bus_addr_o   : out std_ulogic_vector(data_width_c-1 downto 0); -- bus access address
-    i_bus_rdata_i  : in  std_ulogic_vector(data_width_c-1 downto 0) := (others => '0'); -- bus read data
-    i_bus_wdata_o  : out std_ulogic_vector(data_width_c-1 downto 0); -- bus write data
-    i_bus_ben_o    : out std_ulogic_vector(03 downto 0); -- byte enable
-    i_bus_we_o     : out std_ulogic; -- write enable
-    i_bus_re_o     : out std_ulogic; -- read enable
-    i_bus_cancel_o : out std_ulogic; -- cancel current bus transaction
-    i_bus_ack_i    : in  std_ulogic := '0'; -- bus transfer acknowledge
-    i_bus_err_i    : in  std_ulogic := '0'; -- bus transfer error
-    i_bus_fence_o  : out std_ulogic; -- executed FENCEI operation
-    -- data bus interface --
-    d_bus_addr_o   : out std_ulogic_vector(data_width_c-1 downto 0); -- bus access address
-    d_bus_rdata_i  : in  std_ulogic_vector(data_width_c-1 downto 0) := (others => '0'); -- bus read data
-    d_bus_wdata_o  : out std_ulogic_vector(data_width_c-1 downto 0); -- bus write data
-    d_bus_ben_o    : out std_ulogic_vector(03 downto 0); -- byte enable
-    d_bus_we_o     : out std_ulogic; -- write enable
-    d_bus_re_o     : out std_ulogic; -- read enable
-    d_bus_cancel_o : out std_ulogic; -- cancel current bus transaction
-    d_bus_ack_i    : in  std_ulogic := '0'; -- bus transfer acknowledge
-    d_bus_err_i    : in  std_ulogic := '0'; -- bus transfer error
-    d_bus_fence_o  : out std_ulogic; -- executed FENCE operation
-    -- system time input from MTIME --
-    time_i         : in  std_ulogic_vector(63 downto 0) := (others => '0'); -- current system time
-    -- interrupts (risc-v compliant) --
-    msw_irq_i      : in  std_ulogic := '0'; -- machine software interrupt
-    mext_irq_i     : in  std_ulogic := '0'; -- machine external interrupt
-    mtime_irq_i    : in  std_ulogic := '0'; -- machine timer interrupt
-    -- fast interrupts (custom) --
-    firq_i         : in  std_ulogic_vector(3 downto 0) := (others => '0')
-  );
-end neorv32_cpu;
-```
+
+### Alternative Top Entities
+
+*Alternative top entities*, like the simplified ["hello world" test setup](#Create-a-new-Hardware-Project) or CPU/Processor
+wrappers with resolved port signal types (i.e. *std_logic*), can be found in [`rtl/top_templates`](https://github.com/stnolting/neorv32/blob/master/rtl/top_templates).
+
+
+### AXI4 Connectivity
+
+Via the [`rtl/top_templates/neorv32_top_axi4lite.vhd`](https://github.com/stnolting/neorv32/blob/master/rtl/top_templates/neorv32_top_axi4lite.vhd)
+wrapper the NEORV32 provides an **AXI4-Lite** compatible master interface. This wrapper instantiates the default
+[NEORV32 processor top entitiy](https://github.com/stnolting/neorv32/blob/master/rtl/core/neorv32_top.vhd) and implements a Wishbone to AXI4-Lite bridge.
+
+The AXI4-Lite interface has been tested using Xilinx Vivado 19.2 block designer:
+
+![AXI-SoC](https://raw.githubusercontent.com/stnolting/neorv32/master/docs/figures/neorv32_axi_soc.png)
+
+The processor was packed as custom IP using `neorv32_top_axi4lite.vhd` as top entity. The AXI interface is automatically detected by the packager.
+All remaining IO interfaces are available as custom signals. The configuration generics are available via the "customize IP" dialog.
+In the figure above the resulting IP block is named "neorv32_top_axi4lite_v1_0".
+*(Note: Use Syntheiss option "global" when generating the block design to maintain the internal TWI tri-state drivers.)*
+
+The setup uses an AXI interconnect to attach two block RAMs to the processor. Since the processor in this example is configured *without* IMEM and DMEM,
+the attached block RAMs are used for storing instructions and data: the first RAM is used as instruction memory
+and is mapped to address `0x00000000 - 0x00003fff` (16kB), the second RAM is used as data memory and is mapped to address `0x80000000 - 0x80001fff` (8kB).
 
 
 
@@ -492,7 +429,7 @@ end neorv32_cpu;
 
 This overview is just a short excerpt from the *Let's Get It Started* section of the NEORV32 documentary:
 
-[![NEORV32 datasheet](https://raw.githubusercontent.com/stnolting/neorv32/master/docs/figures/PDF_32.png) NEORV32 datasheet](https://raw.githubusercontent.com/stnolting/neorv32/master/docs/NEORV32.pdf)
+[:page_facing_up: NEORV32 data sheet](https://raw.githubusercontent.com/stnolting/neorv32/master/docs/NEORV32.pdf)
 
 
 ### Toolchain
@@ -503,30 +440,38 @@ and build the toolchain by yourself, or you can download a prebuilt one and inst
 :warning: Keep in mind that – for instance – a `rv32imc` toolchain only provides library code compiled with compressed and
 `mul`/`div` instructions! Hence, this code cannot be executed (without emulation) on an architecture without these extensions!
 
-To build the toolchain by yourself, follow the official [build instructions](https://github.com/riscv/riscv-gnu-toolchain.
+To build the toolchain by yourself, follow the official [build instructions](https://github.com/riscv/riscv-gnu-toolchain).
 Make sure to use the `ilp32` or `ilp32e` ABI.
 
 **Alternatively**, you can download a prebuilt toolchain. I have uploaded the toolchains I am using to GitHub. These toolchains
-were compiled on a 64-bit x86 Ubuntu 20.04 LTS (Ubuntu on Windows, actually). Download the toolchain of choice:
+were compiled on a 64-bit x86 Ubuntu 20.04 LTS (Ubuntu on Windows, actually). Download the toolchain of choice: 
+[:octocat: github.com/stnolting/riscv_gcc_prebuilt](https://github.com/stnolting/riscv_gcc_prebuilt)
 
-[https://github.com/stnolting/riscv_gcc_prebuilt](https://github.com/stnolting/riscv_gcc_prebuilt)
 
+### Dowload the NEORV32 Project
 
-### Dowload the NEORV32 and Create a Hardware Project
-
-Get the sources of the NEORV32 Processor project. You can either download a [release](https://github.com/stnolting/neorv32/releases)
-or get the most recent version of this project as [`*.zip` file](https://github.com/stnolting/neorv32/archive/master.zip) or using `git clone` (suggested for easy project updates via `git pull`):
+Get the sources of the NEORV32 Processor project. The simplest way is using `git clone` (suggested for easy project updates via `git pull`):
 
     $ git clone https://github.com/stnolting/neorv32.git
 
-Create a new project with your FPGA design tool of choice and add all the `*.vhd` files from the [`rtl/core`](https://github.com/stnolting/neorv32/blob/master/rtl)
-folder to this project. Make sure to add them to a **new library** called `neorv32`.
+Alternatively, you can either download a specific [release](https://github.com/stnolting/neorv32/releases) or get the most recent version
+of this project as [`*.zip` file](https://github.com/stnolting/neorv32/archive/master.zip).
 
-You can either instantiate the [processor's top entity](https://github.com/stnolting/neorv32#top-entity) in your own project or you
-can use a simple [test setup](https://github.com/stnolting/neorv32/blob/master/rtl/top_templates/neorv32_test_setup.vhd) (from the project's
-[`rtl/top_templates`](https://github.com/stnolting/neorv32/blob/master/rtl/top_templates) folder) as top entity.
-This test setup instantiates the processor and implements most of the peripherals and some ISA extensions. Only the UART, clock, reset and some GPIO output sginals are
-propagated (basically, its a FPGA "hello world" example):
+
+### Create a new Hardware Project
+
+Create a new project with your FPGA design tool of choice. Add all the `*.vhd` files from the [`rtl/core`](https://github.com/stnolting/neorv32/blob/master/rtl)
+folder to this project. Make sure to add these files to a **new design library** called `neorv32`.
+
+You can either instantiate the [processor's top entity](https://github.com/stnolting/neorv32/blob/master/rtl/core/neorv32_top.vhd) or one of its
+[wrappers](https://github.com/stnolting/neorv32/blob/master/rtl/top_templates) in your own project. If you just want to try out the processor,
+you can use the simple [test setup](https://github.com/stnolting/neorv32/blob/master/rtl/top_templates/neorv32_test_setup.vhd) as top entity.
+
+![neorv32 test setup](https://raw.githubusercontent.com/stnolting/neorv32/master/docs/figures/neorv32_test_setup.png)
+
+
+This test setup instantiates the processor and implements most of the peripherals and some ISA extensions. Only the UART lines, clock, reset and some GPIO output signals are
+propagated as actual entity signals. Basically, it is a FPGA "hello world" example:
 
 ```vhdl
   entity neorv32_test_setup is
@@ -544,40 +489,52 @@ propagated (basically, its a FPGA "hello world" example):
 ```
 
 
-### Compiling and Uploading One of the Example Projects
+### Check the Toolchain
 
 Make sure `GNU Make` and a native `GCC` compiler are installed. To test the installation of the RISC-V toolchain navigate to an example project like
 `sw/example/blink_led` and run:
 
     neorv32/sw/example/blink_led$ make check
 
+
+### Compiling an Example Program
+
 The NEORV32 project includes some [example programs](https://github.com/stnolting/neorv32/tree/master/sw/example) from
 which you can start your own application. Simply compile one of these projects. This will create a NEORV32
-executable `neorv32_exe.bin` in the same folder.
+*executable* `neorv32_exe.bin` in the same folder:
 
-    neorv32/sw/example/blink_led$ make clean_all compile
+    neorv32/sw/example/blink_led$ make clean_all exe
 
-Connect your FPGA board via UART to you computer and open the according port to interface with the NEORV32 bootloader. The bootloader
+
+### Upload the Executable via the Bootloader
+
+You can upload a generated executable directly from the command line using the makefile's `upload` target. Replace `/dev/ttyUSB0` with
+the according serial port.
+
+    sw/exeample/blink_example$ make COM_PORT=/dev/ttyUSB0` upload
+
+A more "secure" way is to use a dedicated terminal program. This allows to directly interact with the bootloader console.
+Connect your FPGA board via UART to your computer and open the according port to interface with the NEORV32 bootloader. The bootloader
 uses the following default UART configuration:
 
-- 19200 Baud
-- 8 data bits
-- 1 stop bit
-- No parity bits
-- No transmission / flow control protocol (raw bytes only)
-- Newline on `\r\n` (carriage return & newline)
+* 19200 Baud
+* 8 data bits
+* 1 stop bit
+* No parity bits
+* No transmission / flow control protocol (raw bytes only)
+* Newline on `\r\n` (carriage return & newline) - also for sent data
 
-Use the bootloader console to upload the `neorv32_exe.bin` file and run your application image.
+Use the bootloader console to upload the `neorv32_exe.bin` executable and run your application image.
 
 ```
   << NEORV32 Bootloader >>
   
-  BLDV: Jul  6 2020
-  HWV:  1.0.1.0
+  BLDV: Nov  7 2020
+  HWV:  0x01040606
   CLK:  0x0134FD90 Hz
   USER: 0x0001CE40
   MISA: 0x42801104
-  CONF: 0x03FF0035
+  PROC: 0x03FF0035
   IMEM: 0x00010000 bytes @ 0x00000000
   DMEM: 0x00010000 bytes @ 0x80000000
   
@@ -599,18 +556,26 @@ Use the bootloader console to upload the `neorv32_exe.bin` file and run your app
   Blinking LED demo program
 ```
 
-Going further: Take a look at the _Let's Get It Started!_ chapter of the [![NEORV32 datasheet](https://raw.githubusercontent.com/stnolting/neorv32/master/docs/figures/PDF_32.png) NEORV32 datasheet](https://raw.githubusercontent.com/stnolting/neorv32/master/docs/NEORV32.pdf).
+Going further: Take a look at the _Let's Get It Started!_ chapter of the [:page_facing_up: NEORV32 data sheet](https://raw.githubusercontent.com/stnolting/neorv32/master/docs/NEORV32.pdf).
 
 
 
-## Contribute
+## Contribute/Feedback/Questions
 
 I'm always thankful for help! So if you have any questions, bug reports, ideas or if you want to give some kind of feedback, feel free
-to open a [new issue](https://github.com/stnolting/neorv32/issues).
+to [:bulb: open a new issue](https://github.com/stnolting/neorv32/issues), start a new [:sparkles: discussion on GitHub](https://github.com/stnolting/neorv32/discussions)
+or directly [:e-mail: drop me a line](mailto:stnolting@gmail.com).
 
-If you want to get involved you can also directly drop me a line (mailto:stnolting@gmail.com).
-Please also check out the project's [code of conduct](https://github.com/stnolting/neorv32/tree/master/CODE_OF_CONDUCT.md).
+If you'd like to directly contribute to this repository:
 
+0. :star: this repository ;)
+1. Check out the project's [code of conduct](https://github.com/stnolting/neorv32/tree/master/CODE_OF_CONDUCT.md)
+2. [Fork](https://github.com/stnolting/neorv32/fork) this repository and clone the fork
+3. Create a feature branch in your fork: `git checkout -b awesome_new_feature_branch`
+4. Create a new remote for the upstream repo: `git remote add upstream https://github.com/stnolting/neorv32`
+5. Commit your modifications: `git commit -m "Awesome new feature!"`
+6. Push to the branch: `git push origin awesome_new_feature_branch`
+7. Create a new [pull request](https://github.com/stnolting/neorv32/pulls)
 
 
 ## Legal
@@ -618,9 +583,9 @@ Please also check out the project's [code of conduct](https://github.com/stnolti
 This project is released under the BSD 3-Clause license. No copyright infringement intended.
 Other implied or used projects might have different licensing - see their documentation to get more information.
 
-#### Citation
+#### Citing
 
-If you are using the NEORV32 Processor in some kind of publication, please cite it as follows:
+If you are using the NEORV32 or some parts of the project in some kind of publication, please cite it as follows:
 
 > S. Nolting, "The NEORV32 Processor", github.com/stnolting/neorv32
 
@@ -653,7 +618,7 @@ OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #### Limitation of Liability for External Links
 
-Our website contains links to the websites of third parties („external links“). As the
+Our website contains links to the websites of third parties ("external links"). As the
 content of these websites is not under our control, we cannot assume any liability for
 such external content. In all cases, the provider of information of the linked websites
 is liable for the content and accuracy of the information provided. At the point in time
@@ -664,24 +629,21 @@ link in question.
 
 #### Proprietary  Notice
 
-"Windows" is a trademark of Microsoft Corporation.
-
 "Artix" and "Vivado" are trademarks of Xilinx Inc.
 
-"Cyclone", "Quartus Prime", "Quartus Prime Lite" and "Avalon Bus" are trademarks of Intel Corporation.
+"Cyclone", "Quartus Prime Lite" and "Avalon Bus" are trademarks of Intel Corporation.
 
-"Artix" and "Vivado" are trademarks of Xilinx, Inc.
+"iCE40", "UltraPlus" and "Radiant" are trademarks of Lattice Semiconductor Corporation.
 
-"iCE40", "UltraPlus" and "Lattice Radiant" are trademarks of Lattice Semiconductor Corporation.
+"AXI", "AXI4" and "AXI4-Lite" are trademarks of Arm Holdings plc.
 
-"AXI" and "AXI-Lite" are trademarks of Arm Holdings plc.
 
 
 ## Acknowledgements
 
 [![RISC-V](https://raw.githubusercontent.com/stnolting/neorv32/master/docs/figures/riscv_logo.png)](https://riscv.org/)
 
-[RISC-V](https://riscv.org/) - Instruction Sets Want To Be Free :heart:
+[RISC-V](https://riscv.org/) - Instruction Sets Want To Be Free!
 
 [![Continous Integration provided by Travis CI](https://travis-ci.com/images/logos/TravisCI-Full-Color.png)](https://travis-ci.com/stnolting/neorv32)
 
@@ -692,6 +654,6 @@ Continous integration provided by [Travis CI](https://travis-ci.com/stnolting/ne
 
 This project is not affiliated with or endorsed by the Open Source Initiative (https://www.oshwa.org / https://opensource.org).
 
+--------
 
-
-Made with :coffee: in Hannover, Germany.
+Made with :coffee: in Hannover, Germany :eu:

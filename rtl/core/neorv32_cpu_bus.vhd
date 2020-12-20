@@ -44,16 +44,13 @@ use neorv32.neorv32_package.all;
 entity neorv32_cpu_bus is
   generic (
     CPU_EXTENSION_RISCV_C : boolean := true; -- implement compressed extension?
-    BUS_TIMEOUT           : natural := 15;   -- cycles after which a valid bus access will timeout
     -- Physical memory protection (PMP) --
-    PMP_USE               : boolean := false; -- implement physical memory protection?
-    PMP_NUM_REGIONS       : natural := 4; -- number of regions (1..4)
-    PMP_GRANULARITY       : natural := 16 -- granularity (1=8B, 2=16B, 3=32B, ...)
+    PMP_USE               : boolean := false -- implement physical memory protection?
   );
   port (
     -- global control --
     clk_i          : in  std_ulogic; -- global clock, rising edge
-    rstn_i         : in  std_ulogic; -- global reset, low-active, async
+    rstn_i         : in  std_ulogic := '0'; -- global reset, low-active, async
     ctrl_i         : in  std_ulogic_vector(ctrl_width_c-1 downto 0); -- main control bus
     -- cpu instruction fetch interface --
     fetch_pc_i     : in  std_ulogic_vector(data_width_c-1 downto 0); -- PC for instruction fetch
@@ -76,7 +73,6 @@ entity neorv32_cpu_bus is
     -- physical memory protection --
     pmp_addr_i     : in  pmp_addr_if_t; -- addresses
     pmp_ctrl_i     : in  pmp_ctrl_if_t; -- configs
-    priv_mode_i    : in  std_ulogic_vector(1 downto 0); -- current CPU privilege level
     -- instruction bus --
     i_bus_addr_o   : out std_ulogic_vector(data_width_c-1 downto 0); -- bus access address
     i_bus_rdata_i  : in  std_ulogic_vector(data_width_c-1 downto 0); -- bus read data
@@ -88,6 +84,7 @@ entity neorv32_cpu_bus is
     i_bus_ack_i    : in  std_ulogic; -- bus transfer acknowledge
     i_bus_err_i    : in  std_ulogic; -- bus transfer error
     i_bus_fence_o  : out std_ulogic; -- fence operation
+    i_bus_lock_o   : out std_ulogic; -- locked/exclusive access
     -- data bus --
     d_bus_addr_o   : out std_ulogic_vector(data_width_c-1 downto 0); -- bus access address
     d_bus_rdata_i  : in  std_ulogic_vector(data_width_c-1 downto 0); -- bus read data
@@ -98,7 +95,8 @@ entity neorv32_cpu_bus is
     d_bus_cancel_o : out std_ulogic; -- cancel current bus transaction
     d_bus_ack_i    : in  std_ulogic; -- bus transfer acknowledge
     d_bus_err_i    : in  std_ulogic; -- bus transfer error
-    d_bus_fence_o  : out std_ulogic  -- fence operation
+    d_bus_fence_o  : out std_ulogic; -- fence operation
+    d_bus_lock_o   : out std_ulogic  -- locked/exclusive access
   );
 end neorv32_cpu_bus;
 
@@ -106,9 +104,12 @@ architecture neorv32_cpu_bus_rtl of neorv32_cpu_bus is
 
   -- PMP modes --
   constant pmp_off_mode_c   : std_ulogic_vector(1 downto 0) := "00"; -- null region (disabled)
-  constant pmp_tor_mode_c   : std_ulogic_vector(1 downto 0) := "01"; -- top of range
-  constant pmp_na4_mode_c   : std_ulogic_vector(1 downto 0) := "10"; -- naturally aligned four-byte region
+--constant pmp_tor_mode_c   : std_ulogic_vector(1 downto 0) := "01"; -- top of range
+--constant pmp_na4_mode_c   : std_ulogic_vector(1 downto 0) := "10"; -- naturally aligned four-byte region
   constant pmp_napot_mode_c : std_ulogic_vector(1 downto 0) := "11"; -- naturally aligned power-of-two region (>= 8 bytes)
+
+  -- PMP granularity --
+  constant pmp_g_c : natural := index_size_f(pmp_min_granularity_c);
 
   -- PMP configuration register bits --
   constant pmp_cfg_r_c  : natural := 0; -- read permit
@@ -135,23 +136,22 @@ architecture neorv32_cpu_bus_rtl of neorv32_cpu_bus is
     wr_req    : std_ulogic; -- write access in progress
     err_align : std_ulogic; -- alignment error
     err_bus   : std_ulogic; -- bus access error
-    timeout   : std_ulogic_vector(index_size_f(BUS_TIMEOUT)-1 downto 0);
+    timeout   : std_ulogic_vector(index_size_f(bus_timeout_c)-1 downto 0);
   end record;
   signal i_arbiter, d_arbiter : bus_arbiter_t;
 
   -- physical memory protection --
-  type pmp_addr34_t is array (0 to PMP_NUM_REGIONS-1) of std_ulogic_vector(data_width_c+1 downto 0);
-  type pmp_addr_t   is array (0 to PMP_NUM_REGIONS-1) of std_ulogic_vector(data_width_c-1 downto 0);
+  type pmp_addr_t is array (0 to pmp_num_regions_c-1) of std_ulogic_vector(data_width_c-1 downto 0);
   type pmp_t is record
-    addr_mask     : pmp_addr34_t; -- 34-bit physical address
-    region_base   : pmp_addr_t; -- masked region base address for comparator
+    addr_mask     : pmp_addr_t;
+    region_base   : pmp_addr_t; -- region config base address
     region_i_addr : pmp_addr_t; -- masked instruction access base address for comparator
     region_d_addr : pmp_addr_t; -- masked data access base address for comparator
-    i_match       : std_ulogic_vector(PMP_NUM_REGIONS-1 downto 0); -- region match for instruction interface
-    d_match       : std_ulogic_vector(PMP_NUM_REGIONS-1 downto 0); -- region match for data interface
-    if_fault      : std_ulogic_vector(PMP_NUM_REGIONS-1 downto 0); -- region access fault for fetch operation
-    ld_fault      : std_ulogic_vector(PMP_NUM_REGIONS-1 downto 0); -- region access fault for load operation
-    st_fault      : std_ulogic_vector(PMP_NUM_REGIONS-1 downto 0); -- region access fault for store operation
+    i_match       : std_ulogic_vector(pmp_num_regions_c-1 downto 0); -- region match for instruction interface
+    d_match       : std_ulogic_vector(pmp_num_regions_c-1 downto 0); -- region match for data interface
+    if_fault      : std_ulogic_vector(pmp_num_regions_c-1 downto 0); -- region access fault for fetch operation
+    ld_fault      : std_ulogic_vector(pmp_num_regions_c-1 downto 0); -- region access fault for load operation
+    st_fault      : std_ulogic_vector(pmp_num_regions_c-1 downto 0); -- region access fault for store operation
   end record;
   signal pmp : pmp_t;
 
@@ -164,10 +164,10 @@ begin
 
   -- Data Interface: Access Address ---------------------------------------------------------
   -- -------------------------------------------------------------------------------------------
-  mem_adr_reg: process(rstn_i, clk_i)
+  mem_adr_reg: process(clk_i)
   begin
     if rising_edge(clk_i) then
-      if (ctrl_i(ctrl_bus_mar_we_c) = '1') then
+      if (ctrl_i(ctrl_bus_mo_we_c) = '1') then
         mar <= addr_i;
       end if;
     end if;
@@ -201,8 +201,8 @@ begin
   mem_do_reg: process(clk_i)
   begin
     if rising_edge(clk_i) then
-      if (ctrl_i(ctrl_bus_mdo_we_c) = '1') then
-        mdo <= wdata_i;
+      if (ctrl_i(ctrl_bus_mo_we_c) = '1') then
+        mdo <= wdata_i; -- memory data output register (MDO)
       end if;
     end if;
   end process mem_do_reg;
@@ -216,8 +216,12 @@ begin
         d_bus_wdata(15 downto 08) <= mdo(07 downto 00);
         d_bus_wdata(23 downto 16) <= mdo(07 downto 00);
         d_bus_wdata(31 downto 24) <= mdo(07 downto 00);
-        d_bus_ben <= (others => '0');
-        d_bus_ben(to_integer(unsigned(mar(1 downto 0)))) <= '1';
+        case mar(1 downto 0) is
+          when "00"   => d_bus_ben <= "0001";
+          when "01"   => d_bus_ben <= "0010";
+          when "10"   => d_bus_ben <= "0100";
+          when others => d_bus_ben <= "1000";
+        end case;
       when "01" => -- half-word
         d_bus_wdata(31 downto 16) <= mdo(15 downto 00);
         d_bus_wdata(15 downto 00) <= mdo(15 downto 00);
@@ -238,117 +242,36 @@ begin
   mem_out_buf: process(clk_i)
   begin
     if rising_edge(clk_i) then
-      -- memory data in register (MDI) --
-      if (ctrl_i(ctrl_bus_mdi_we_c) = '1') then
-        mdi <= d_bus_rdata;
+      if (ctrl_i(ctrl_bus_mi_we_c) = '1') then
+        mdi <= d_bus_rdata; -- memory data input register (MDI)
       end if;
     end if;
   end process mem_out_buf;
 
   -- input data alignment and sign extension --
   read_align: process(mdi, mar, ctrl_i)
-    variable signed_v : std_ulogic;
+    variable byte_in_v  : std_ulogic_vector(07 downto 0); 
+    variable hword_in_v : std_ulogic_vector(15 downto 0);
   begin
-    signed_v := not ctrl_i(ctrl_bus_unsigned_c);
-    case ctrl_i(ctrl_bus_size_msb_c downto ctrl_bus_size_lsb_c) is -- data size
+    -- sub-word input --
+    case mar(1 downto 0) is
+      when "00"   => byte_in_v := mdi(07 downto 00); hword_in_v := mdi(15 downto 00); -- byte 0 / half-word 0
+      when "01"   => byte_in_v := mdi(15 downto 08); hword_in_v := mdi(15 downto 00); -- byte 1 / half-word 0
+      when "10"   => byte_in_v := mdi(23 downto 16); hword_in_v := mdi(31 downto 16); -- byte 2 / half-word 1
+      when others => byte_in_v := mdi(31 downto 24); hword_in_v := mdi(31 downto 16); -- byte 3 / half-word 1
+    end case;
+    -- actual data size --
+    case ctrl_i(ctrl_bus_size_msb_c downto ctrl_bus_size_lsb_c) is
       when "00" => -- byte
-        case mar(1 downto 0) is
-          when "00" =>
-            rdata_o(31 downto 08) <= (others => (signed_v and mdi(07)));
-            rdata_o(07 downto 00) <= mdi(07 downto 00); -- byte 0
-          when "01" =>
-            rdata_o(31 downto 08) <= (others => (signed_v and mdi(15)));
-            rdata_o(07 downto 00) <= mdi(15 downto 08); -- byte 1
-          when "10" =>
-            rdata_o(31 downto 08) <= (others => (signed_v and mdi(23)));
-            rdata_o(07 downto 00) <= mdi(23 downto 16); -- byte 2
-          when others =>
-            rdata_o(31 downto 08) <= (others => (signed_v and mdi(31)));
-            rdata_o(07 downto 00) <= mdi(31 downto 24); -- byte 3
-        end case;
+        rdata_o(31 downto 08) <= (others => ((not ctrl_i(ctrl_bus_unsigned_c)) and byte_in_v(7))); -- sign extension
+        rdata_o(07 downto 00) <= byte_in_v;
       when "01" => -- half-word
-        if (mar(1) = '0') then
-          rdata_o(31 downto 16) <= (others => (signed_v and mdi(15)));
-          rdata_o(15 downto 00) <= mdi(15 downto 00); -- low half-word
-        else
-          rdata_o(31 downto 16) <= (others => (signed_v and mdi(31)));
-          rdata_o(15 downto 00) <= mdi(31 downto 16); -- high half-word
-        end if;
+        rdata_o(31 downto 16) <= (others => ((not ctrl_i(ctrl_bus_unsigned_c)) and hword_in_v(15))); -- sign extension
+        rdata_o(15 downto 00) <= hword_in_v; -- high half-word
       when others => -- word
         rdata_o <= mdi; -- full word
     end case;
   end process read_align;
-
-
-  -- Instruction Interface: Check for Misaligned Access -------------------------------------
-  -- -------------------------------------------------------------------------------------------
-  misaligned_i_check: process(ctrl_i, fetch_pc_i)
-  begin
-    -- check instruction access --
-    i_misaligned <= '0'; -- default
-    if (CPU_EXTENSION_RISCV_C = true) then -- 16-bit and 32-bit instruction accesses
-      i_misaligned <= '0'; -- no alignment exceptions possible
-    else -- 32-bit instruction accesses only
-      if (fetch_pc_i(1) = '1') then -- PC(0) is always zero
-        i_misaligned <= '1';
-      end if; 
-    end if;
-  end process misaligned_i_check;
-
-
-  -- Instruction Fetch Arbiter --------------------------------------------------------------
-  -- -------------------------------------------------------------------------------------------
-  ifetch_arbiter: process(rstn_i, clk_i)
-  begin
-    if (rstn_i = '0') then
-      i_arbiter.rd_req    <= '0';
-      i_arbiter.wr_req    <= '0';
-      i_arbiter.err_align <= '0';
-      i_arbiter.err_bus   <= '0';
-      i_arbiter.timeout   <= (others => '0');
-    elsif rising_edge(clk_i) then
-      i_arbiter.wr_req <= '0'; -- instruction fetch is read-only
-
-      -- instruction fetch request --
-      if (i_arbiter.rd_req = '0') then -- idle
-        i_arbiter.rd_req    <= ctrl_i(ctrl_bus_if_c);
-        i_arbiter.err_align <= i_misaligned;
-        i_arbiter.err_bus   <= '0';
-        i_arbiter.timeout   <= std_ulogic_vector(to_unsigned(BUS_TIMEOUT, index_size_f(BUS_TIMEOUT)));
-      else -- in progress
-        i_arbiter.timeout   <= std_ulogic_vector(unsigned(i_arbiter.timeout) - 1);
-        i_arbiter.err_align <= (i_arbiter.err_align or i_misaligned)                                     and (not ctrl_i(ctrl_bus_ierr_ack_c));
-        i_arbiter.err_bus   <= (i_arbiter.err_bus   or (not or_all_f(i_arbiter.timeout)) or i_bus_err_i) and (not ctrl_i(ctrl_bus_ierr_ack_c));
-        if (i_arbiter.err_align = '1') or (i_arbiter.err_bus = '1') then -- any error?
-          if (ctrl_i(ctrl_bus_ierr_ack_c) = '1') then -- wait for controller to acknowledge error
-            i_arbiter.rd_req <= '0';
-          end if;
-        elsif (i_bus_ack_i = '1') then -- wait for normal termination
-         i_arbiter.rd_req <= '0';
-        end if;
-      end if;
-
-      -- cancel bus access --
-      i_bus_cancel_o <= i_arbiter.rd_req and ctrl_i(ctrl_bus_ierr_ack_c);
-    end if;
-  end process ifetch_arbiter;
-
-
-  -- wait for bus transaction to finish --
-  i_wait_o <= i_arbiter.rd_req and (not i_bus_ack_i);
-
-  -- output instruction fetch error to controller --
-  ma_instr_o <= i_arbiter.err_align;
-  be_instr_o <= i_arbiter.err_bus;
-
-  -- instruction bus (read-only) --
-  i_bus_addr_o  <= fetch_pc_i;
-  i_bus_wdata_o <= (others => '0');
-  i_bus_ben_o   <= (others => '0');
-  i_bus_we_o    <= '0';
-  i_bus_re_o    <= ctrl_i(ctrl_bus_if_c) and (not i_misaligned) and (not if_pmp_fault); -- no actual read when misaligned or PMP fault
-  i_bus_fence_o <= ctrl_i(ctrl_bus_fencei_c);
-  instr_o       <= i_bus_rdata_i;
 
 
   -- Data Access Arbiter --------------------------------------------------------------------
@@ -356,40 +279,34 @@ begin
   data_access_arbiter: process(rstn_i, clk_i)
   begin
     if (rstn_i = '0') then
-      d_arbiter.rd_req    <= '0';
       d_arbiter.wr_req    <= '0';
+      d_arbiter.rd_req    <= '0';
       d_arbiter.err_align <= '0';
       d_arbiter.err_bus   <= '0';
       d_arbiter.timeout   <= (others => '0');
     elsif rising_edge(clk_i) then
-
       -- data access request --
       if (d_arbiter.wr_req = '0') and (d_arbiter.rd_req = '0') then -- idle
         d_arbiter.wr_req    <= ctrl_i(ctrl_bus_wr_c);
         d_arbiter.rd_req    <= ctrl_i(ctrl_bus_rd_c);
         d_arbiter.err_align <= d_misaligned;
         d_arbiter.err_bus   <= '0';
-        d_arbiter.timeout   <= std_ulogic_vector(to_unsigned(BUS_TIMEOUT, index_size_f(BUS_TIMEOUT)));
+        d_arbiter.timeout   <= std_ulogic_vector(to_unsigned(bus_timeout_c, index_size_f(bus_timeout_c)));
       else -- in progress
         d_arbiter.timeout   <= std_ulogic_vector(unsigned(d_arbiter.timeout) - 1);
-        d_arbiter.err_align <= (d_arbiter.err_align or d_misaligned)                                     and (not ctrl_i(ctrl_bus_derr_ack_c));
-        d_arbiter.err_bus   <= (d_arbiter.err_bus   or (not or_all_f(d_arbiter.timeout)) or d_bus_err_i) and (not ctrl_i(ctrl_bus_derr_ack_c));
-        if (d_arbiter.err_align = '1') or (d_arbiter.err_bus = '1') then -- any error?
-          if (ctrl_i(ctrl_bus_derr_ack_c) = '1') then -- wait for controller to acknowledge error
-            d_arbiter.wr_req <= '0';
-            d_arbiter.rd_req <= '0';
-          end if;
-        elsif (d_bus_ack_i = '1') then -- wait for normal termination
+        d_arbiter.err_align <= (d_arbiter.err_align or d_misaligned) and (not ctrl_i(ctrl_bus_derr_ack_c));
+        d_arbiter.err_bus   <= (d_arbiter.err_bus   or (not or_all_f(d_arbiter.timeout)) or d_bus_err_i or 
+                                (st_pmp_fault and d_arbiter.wr_req) or (ld_pmp_fault and d_arbiter.rd_req)) and (not ctrl_i(ctrl_bus_derr_ack_c));
+        if (d_bus_ack_i = '1') or (ctrl_i(ctrl_bus_derr_ack_c) = '1') then -- wait for normal termination / CPU abort
           d_arbiter.wr_req <= '0';
           d_arbiter.rd_req <= '0';
         end if;
       end if;
-
-      -- cancel bus access --
-      d_bus_cancel_o <= (d_arbiter.wr_req or d_arbiter.rd_req) and ctrl_i(ctrl_bus_derr_ack_c);
     end if;
   end process data_access_arbiter;
 
+  -- cancel bus access --
+  d_bus_cancel_o <= (d_arbiter.wr_req or d_arbiter.rd_req) and ctrl_i(ctrl_bus_derr_ack_c);
 
   -- wait for bus transaction to finish --
   d_wait_o <= (d_arbiter.wr_req or d_arbiter.rd_req) and (not d_bus_ack_i);
@@ -408,62 +325,98 @@ begin
   d_bus_re_o    <= ctrl_i(ctrl_bus_rd_c) and (not d_misaligned) and (not ld_pmp_fault); -- no actual read when misaligned or PMP fault
   d_bus_fence_o <= ctrl_i(ctrl_bus_fence_c);
   d_bus_rdata   <= d_bus_rdata_i;
+  d_bus_lock_o  <= ctrl_i(ctrl_bus_lock_c);
+
+
+  -- Instruction Fetch Arbiter --------------------------------------------------------------
+  -- -------------------------------------------------------------------------------------------
+  ifetch_arbiter: process(rstn_i, clk_i)
+  begin
+    if (rstn_i = '0') then
+      i_arbiter.rd_req    <= '0';
+      i_arbiter.err_align <= '0';
+      i_arbiter.err_bus   <= '0';
+      i_arbiter.timeout   <= (others => '0');
+    elsif rising_edge(clk_i) then
+      -- instruction fetch request --
+      if (i_arbiter.rd_req = '0') then -- idle
+        i_arbiter.rd_req    <= ctrl_i(ctrl_bus_if_c);
+        i_arbiter.err_align <= i_misaligned;
+        i_arbiter.err_bus   <= '0';
+        i_arbiter.timeout   <= std_ulogic_vector(to_unsigned(bus_timeout_c, index_size_f(bus_timeout_c)));
+      else -- in progress
+        i_arbiter.timeout   <= std_ulogic_vector(unsigned(i_arbiter.timeout) - 1);
+        i_arbiter.err_align <= (i_arbiter.err_align or i_misaligned)                                                     and (not ctrl_i(ctrl_bus_ierr_ack_c));
+        i_arbiter.err_bus   <= (i_arbiter.err_bus   or (not or_all_f(i_arbiter.timeout)) or i_bus_err_i or if_pmp_fault) and (not ctrl_i(ctrl_bus_ierr_ack_c));
+        if (i_bus_ack_i = '1') or (ctrl_i(ctrl_bus_ierr_ack_c) = '1') then -- wait for normal termination / CPU abort
+          i_arbiter.rd_req <= '0';
+        end if;
+      end if;
+    end if;
+  end process ifetch_arbiter;
+
+  i_arbiter.wr_req <= '0'; -- instruction fetch is read-only
+
+  -- cancel bus access --
+  i_bus_cancel_o <= i_arbiter.rd_req and ctrl_i(ctrl_bus_ierr_ack_c);
+
+  -- wait for bus transaction to finish --
+  i_wait_o <= i_arbiter.rd_req and (not i_bus_ack_i);
+
+  -- output instruction fetch error to controller --
+  ma_instr_o <= i_arbiter.err_align;
+  be_instr_o <= i_arbiter.err_bus;
+
+  -- instruction bus (read-only) --
+  i_bus_addr_o  <= fetch_pc_i(data_width_c-1 downto 2) & "00"; -- instruction access is always 4-byte aligned (even for compressed instructions)
+  i_bus_wdata_o <= (others => '0'); -- instruction fetch is read-only
+  i_bus_ben_o   <= (others => '0');
+  i_bus_we_o    <= '0';
+  i_bus_re_o    <= ctrl_i(ctrl_bus_if_c) and (not i_misaligned) and (not if_pmp_fault); -- no actual read when misaligned or PMP fault
+  i_bus_fence_o <= ctrl_i(ctrl_bus_fencei_c);
+  instr_o       <= i_bus_rdata_i;
+  i_bus_lock_o  <= '0'; -- instruction fetch cannot be atomic
+
+
+  -- check instruction access --
+  i_misaligned <= '0' when (CPU_EXTENSION_RISCV_C = true) else -- no alignment exceptions possible when using C-extension
+                  '1' when (fetch_pc_i(1) = '1') else '0'; -- 32-bit accesses only
 
 
   -- Physical Memory Protection (PMP) -------------------------------------------------------
   -- -------------------------------------------------------------------------------------------
-  -- compute address masks --
+  -- compute address masks (ITERATIVE!!!) --
   pmp_masks: process(clk_i)
   begin
-    if rising_edge(clk_i) then -- address configuration (not the actual address check!) has a latency of +1 cycles
-      for r in 0 to PMP_NUM_REGIONS-1 loop -- iterate over all regions
-        pmp.addr_mask(r) <= (others => '0'); -- default
-        for i in PMP_GRANULARITY+1 to 33 loop
-          if (i = PMP_GRANULARITY+1) then
-            pmp.addr_mask(r)(i) <= '0';
-          else -- current bit = not AND(all previous bits)
-            pmp.addr_mask(r)(i) <= not (and_all_f(pmp_addr_i(r)(i-1 downto PMP_GRANULARITY)));
-          end if;
+    if rising_edge(clk_i) then -- address mask computation (not the actual address check!) has a latency of max +32 cycles
+      for r in 0 to pmp_num_regions_c-1 loop -- iterate over all regions
+        pmp.addr_mask(r) <= (others => '0');
+        for i in pmp_g_c to data_width_c-1 loop
+          pmp.addr_mask(r)(i) <= pmp.addr_mask(r)(i-1) or (not pmp_addr_i(r)(i-1));
         end loop; -- i
       end loop; -- r
     end if;
   end process pmp_masks;
 
 
-  -- compute operands for comparator --
-  pmp_prepare_check:
-  for r in 0 to PMP_NUM_REGIONS-1 generate -- iterate over all regions
-    -- ignore lowest 3 bits of access addresses -> minimal region size = 8 bytes
-    pmp.region_i_addr(r) <= (fetch_pc_i(31 downto 3) & "000") and pmp.addr_mask(r)(33 downto 2);
-    pmp.region_d_addr(r) <= (mar(31 downto 3) & "000")        and pmp.addr_mask(r)(33 downto 2);
-    pmp.region_base(r)   <= pmp_addr_i(r)(33 downto 2)        and pmp.addr_mask(r)(33 downto 2);
+  -- address access check --
+  pmp_address_check:
+  for r in 0 to pmp_num_regions_c-1 generate -- iterate over all regions
+    pmp.region_i_addr(r) <= fetch_pc_i                             and pmp.addr_mask(r);
+    pmp.region_d_addr(r) <= mar                                    and pmp.addr_mask(r);
+    pmp.region_base(r)   <= pmp_addr_i(r)(data_width_c+1 downto 2) and pmp.addr_mask(r);
+    --
+    pmp.i_match(r) <= '1' when (pmp.region_i_addr(r)(data_width_c-1 downto pmp_g_c) = pmp.region_base(r)(data_width_c-1 downto pmp_g_c)) else '0';
+    pmp.d_match(r) <= '1' when (pmp.region_d_addr(r)(data_width_c-1 downto pmp_g_c) = pmp.region_base(r)(data_width_c-1 downto pmp_g_c)) else '0';
   end generate; -- r
 
 
-  -- check for access address match --
-  pmp_addr_check: process (pmp)
-  begin
-    for r in 0 to PMP_NUM_REGIONS-1 loop -- iterate over all regions
-      -- instruction interface --
-      pmp.i_match(r) <= '0';
-      if (pmp.region_i_addr(r)(31 downto PMP_GRANULARITY+2) = pmp.region_base(r)(31 downto PMP_GRANULARITY+2)) then
-        pmp.i_match(r) <= '1';
-      end if;
-      -- data interface --
-      pmp.d_match(r) <= '0';
-      if (pmp.region_d_addr(r)(31 downto PMP_GRANULARITY+2) = pmp.region_base(r)(31 downto PMP_GRANULARITY+2)) then
-        pmp.d_match(r) <= '1';
-      end if;
-    end loop; -- r
-  end process pmp_addr_check;
-
-
   -- check access type and regions's permissions --
-  pmp_check_permission: process(pmp, pmp_ctrl_i, priv_mode_i)
+  pmp_check_permission: process(pmp, pmp_ctrl_i, ctrl_i)
   begin
-    for r in 0 to PMP_NUM_REGIONS-1 loop -- iterate over all regions
-      if ((priv_mode_i = u_priv_mode_c) or (pmp_ctrl_i(r)(pmp_cfg_l_c) = '1')) and -- user privilege level or locked pmp entry -> enforce permissions also for machine mode
-          (pmp_ctrl_i(r)(pmp_cfg_ah_c downto pmp_cfg_al_c) /= pmp_off_mode_c) then -- active entry
+    for r in 0 to pmp_num_regions_c-1 loop -- iterate over all regions
+      if ((ctrl_i(ctrl_priv_lvl_msb_c downto ctrl_priv_lvl_lsb_c) = priv_mode_u_c) or (pmp_ctrl_i(r)(pmp_cfg_l_c) = '1')) and -- user privilege level or locked pmp entry -> enforce permissions also for machine mode
+         (pmp_ctrl_i(r)(pmp_cfg_ah_c downto pmp_cfg_al_c) /= pmp_off_mode_c) then -- active entry
         pmp.if_fault(r) <= pmp.i_match(r) and (not pmp_ctrl_i(r)(pmp_cfg_x_c)); -- fetch access match no execute permission
         pmp.ld_fault(r) <= pmp.d_match(r) and (not pmp_ctrl_i(r)(pmp_cfg_r_c)); -- load access match no read permission
         pmp.st_fault(r) <= pmp.d_match(r) and (not pmp_ctrl_i(r)(pmp_cfg_w_c)); -- store access match no write permission

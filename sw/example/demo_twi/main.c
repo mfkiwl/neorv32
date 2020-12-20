@@ -60,9 +60,9 @@ uint32_t hexstr_to_uint(char *buffer, uint8_t length);
 
 
 /**********************************************************************//**
- * This program generates a simple dimming sequence for PWM channel 0,1,2.
+ * This program provides an interactive console to communicate with TWI devices.
  *
- * @note This program requires the UART and the TWI to be synthesized.
+ * @note This program requires the UART and the PWM to be synthesized.
  *
  * @return Irrelevant.
  **************************************************************************/
@@ -101,8 +101,8 @@ int main() {
   neorv32_uart_printf("This program allows to create TWI transfers by hand.\n"
                       "Type 'help' to see the help menu.\n\n");
 
-  // configure TWI, second slowest clock, no IRQ
-  neorv32_twi_setup(CLK_PRSC_2048, 0);
+  // configure TWI, second slowest clock, no IRQ, no clock-stretching
+  neorv32_twi_setup(CLK_PRSC_2048, 0, 0);
 
   // no active bus session yet
   bus_claimed = 0;

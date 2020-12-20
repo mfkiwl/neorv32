@@ -66,8 +66,9 @@ int neorv32_twi_available(void) {
  *
  * @param[in] prsc Clock prescaler select (0..7). See #NEORV32_CLOCK_PRSC_enum.
  * @param[in] irq_en Enable transfer-done interrupt when 1.
+ * @param[in] ckst_en Enable clock-stretching by peripherals when 1.
  **************************************************************************/
-void neorv32_twi_setup(uint8_t prsc, uint8_t irq_en) {
+void neorv32_twi_setup(uint8_t prsc, uint8_t irq_en, uint8_t ckst_en) {
 
   TWI_CT = 0; // reset
 
@@ -80,7 +81,10 @@ void neorv32_twi_setup(uint8_t prsc, uint8_t irq_en) {
   uint32_t ct_irq = (uint32_t)(irq_en & 0x01);
   ct_irq = ct_irq << TWI_CT_IRQ_EN;
 
-  TWI_CT = ct_enable | ct_prsc | ct_irq;
+  uint32_t ct_cksten = (uint32_t)(ckst_en & 0x01);
+  ct_cksten = ct_cksten << TWI_CT_CKSTEN;
+
+  TWI_CT = ct_enable | ct_prsc | ct_irq | ct_cksten;
 }
 
 
@@ -108,6 +112,22 @@ void neorv32_twi_mack_enable(void) {
 void neorv32_twi_mack_disable(void) {
 
   TWI_CT &= ~((uint32_t)(1 << TWI_CT_MACK));
+}
+
+
+/**********************************************************************//**
+ * Check if TWI is busy.
+ *
+ * @note This function is blocking.
+ *
+ * @return 0 if idle, 1 if busy
+ **************************************************************************/
+int neorv32_twi_busy(void) {
+
+  if (TWI_CT & (1 << TWI_CT_BUSY)) {
+    return 1;
+  }
+  return 0;
 }
 
 

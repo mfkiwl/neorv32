@@ -3,7 +3,7 @@
 # Abort if any command returns != 0
 set -e
 
-# NEORV32 project home folder
+# Project home folder
 homedir="$( cd "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
 homedir=$homedir/..
 
@@ -19,18 +19,18 @@ ls -al $srcdir_bootloader
 # check toolchain
 make -C $test_app_dir check
 
-# Compile all example projects
-make -C $srcdir_examples clean_all compile
+# Generate executables for all example projects
+make -C $srcdir_examples clean_all exe
 
 # Compile and install bootloader
 make -C $srcdir_bootloader clean_all info bootloader
 
 # Compile and install test application
-# Redirect UART TX to DEVNULL.simulation_output via <DEVNULL_UART_OVERRIDE> user flag
-echo "Installing test application"
-make -C $test_app_dir clean_all USER_FLAGS+=-DDEVNULL_UART_OVERRIDE MARCH=-march=rv32imc info all
+# Redirect UART TX to text.io simulation output via <UART_SIM_MODE> user flag
+echo "Compiling and installing CPU (/Processor) test application"
+make -C $test_app_dir clean_all USER_FLAGS+=-DRUN_CPUTEST USER_FLAGS+=-DUART_SIM_MODE MARCH=-march=rv32imac info all
 
 # Verification reference string
 touch $homedir/check_reference.out
 chmod 777 $homedir/check_reference.out
-echo "TEST OK!" > $homedir/check_reference.out
+echo "CPU TEST COMPLETED SUCCESSFULLY!" > $homedir/check_reference.out
