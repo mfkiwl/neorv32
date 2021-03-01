@@ -1,7 +1,7 @@
 -- #################################################################################################
 -- # << NEORV32 - System/Processor Configuration Information Memory (SYSINFO) >>                   #
 -- # ********************************************************************************************* #
--- # This unit provides information regarding the 'processor system' configuration -               #
+-- # This unit provides information regarding the NEORV32 processor system configuration -         #
 -- # mostly derived from the top's configuration generics.                                         #
 -- # ********************************************************************************************* #
 -- # BSD 3-Clause License                                                                          #
@@ -65,14 +65,15 @@ entity neorv32_sysinfo is
     -- Processor peripherals --
     IO_GPIO_EN           : boolean := true;   -- implement general purpose input/output port unit (GPIO)?
     IO_MTIME_EN          : boolean := true;   -- implement machine system timer (MTIME)?
-    IO_UART_EN           : boolean := true;   -- implement universal asynchronous receiver/transmitter (UART)?
+    IO_UART0_EN          : boolean := true;   -- implement primary universal asynchronous receiver/transmitter (UART0)?
+    IO_UART1_EN          : boolean := true;   -- implement secondary universal asynchronous receiver/transmitter (UART1)?
     IO_SPI_EN            : boolean := true;   -- implement serial peripheral interface (SPI)?
     IO_TWI_EN            : boolean := true;   -- implement two-wire interface (TWI)?
     IO_PWM_EN            : boolean := true;   -- implement pulse-width modulation unit (PWM)?
     IO_WDT_EN            : boolean := true;   -- implement watch dog timer (WDT)?
     IO_TRNG_EN           : boolean := true;   -- implement true random number generator (TRNG)?
-    IO_CFU0_EN           : boolean := true;   -- implement custom functions unit 0 (CFU0)?
-    IO_CFU1_EN           : boolean := true    -- implement custom functions unit 1 (CFU1)?
+    IO_CFS_EN            : boolean := true;   -- implement custom functions subsystem (CFS)?
+    IO_NCO_EN            : boolean := true    -- implement numerically-controlled oscillator (NCO)?
   );
   port (
     -- host access --
@@ -133,16 +134,17 @@ begin
   -- IO --
   sysinfo_mem(2)(16) <= bool_to_ulogic_f(IO_GPIO_EN);  -- general purpose input/output port unit (GPIO) implemented?
   sysinfo_mem(2)(17) <= bool_to_ulogic_f(IO_MTIME_EN); -- machine system timer (MTIME) implemented?
-  sysinfo_mem(2)(18) <= bool_to_ulogic_f(IO_UART_EN);  -- universal asynchronous receiver/transmitter (UART) implemented?
+  sysinfo_mem(2)(18) <= bool_to_ulogic_f(IO_UART0_EN); -- primary universal asynchronous receiver/transmitter (UART0) implemented?
   sysinfo_mem(2)(19) <= bool_to_ulogic_f(IO_SPI_EN);   -- serial peripheral interface (SPI) implemented?
   sysinfo_mem(2)(20) <= bool_to_ulogic_f(IO_TWI_EN);   -- two-wire interface (TWI) implemented?
   sysinfo_mem(2)(21) <= bool_to_ulogic_f(IO_PWM_EN);   -- pulse-width modulation unit (PWM) implemented?
   sysinfo_mem(2)(22) <= bool_to_ulogic_f(IO_WDT_EN);   -- watch dog timer (WDT) implemented?
-  sysinfo_mem(2)(23) <= bool_to_ulogic_f(IO_CFU0_EN);  -- custom functions unit 0 (CFU0) implemented?
+  sysinfo_mem(2)(23) <= bool_to_ulogic_f(IO_CFS_EN);   -- custom functions subsystem (CFS) implemented?
   sysinfo_mem(2)(24) <= bool_to_ulogic_f(IO_TRNG_EN);  -- true random number generator (TRNG) implemented?
-  sysinfo_mem(2)(25) <= bool_to_ulogic_f(IO_CFU1_EN);  -- custom functions unit 1 (CFU1) implemented?
+  sysinfo_mem(2)(25) <= bool_to_ulogic_f(IO_NCO_EN);   -- numerically-controlled oscillator (NCO) implemented?
+  sysinfo_mem(2)(26) <= bool_to_ulogic_f(IO_UART1_EN); -- secondary universal asynchronous receiver/transmitter (UART1) implemented?
   --
-  sysinfo_mem(2)(31 downto 26) <= (others => '0'); -- reserved
+  sysinfo_mem(2)(31 downto 27) <= (others => '0'); -- reserved
 
   -- SYSINFO(3): Cache configuration --
   sysinfo_mem(3)(03 downto 00) <= std_ulogic_vector(to_unsigned(index_size_f(ICACHE_BLOCK_SIZE),    4)) when (ICACHE_EN = true) else (others => '0'); -- i-cache: log2(block_size_in_bytes)

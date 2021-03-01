@@ -6,6 +6,8 @@
 // # ********************************************************************************************* #
 // # Boot from (internal) instruction memory, UART or SPI Flash.                                   #
 // #                                                                                               #
+// # The bootloader uses the primary UART (UART0) for user console interface.                      #
+// #                                                                                               #
 // # UART configuration: 8 data bits, NO parity bit, 1 stop bit, 19200 baud (19200-8N1)            #
 // # Boot Flash: 8-bit SPI, 24-bit addresses (like Micron N25Q032A) @ neorv32.spi_csn_o(0)         #
 // # neorv32.gpio_o(0) is used as high-active status LED (can be disabled via #STATUS_LED_EN).     #
@@ -153,7 +155,13 @@ enum NEORV32_EXECUTABLE {
  * This global variable keeps the size of the available executable in bytes.
  * If =0 no executable is available (yet).
  **************************************************************************/
-uint32_t exe_available = 0;
+volatile uint32_t exe_available = 0;
+
+
+/**********************************************************************//**
+ * Only set during executable fetch (required for cpaturing STORE-BUS-TIMOUT exception).
+ **************************************************************************/
+volatile uint32_t getting_exe = 0;
 
 
 // Function prototypes
@@ -187,17 +195,8 @@ int main(void) {
   #warning In order to allow the bootloader to run on any CPU configuration it should be compiled using the base ISA (rv32i/e) only.
 #endif
 
-  // global variable for executable size; 0 means there is no exe available
-  exe_available = 0;
-
-  // ------------------------------------------------
-  // Minimal CPU hardware initialization
-  // - all IO devices are reset and disabled by the crt0 code
-  // ------------------------------------------------
-
-  // confiure trap handler (bare-metal, no neorv32 rte available)
-  neorv32_cpu_csr_write(CSR_MTVEC, (uint32_t)(&bootloader_trap_handler));
-
+  exe_available = 0; // global variable for executable size; 0 means there is no exe available
+  getting_exe   = 0; // we are not trying to get an executable yet
 
   // ------------------------------------------------
   // Minimal processor hardware initialization
@@ -207,12 +206,12 @@ int main(void) {
   // get clock speed (in Hz)
   uint32_t clock_speed = SYSINFO_CLK;
 
-  // init SPI for 8-bit, clock-mode 0, no interrupt
+  // init SPI for 8-bit, clock-mode 0
   if (clock_speed < 40000000) {
-    neorv32_spi_setup(SPI_FLASH_CLK_PRSC, 0, 0, 0);
+    neorv32_spi_setup(SPI_FLASH_CLK_PRSC, 0, 0);
   }
   else {
-    neorv32_spi_setup(CLK_PRSC_128, 0, 0, 0);
+    neorv32_spi_setup(CLK_PRSC_128, 0, 0);
   }
 
   if (STATUS_LED_EN == 1) {
@@ -220,12 +219,16 @@ int main(void) {
     neorv32_gpio_port_set(1 << STATUS_LED);
   }
 
-  // init UART (no parity bit, no interrupts)
-  neorv32_uart_setup(BAUD_RATE, 0, 0, 0);
+  // init UART (no parity bit, no hardware flow control)
+  neorv32_uart_setup(BAUD_RATE, PARITY_NONE, FLOW_CONTROL_NONE);
 
   // Configure machine system timer interrupt for ~2Hz
   neorv32_mtime_set_timecmp(neorv32_mtime_get_time() + (clock_speed/4));
 
+  // confiure trap handler (bare-metal, no neorv32 rte available)
+  neorv32_cpu_csr_write(CSR_MTVEC, (uint32_t)(&bootloader_trap_handler));
+
+  // active timer IRQ
   neorv32_cpu_csr_write(CSR_MIE, 1 << CSR_MIE_MTIE); // activate MTIME IRQ source
   neorv32_cpu_eint(); // enable global interrupts
 
@@ -282,7 +285,7 @@ int main(void) {
 
   uint64_t timeout_time = neorv32_mtime_get_time() + (uint64_t)(AUTOBOOT_TIMEOUT * clock_speed);
 
-  while ((UART_DATA & (1 << UART_DATA_AVAIL)) == 0) { // wait for any key to be pressed
+  while (neorv32_uart_char_received() == 0) { // wait for any key to be pressed
 
     if (neorv32_mtime_get_time() >= timeout_time) { // timeout? start auto boot sequence
       fast_upload(EXE_STREAM_FLASH); // try booting from flash
@@ -394,7 +397,7 @@ void start_app(void) {
   neorv32_uart_print("Booting...\n\n");
 
   // wait for UART to finish transmitting
-  while ((UART_CT & (1<<UART_CT_TX_BUSY)) != 0);
+  while (neorv32_uart_tx_busy());
 
   // start app at instruction space base address
   register uint32_t app_base = SYSINFO_ISPACE_BASE;
@@ -405,12 +408,13 @@ void start_app(void) {
 
 /**********************************************************************//**
  * Bootloader trap handler. Used for the MTIME tick and to capture any other traps.
- * @warning Since we have no runtime environment, we have to use the interrupt attribute here. Here, and only here!
+ * @warning Since we have no runtime environment, we have to use the interrupt attribute here. Here and only here!
  **************************************************************************/
 void __attribute__((__interrupt__)) bootloader_trap_handler(void) {
 
-  // make sure this was caused by MTIME IRQ
   uint32_t cause = neorv32_cpu_csr_read(CSR_MCAUSE);
+
+  // make sure this was caused by MTIME IRQ
   if (cause == TRAP_CODE_MTI) { // raw exception code for MTI
     if (STATUS_LED_EN == 1) {
       // toggle status LED
@@ -419,17 +423,20 @@ void __attribute__((__interrupt__)) bootloader_trap_handler(void) {
     // set time for next IRQ
     neorv32_mtime_set_timecmp(neorv32_mtime_get_time() + (SYSINFO_CLK/4));
   }
-
-  else if (cause == TRAP_CODE_S_ACCESS) { // seems like executable is too large
-    system_error(ERROR_SIZE);
-  }
-
   else {
-    neorv32_uart_print("\n\nEXC (");
-    print_hex_word(cause);
-    neorv32_uart_print(") @ 0x");
-    print_hex_word(neorv32_cpu_csr_read(CSR_MEPC));
-    system_error(ERROR_SYSTEM);
+    // store bus access error during get_exe
+    // -> seems like executable is too large
+    if ((cause == TRAP_CODE_S_ACCESS) && (getting_exe)) {
+      system_error(ERROR_SIZE);
+    }
+    // unknown error
+    else {
+      neorv32_uart_print("\n\nEXC (");
+      print_hex_word(cause);
+      neorv32_uart_print(") @ 0x");
+      print_hex_word(neorv32_cpu_csr_read(CSR_MEPC));
+      system_error(ERROR_SYSTEM);
+    }
   }
 }
 
@@ -440,6 +447,8 @@ void __attribute__((__interrupt__)) bootloader_trap_handler(void) {
  * @param src Source of executable stream data. See #EXE_STREAM_SOURCE.
  **************************************************************************/
 void get_exe(int src) {
+
+  getting_exe = 1; // to inform trap handler we were trying to get an executable
 
   // is MEM implemented and read-only?
   if ((SYSINFO_FEATURES & (1 << SYSINFO_FEATURES_MEM_INT_IMEM_ROM)) &&
@@ -493,6 +502,8 @@ void get_exe(int src) {
     neorv32_uart_print("OK");
     exe_available = size; // store exe size
   }
+
+  getting_exe = 0; // to inform trap handler we are done getting an executable
 }
 
 

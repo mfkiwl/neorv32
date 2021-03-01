@@ -36,7 +36,7 @@
 /**********************************************************************//**
  * @file cpu_test/main.c
  * @author Stephan Nolting
- * @brief Simple CPU test program.
+ * @brief CPU/Processor test program.
  **************************************************************************/
 
 #include <neorv32.h>
@@ -51,16 +51,15 @@
 #define BAUD_RATE 19200
 //** Reachable unaligned address */
 #define ADDR_UNALIGNED   0x00000002
-//** Unreachable aligned address */
-#define ADDR_UNREACHABLE 0xFFFFFF00
+//** Unreachable word-aligned address */
+#define ADDR_UNREACHABLE (IO_BASE_ADDRESS-4)
 //* external memory base address */
 #define EXT_MEM_BASE     0xF0000000
 /**@}*/
 
 
 // Prototypes
-void sim_trigger_msi(void);
-void sim_trigger_mei(void);
+void sim_irq_trigger(uint32_t sel);
 void global_trap_handler(void);
 void test_ok(void);
 void test_fail(void);
@@ -96,26 +95,7 @@ uint32_t num_hpm_cnts_global = 0;
 
 
 /**********************************************************************//**
- * Simulation-based function to trigger CPU MSI (machine software interrupt).
- **************************************************************************/
-void sim_trigger_msi(void) {
-
-  *(IO_REG32 (0xFF000000)) = 1;
-}
-
-
-/**********************************************************************//**
- * Simulation-based function to trigger CPU MEI (machine external interrupt).
- **************************************************************************/
-void sim_trigger_mei(void) {
-
-  *(IO_REG32 (0xFF000004)) = 1;
-}
-
-
-/**********************************************************************//**
- * This program uses mostly synthetic case to trigger all implemented exceptions.
- * Each exception is captured and evaluated for correct detection.
+ * High-level CPU/processor test program.
  *
  * @note Applications has to be compiler with <USER_FLAGS+=-DRUN_CPUTEST>
  *
@@ -123,12 +103,15 @@ void sim_trigger_mei(void) {
  **************************************************************************/
 int main() {
 
+  volatile uint64_t temp64;
   register uint32_t tmp_a, tmp_b;
   volatile uint32_t dummy_dst __attribute__((unused));
+  uint8_t id;
+  uint32_t is_simulation = 0;
 
 
-  // init UART at default baud rate, no parity bits, no rx interrupt, no tx interrupt
-  neorv32_uart_setup(BAUD_RATE, 0b00, 0, 0);
+  // init UART at default baud rate, no parity bits, ho hw flow control
+  neorv32_uart_setup(BAUD_RATE, PARITY_NONE, FLOW_CONTROL_NONE);
 
 // Disable cpu_test compilation by default
 #ifndef RUN_CPUTEST
@@ -140,7 +123,15 @@ int main() {
   return 0;
 #endif
 
-  neorv32_uart_printf("\n<< PROCESSOR/CPU TEST >>\n");
+  // check if this is a simulation (using primary UART0)
+  if (UART0_CT & (1 << UART_CT_SIM_MODE)) {
+    is_simulation = 1;
+  }
+  else {
+    is_simulation = 0;
+  }
+
+  neorv32_uart_printf("\n<< CPU/PROCESSOR TEST >>\n");
   neorv32_uart_printf("build: "__DATE__" "__TIME__"\n");
 
   // check if we came from hardware reset
@@ -149,7 +140,7 @@ int main() {
     neorv32_uart_printf("yes\n");
   }
   else {
-    neorv32_uart_printf("unknown (mcause != TRAP_CODE_RESET)\n");
+    neorv32_uart_printf("unknown\n");
   }
 
   // check available hardware extensions and compare with compiler flags
@@ -160,19 +151,17 @@ int main() {
   neorv32_cpu_set_minstret(0);
   neorv32_cpu_set_mcycle(0);
 
-  // enable performance counter auto increment
-  neorv32_cpu_csr_write(CSR_MCOUNTINHIBIT, 0);
-  neorv32_cpu_csr_write(CSR_MCOUNTEREN, 7); // allow access from user-mode code
+  neorv32_cpu_csr_write(CSR_MCOUNTINHIBIT, 0); // enable performance counter auto increment (ALL counters)
+  neorv32_cpu_csr_write(CSR_MCOUNTEREN, 7); // allow access from user-mode code to standard counters only
 
   neorv32_mtime_set_time(0);
   // set CMP of machine system timer MTIME to max to prevent an IRQ
-  uint64_t mtime_cmp_max = 0xFFFFFFFFFFFFFFFFUL;
+  uint64_t mtime_cmp_max = 0xffffffffffffffffULL;
   neorv32_mtime_set_timecmp(mtime_cmp_max);
 
 
-  // intro
+  // fancy intro
   // -----------------------------------------------
-
   // logo
   neorv32_rte_print_logo();
 
@@ -190,43 +179,21 @@ int main() {
   neorv32_rte_setup(); // this will install a full-detailed debug handler for all traps
 
   int install_err = 0;
-  // here we are overriding the default debug handlers
-  install_err += neorv32_rte_exception_install(RTE_TRAP_I_MISALIGNED, global_trap_handler);
-  install_err += neorv32_rte_exception_install(RTE_TRAP_I_ACCESS,     global_trap_handler);
-  install_err += neorv32_rte_exception_install(RTE_TRAP_I_ILLEGAL,    global_trap_handler);
-  install_err += neorv32_rte_exception_install(RTE_TRAP_BREAKPOINT,   global_trap_handler);
-  install_err += neorv32_rte_exception_install(RTE_TRAP_L_MISALIGNED, global_trap_handler);
-  install_err += neorv32_rte_exception_install(RTE_TRAP_L_ACCESS,     global_trap_handler);
-  install_err += neorv32_rte_exception_install(RTE_TRAP_S_MISALIGNED, global_trap_handler);
-  install_err += neorv32_rte_exception_install(RTE_TRAP_S_ACCESS,     global_trap_handler);
-  install_err += neorv32_rte_exception_install(RTE_TRAP_UENV_CALL,    global_trap_handler);
-  install_err += neorv32_rte_exception_install(RTE_TRAP_MENV_CALL,    global_trap_handler);
-  install_err += neorv32_rte_exception_install(RTE_TRAP_MTI,          global_trap_handler);
-  install_err += neorv32_rte_exception_install(RTE_TRAP_MSI,          global_trap_handler);
-  install_err += neorv32_rte_exception_install(RTE_TRAP_MEI,          global_trap_handler);
-  install_err += neorv32_rte_exception_install(RTE_TRAP_FIRQ_0,       global_trap_handler);
-  install_err += neorv32_rte_exception_install(RTE_TRAP_FIRQ_1,       global_trap_handler);
-  install_err += neorv32_rte_exception_install(RTE_TRAP_FIRQ_2,       global_trap_handler);
-  install_err += neorv32_rte_exception_install(RTE_TRAP_FIRQ_3,       global_trap_handler);
+  // initialize ALL provided trap handler (overriding the default debug handlers)
+  for (id=0; id<NEORV32_RTE_NUM_TRAPS; id++) {
+    install_err += neorv32_rte_exception_install(id, global_trap_handler);
+  }
 
   if (install_err) {
-    neorv32_uart_printf("RTE error (%i)!\n", install_err);
+    neorv32_uart_printf("RTE install error (%i)!\n", install_err);
     return 0;
   }
 
   // enable interrupt sources
-  install_err  = neorv32_cpu_irq_enable(CSR_MIE_MSIE);   // activate software interrupt
-  install_err += neorv32_cpu_irq_enable(CSR_MIE_MTIE);   // activate timer interrupt
-  install_err += neorv32_cpu_irq_enable(CSR_MIE_MEIE);   // activate external interrupt
-  install_err += neorv32_cpu_irq_enable(CSR_MIE_FIRQ0E); // activate fast interrupt channel 0
-  install_err += neorv32_cpu_irq_enable(CSR_MIE_FIRQ1E); // activate fast interrupt channel 1
-  install_err += neorv32_cpu_irq_enable(CSR_MIE_FIRQ2E); // activate fast interrupt channel 2
-  install_err += neorv32_cpu_irq_enable(CSR_MIE_FIRQ3E); // activate fast interrupt channel 3
-
-  if (install_err) {
-    neorv32_uart_printf("IRQ enable error (%i)!\n", install_err);
-    return 0;
-  }
+  neorv32_cpu_irq_enable(CSR_MIE_MSIE);   // machine software interrupt
+  neorv32_cpu_irq_enable(CSR_MIE_MTIE);   // machine timer interrupt
+  neorv32_cpu_irq_enable(CSR_MIE_MEIE);   // machine external interrupt
+  // enable FAST IRQ sources only where actually needed
 
   // test intro
   neorv32_uart_printf("\nStarting tests...\n\n");
@@ -244,15 +211,14 @@ int main() {
   cnt_test++;
 
   // get current cycle counter
-  tmp_a = neorv32_cpu_get_cycle();
+  temp64 = neorv32_cpu_get_cycle();
 
   // wait some time to have a nice increment
   asm volatile ("nop");
   asm volatile ("nop");
 
   // make sure cycle counter has incremented and there was no exception during access
-  if ((neorv32_cpu_get_cycle() > tmp_a) &&
-      (neorv32_cpu_csr_read(CSR_MCAUSE) == 0)) {
+  if ((neorv32_cpu_get_cycle() > temp64) && (neorv32_cpu_csr_read(CSR_MCAUSE) == 0)) {
     test_ok();
   }
   else {
@@ -269,14 +235,14 @@ int main() {
   cnt_test++;
 
   // get current instruction counter
-  tmp_a = neorv32_cpu_get_instret();
+  temp64 = neorv32_cpu_get_instret();
 
   // wait some time to have a nice increment
   asm volatile ("nop");
   asm volatile ("nop");
 
   // make sure instruction counter has incremented and there was no exception during access
-  if ((neorv32_cpu_get_instret() > tmp_a) &&
+  if ((neorv32_cpu_get_instret() > temp64) &&
       (neorv32_cpu_csr_read(CSR_MCAUSE) == 0)) {
     test_ok();
   }
@@ -429,7 +395,7 @@ int main() {
   neorv32_cpu_csr_write(CSR_MCAUSE, 0);
   neorv32_uart_printf("[%i] External memory access (@ 0x%x) test: ", cnt_test, (uint32_t)EXT_MEM_BASE);
 
-  if (UART_CT & (1 << UART_CT_SIM_MODE)) { // check if this is a simulation
+  if (is_simulation) { // check if this is a simulation
     if (SYSINFO_FEATURES & (1 << SYSINFO_FEATURES_MEM_EXT)) {
       cnt_test++;
 
@@ -470,12 +436,12 @@ int main() {
     neorv32_uart_printf("skipped (on real HW)\n");
   }
 
-
+/*
   // ----------------------------------------------------------
-  // Test FENCE.I instruction (clear & reload i-cache)
+  // Test FENCE.I instruction (instruction buffer / i-cache clear & reload)
   // ----------------------------------------------------------
   neorv32_cpu_csr_write(CSR_MCAUSE, 0);
-  neorv32_uart_printf("[%i] Testing FENCE.I operation: ", cnt_test);
+  neorv32_uart_printf("[%i] FENCE.I test: ", cnt_test);
 
   // check if implemented
   if (neorv32_cpu_csr_read(CSR_MZEXT) & (1 << CSR_MZEXT_ZIFENCEI)) {
@@ -494,7 +460,7 @@ int main() {
   else {
     neorv32_uart_printf("skipped (not implemented)\n");
   }
-
+*/
 
   // ----------------------------------------------------------
   // Illegal CSR access (CSR not implemented)
@@ -642,7 +608,7 @@ int main() {
   // Unaligned instruction address
   // ----------------------------------------------------------
   neorv32_cpu_csr_write(CSR_MCAUSE, 0);
-  neorv32_uart_printf("[%i] I_ALIGN (instruction alignment) exception test: ", cnt_test);
+  neorv32_uart_printf("[%i] I_ALIGN (instr. alignment) exception test: ", cnt_test);
 
   // skip if C-mode is implemented
   if ((neorv32_cpu_csr_read(CSR_MISA) & (1<<CSR_MISA_C_EXT)) == 0) {
@@ -662,7 +628,7 @@ int main() {
     }
   }
   else {
-    neorv32_uart_printf("skipped (not possible when C extension is enabled)\n");
+    neorv32_uart_printf("skipped (n.a. with C-ext)\n");
   }
 
 
@@ -670,7 +636,7 @@ int main() {
   // Instruction access fault
   // ----------------------------------------------------------
   neorv32_cpu_csr_write(CSR_MCAUSE, 0);
-  neorv32_uart_printf("[%i] I_ACC (instruction bus access) exception test: ", cnt_test);
+  neorv32_uart_printf("[%i] I_ACC (instr. bus access) exception test: ", cnt_test);
   cnt_test++;
 
   // call unreachable aligned address
@@ -688,7 +654,7 @@ int main() {
   // Illegal instruction
   // ----------------------------------------------------------
   neorv32_cpu_csr_write(CSR_MCAUSE, 0);
-  neorv32_uart_printf("[%i] I_ILLEG (illegal instruction) exception test: ", cnt_test);
+  neorv32_uart_printf("[%i] I_ILLEG (illegal instr.) exception test: ", cnt_test);
 
   cnt_test++;
 
@@ -714,7 +680,7 @@ int main() {
   // Illegal compressed instruction
   // ----------------------------------------------------------
   neorv32_cpu_csr_write(CSR_MCAUSE, 0);
-  neorv32_uart_printf("[%i] CI_ILLEG (illegal compressed instruction) exception test: ", cnt_test);
+  neorv32_uart_printf("[%i] CI_ILLEG (illegal compr. instr.) exception test: ", cnt_test);
 
   // skip if C-mode is not implemented
   if ((neorv32_cpu_csr_read(CSR_MISA) & (1<<CSR_MISA_C_EXT)) != 0) {
@@ -738,7 +704,7 @@ int main() {
     }
   }
   else {
-    neorv32_uart_printf("skipped (not possible when C-EXT disabled)\n");
+    neorv32_uart_printf("skipped (n.a. with C-ext)\n");
   }
 
 
@@ -746,7 +712,7 @@ int main() {
   // Breakpoint instruction
   // ----------------------------------------------------------
   neorv32_cpu_csr_write(CSR_MCAUSE, 0);
-  neorv32_uart_printf("[%i] BREAK (break instruction) exception test: ", cnt_test);
+  neorv32_uart_printf("[%i] BREAK (break instr.) exception test: ", cnt_test);
   cnt_test++;
 
   asm volatile("EBREAK");
@@ -763,7 +729,7 @@ int main() {
   // Unaligned load address
   // ----------------------------------------------------------
   neorv32_cpu_csr_write(CSR_MCAUSE, 0);
-  neorv32_uart_printf("[%i] L_ALIGN (load address alignment) exception test: ", cnt_test);
+  neorv32_uart_printf("[%i] L_ALIGN (load addr alignment) exception test: ", cnt_test);
   cnt_test++;
 
   // load from unaligned address
@@ -799,7 +765,7 @@ int main() {
   // Unaligned store address
   // ----------------------------------------------------------
   neorv32_cpu_csr_write(CSR_MCAUSE, 0);
-  neorv32_uart_printf("[%i] S_ALIGN (store address alignment) exception test: ", cnt_test);
+  neorv32_uart_printf("[%i] S_ALIGN (store addr alignment) exception test: ", cnt_test);
   cnt_test++;
 
   // store to unaligned address
@@ -835,7 +801,7 @@ int main() {
   // Environment call from M-mode
   // ----------------------------------------------------------
   neorv32_cpu_csr_write(CSR_MCAUSE, 0);
-  neorv32_uart_printf("[%i] ENVCALL (ecall instruction) from M-mode exception test: ", cnt_test);
+  neorv32_uart_printf("[%i] ENVCALL (ecall instr.) from M-mode exception test: ", cnt_test);
   cnt_test++;
 
   asm volatile("ECALL");
@@ -852,7 +818,7 @@ int main() {
   // Environment call from U-mode
   // ----------------------------------------------------------
   neorv32_cpu_csr_write(CSR_MCAUSE, 0);
-  neorv32_uart_printf("[%i] ENVCALL (ecall instruction) from U-mode exception test: ", cnt_test);
+  neorv32_uart_printf("[%i] ENVCALL (ecall instr.) from U-mode exception test: ", cnt_test);
 
   // skip if U-mode is not implemented
   if (neorv32_cpu_csr_read(CSR_MISA) & (1<<CSR_MISA_U_EXT)) {
@@ -874,7 +840,7 @@ int main() {
 
   }
   else {
-    neorv32_uart_printf("skipped (not possible when U-EXT disabled)\n");
+    neorv32_uart_printf("skipped (n.a. without U-ext)\n");
   }
 
 
@@ -915,11 +881,11 @@ int main() {
   neorv32_cpu_csr_write(CSR_MCAUSE, 0);
   neorv32_uart_printf("[%i] MSI (via testbench) interrupt test: ", cnt_test);
 
-  if (UART_CT & (1 << UART_CT_SIM_MODE)) { // check if this is a simulation
+  if (is_simulation) { // check if this is a simulation
     cnt_test++;
 
     // trigger IRQ
-    sim_trigger_msi();
+    sim_irq_trigger(1 << CSR_MIE_MSIE);
 
     // wait some time for the IRQ to arrive the CPU
     asm volatile("nop");
@@ -943,11 +909,11 @@ int main() {
   neorv32_cpu_csr_write(CSR_MCAUSE, 0);
   neorv32_uart_printf("[%i] MEI (via testbench) interrupt test: ", cnt_test);
 
-  if (UART_CT & (1 << UART_CT_SIM_MODE)) { // check if this is a simulation
+  if (is_simulation) { // check if this is a simulation
     cnt_test++;
 
     // trigger IRQ
-    sim_trigger_mei();
+    sim_irq_trigger(1 << CSR_MIE_MEIE);
 
     // wait some time for the IRQ to arrive the CPU
     asm volatile("nop");
@@ -969,14 +935,17 @@ int main() {
   // Fast interrupt channel 0 (WDT)
   // ----------------------------------------------------------
   neorv32_cpu_csr_write(CSR_MCAUSE, 0);
-  neorv32_uart_printf("[%i] FIRQ0 (fast IRQ0) interrupt test (via WDT): ", cnt_test);
+  neorv32_uart_printf("[%i] FIRQ0 test (via WDT): ", cnt_test);
 
   if (neorv32_wdt_available()) {
     cnt_test++;
 
+    // enable fast interrupt
+    neorv32_cpu_irq_enable(CSR_MIE_FIRQ0E);
+
     // configure WDT
-    neorv32_wdt_setup(CLK_PRSC_2, 0); // lowest clock prescaler, trigger IRQ on timeout
-    neorv32_wdt_reset(); // reset watchdog
+    neorv32_wdt_setup(CLK_PRSC_4096, 0, 1); // highest clock prescaler, trigger IRQ on timeout, lock access
+    WDT_CT = 0; // try to deactivate WDT (should fail as access is loced)
     neorv32_wdt_force(); // force watchdog into action
 
     // wait some time for the IRQ to arrive the CPU
@@ -992,6 +961,9 @@ int main() {
 
     // no more WDT interrupts
     neorv32_wdt_disable();
+
+    // disable fast interrupt
+    neorv32_cpu_irq_disable(CSR_MIE_FIRQ0E);
   }
   else {
     neorv32_uart_printf("skipped (not implemented)\n");
@@ -999,17 +971,291 @@ int main() {
 
 
   // ----------------------------------------------------------
-  // Fast interrupt channel 1 (GPIO)
+  // Fast interrupt channel 1 (CFS)
+  // ----------------------------------------------------------
+  neorv32_uart_printf("[%i] FIRQ1 test (via CFS): ", cnt_test);
+  neorv32_uart_printf("skipped (not implemented)\n");
+
+
+  // ----------------------------------------------------------
+  // Fast interrupt channel 2 (UART0.RX)
   // ----------------------------------------------------------
   neorv32_cpu_csr_write(CSR_MCAUSE, 0);
-  neorv32_uart_printf("[%i] FIRQ1 (fast IRQ1) interrupt test (via GPIO): ", cnt_test);
+  neorv32_uart_printf("[%i] FIRQ2 test (via UART0.RX): ", cnt_test);
 
-  if (UART_CT & (1 << UART_CT_SIM_MODE)) { // check if this is a simulation
+  if (is_simulation) { // check if this is a simulation
+    cnt_test++;
+
+    // enable fast interrupt
+    neorv32_cpu_irq_enable(CSR_MIE_FIRQ2E);
+
+    // wait for UART0 to finish transmitting
+    while(neorv32_uart_tx_busy());
+
+    // backup current UART0 configuration
+    tmp_a = UART0_CT;
+
+    // disable UART0 sim_mode if it is enabled
+    UART0_CT &= ~(1 << UART_CT_SIM_MODE);
+
+    // trigger UART0 RX IRQ
+    // the default test bench connects UART0.TXD_O to UART0_RXD_I
+    UART0_DATA = 0; // we need to access the raw HW here, since >UART0_SIM_MODE< might be active
+
+    // wait for UART0 to finish transmitting
+    while(neorv32_uart_tx_busy());
+
+    // wait some time for the IRQ to arrive the CPU
+    asm volatile("nop");
+    asm volatile("nop");
+
+    // re-enable UART0 sim_mode if it was enabled
+    UART0_CT = tmp_a;
+
+    // disable fast interrupt
+    neorv32_cpu_irq_disable(CSR_MIE_FIRQ2E);
+
+    if (neorv32_cpu_csr_read(CSR_MCAUSE) == TRAP_CODE_FIRQ_2) {
+      test_ok();
+    }
+    else {
+      test_fail();
+    }
+  }
+  else {
+    neorv32_uart_printf("skipped (on real HW)\n");
+  }
+
+
+  // ----------------------------------------------------------
+  // Fast interrupt channel 3 (UART0.TX)
+  // ----------------------------------------------------------
+  neorv32_cpu_csr_write(CSR_MCAUSE, 0);
+  neorv32_uart_printf("[%i] FIRQ3 test (via UART0.TX): ", cnt_test);
+
+  cnt_test++;
+
+  // UART0 TX interrupt enable
+  neorv32_cpu_irq_enable(CSR_MIE_FIRQ3E);
+
+  // wait for UART0 to finish transmitting
+  while(neorv32_uart_tx_busy());
+
+  // backup current UART0 configuration
+  tmp_a = UART0_CT;
+
+  // disable UART0 sim_mode if it is enabled
+  UART0_CT &= ~(1 << UART_CT_SIM_MODE);
+
+  // trigger UART0 TX IRQ
+  UART0_DATA = 0; // we need to access the raw HW here, since >UART0_SIM_MODE< might be active
+
+  // wait for UART to finish transmitting
+  while(neorv32_uart_tx_busy());
+
+  // wait some time for the IRQ to arrive the CPU
+  asm volatile("nop");
+  asm volatile("nop");
+
+  // re-enable UART sim_mode if it was enabled
+  UART0_CT = tmp_a;
+
+  neorv32_cpu_irq_disable(CSR_MIE_FIRQ3E);
+
+  if (neorv32_cpu_csr_read(CSR_MCAUSE) == TRAP_CODE_FIRQ_3) {
+    test_ok();
+  }
+  else {
+    test_fail();
+  }
+
+
+  // ----------------------------------------------------------
+  // Fast interrupt channel 4 (UART1.RX)
+  // ----------------------------------------------------------
+  neorv32_cpu_csr_write(CSR_MCAUSE, 0);
+  neorv32_uart_printf("[%i] FIRQ4 test (via UART1.RX): ", cnt_test);
+
+  if ((neorv32_uart1_available()) && (is_simulation)) { // UART1 available and we are in a simulation
+    cnt_test++;
+
+    // UART1 RX interrupt enable
+    neorv32_cpu_irq_enable(CSR_MIE_FIRQ4E);
+
+    // initialize UART1
+    UART1_CT = 0;
+    tmp_a = UART0_CT; // copy configuration from UART0
+    tmp_a &= ~(1 << UART_CT_SIM_MODE); // make sure sim_mode is disabled
+    UART1_CT = tmp_a;
+
+    // trigger UART1 RX IRQ
+    UART1_DATA = 0;
+
+    // wait for UART1 to finish transmitting
+    while(neorv32_uart1_tx_busy());
+
+    // wait some time for the IRQ to arrive the CPU
+    asm volatile("nop");
+    asm volatile("nop");
+
+    // disable UART1
+    UART1_CT = 0;
+
+    // disable fast interrupt
+    neorv32_cpu_irq_disable(CSR_MIE_FIRQ4E);
+
+    if (neorv32_cpu_csr_read(CSR_MCAUSE) == TRAP_CODE_FIRQ_4) {
+      test_ok();
+    }
+    else {
+      test_fail();
+    }
+  }
+  else {
+    neorv32_uart_printf("skipped (not implemented)\n");
+  }
+
+
+  // ----------------------------------------------------------
+  // Fast interrupt channel 5 (UART1.TX)
+  // ----------------------------------------------------------
+  neorv32_cpu_csr_write(CSR_MCAUSE, 0);
+  neorv32_uart_printf("[%i] FIRQ5 test (via UART1.TX): ", cnt_test);
+
+  if (neorv32_uart1_available()) {
+    cnt_test++;
+
+    // UART1 RX interrupt enable
+    neorv32_cpu_irq_enable(CSR_MIE_FIRQ5E);
+
+    // initialize UART1
+    UART1_CT = 0;
+    tmp_a = UART0_CT; // copy configuration from UART0
+    tmp_a &= ~(1 << UART_CT_SIM_MODE); // make sure sim_mode is disabled
+    UART1_CT = tmp_a;
+
+    // trigger UART1 TX IRQ
+    UART1_DATA = 0;
+
+    // wait for UART1 to finish transmitting
+    while(neorv32_uart1_tx_busy());
+
+    // wait some time for the IRQ to arrive the CPU
+    asm volatile("nop");
+    asm volatile("nop");
+
+    // disable UART1
+    UART1_CT = 0;
+
+    // disable fast interrupt
+    neorv32_cpu_irq_disable(CSR_MIE_FIRQ5E);
+
+    if (neorv32_cpu_csr_read(CSR_MCAUSE) == TRAP_CODE_FIRQ_5) {
+      test_ok();
+    }
+    else {
+      test_fail();
+    }
+  }
+  else {
+    neorv32_uart_printf("skipped (not implemented)\n");
+  }
+
+
+  // ----------------------------------------------------------
+  // Fast interrupt channel 6 (SPI)
+  // ----------------------------------------------------------
+  neorv32_cpu_csr_write(CSR_MCAUSE, 0);
+  neorv32_uart_printf("[%i] FIRQ6 test (via SPI): ", cnt_test);
+
+  if (neorv32_spi_available()) {
+    cnt_test++;
+
+    // enable fast interrupt
+    neorv32_cpu_irq_enable(CSR_MIE_FIRQ6E);
+
+    // configure SPI
+    neorv32_spi_setup(CLK_PRSC_2, 0, 0);
+
+    // trigger SPI IRQ
+    neorv32_spi_trans(0);
+    while(neorv32_spi_busy()); // wait for current transfer to finish
+
+    // wait some time for the IRQ to arrive the CPU
+    asm volatile("nop");
+    asm volatile("nop");
+
+    if (neorv32_cpu_csr_read(CSR_MCAUSE) == TRAP_CODE_FIRQ_6) {
+      test_ok();
+    }
+    else {
+      test_fail();
+    }
+
+    // disable SPI
+    neorv32_spi_disable();
+
+    // disable fast interrupt
+    neorv32_cpu_irq_disable(CSR_MIE_FIRQ6E);
+  }
+  else {
+    neorv32_uart_printf("skipped (not implemented)\n");
+  }
+
+
+  // ----------------------------------------------------------
+  // Fast interrupt channel 7 (TWI)
+  // ----------------------------------------------------------
+  neorv32_cpu_csr_write(CSR_MCAUSE, 0);
+  neorv32_uart_printf("[%i] FIRQ7 test (via TWI): ", cnt_test);
+
+  if (neorv32_twi_available()) {
+    cnt_test++;
+
+    // configure TWI, fastest clock, no peripheral clock stretching
+    neorv32_twi_setup(CLK_PRSC_2, 0);
+
+    neorv32_cpu_irq_enable(CSR_MIE_FIRQ7E);
+
+    // trigger TWI IRQ
+    neorv32_twi_generate_start();
+    neorv32_twi_trans(0);
+    neorv32_twi_generate_stop();
+
+    // wait some time for the IRQ to arrive the CPU
+    asm volatile("nop");
+    asm volatile("nop");
+
+    if (neorv32_cpu_csr_read(CSR_MCAUSE) == TRAP_CODE_FIRQ_7) {
+      test_ok();
+    }
+    else {
+      test_fail();
+    }
+
+    // disable TWI
+    neorv32_twi_disable();
+    neorv32_cpu_irq_disable(CSR_MIE_FIRQ7E);
+  }
+  else {
+    neorv32_uart_printf("skipped (not implemented)\n");
+  }
+
+
+  // ----------------------------------------------------------
+  // Fast interrupt channel 8 (GPIO)
+  // ----------------------------------------------------------
+  neorv32_cpu_csr_write(CSR_MCAUSE, 0);
+  neorv32_uart_printf("[%i] FIRQ8 test (via GPIO): ", cnt_test);
+
+  if (is_simulation) { // check if this is a simulation
     if (neorv32_gpio_available()) {
       cnt_test++;
 
       // clear output port
       neorv32_gpio_port_set(0);
+
+      neorv32_cpu_irq_enable(CSR_MIE_FIRQ8E);
 
       // configure GPIO.in(31) for pin-change IRQ
       neorv32_gpio_pin_change_config(0x80000000);
@@ -1022,7 +1268,7 @@ int main() {
       asm volatile("nop");
       asm volatile("nop");
 
-      if (neorv32_cpu_csr_read(CSR_MCAUSE) == TRAP_CODE_FIRQ_1) {
+      if (neorv32_cpu_csr_read(CSR_MCAUSE) == TRAP_CODE_FIRQ_8) {
         test_ok();
       }
       else {
@@ -1034,6 +1280,7 @@ int main() {
 
       // clear output port
       neorv32_gpio_port_set(0);
+      neorv32_cpu_irq_disable(CSR_MIE_FIRQ8E);
     }
     else {
       neorv32_uart_printf("skipped (not implemented)\n");
@@ -1045,131 +1292,69 @@ int main() {
 
 
   // ----------------------------------------------------------
-  // Fast interrupt channel 2 (UART)
+  // Fast interrupt channel 9 (reserved)
+  // ----------------------------------------------------------
+  neorv32_uart_printf("[%i] FIRQ9 test: ", cnt_test);
+  neorv32_uart_printf("skipped (not implemented)\n");
+
+
+  // ----------------------------------------------------------
+  // Fast interrupt channel 10..15 (SoC fast IRQ 0..5)
   // ----------------------------------------------------------
   neorv32_cpu_csr_write(CSR_MCAUSE, 0);
-  neorv32_uart_printf("[%i] FIRQ2 (fast IRQ2) interrupt test (via UART): ", cnt_test);
+  neorv32_uart_printf("[%i] FIRQ10..15 (SoC fast IRQ 0..5; via testbench) test: ", cnt_test);
 
-  if (neorv32_uart_available()) {
+  if (is_simulation) { // check if this is a simulation
+
     cnt_test++;
 
-    // wait for UART to finish transmitting
-    while(neorv32_uart_tx_busy());
+    // enable SOC FIRQs
+    for (id=CSR_MIE_FIRQ10E; id<=CSR_MIE_FIRQ15E; id++) {
+      neorv32_cpu_irq_enable(id);
+    }
 
-    // backup current UART configuration
-    uint32_t uart_ct_backup = UART_CT;
-
-    // disable UART sim_mode if it is enabled
-    UART_CT &= ~(1 << UART_CT_SIM_MODE);
-
-    // enable UART TX done IRQ
-    UART_CT |= (1 << UART_CT_TX_IRQ);
-
-    // trigger UART TX IRQ
-    UART_DATA = 0; // we need to access the raw HW here, since >DEVNULL_UART_OVERRIDE< might be active
-
-    // wait for UART to finish transmitting
-    while(neorv32_uart_tx_busy());
+    // trigger all SoC Fast interrupts at once
+    neorv32_cpu_dint(); // do not fire yet!
+    sim_irq_trigger((1 << CSR_MIE_FIRQ10E) | (1 << CSR_MIE_FIRQ11E) | (1 << CSR_MIE_FIRQ12E) | (1 << CSR_MIE_FIRQ13E) | (1 << CSR_MIE_FIRQ14E) | (1 << CSR_MIE_FIRQ15E));
 
     // wait some time for the IRQ to arrive the CPU
     asm volatile("nop");
     asm volatile("nop");
 
-    // wait for UART to finish transmitting
-    while(neorv32_uart_tx_busy());
+    // make sure all SoC FIRQs have been triggered
+    tmp_a = (1 << CSR_MIP_FIRQ10P) | (1 << CSR_MIP_FIRQ11P) | (1 << CSR_MIP_FIRQ12P) | (1 << CSR_MIP_FIRQ13P) | (1 << CSR_MIP_FIRQ14P) | (1 << CSR_MIP_FIRQ15P);
 
-    // re-enable UART sim_mode if it was enabled and disable UART TX done IRQ
-    UART_CT = uart_ct_backup;
+    if (neorv32_cpu_csr_read(CSR_MIP) == tmp_a) {
+      neorv32_cpu_eint(); // allow IRQs to fire again
+      asm volatile ("nop");
+      asm volatile ("nop"); // irq should kick in HERE
 
-    if (neorv32_cpu_csr_read(CSR_MCAUSE) == TRAP_CODE_FIRQ_2) {
-      test_ok();
+      tmp_a = neorv32_cpu_csr_read(CSR_MCAUSE);
+      if ((tmp_a >= TRAP_CODE_FIRQ_8) && (tmp_a <= TRAP_CODE_FIRQ_15)) {
+        test_ok();
+      }
+      else {
+        test_fail();
+      }
     }
-    else {
-      test_fail();
-    }
 
+    // disable SOC FIRQs
+    for (id=CSR_MIE_FIRQ10E; id<=CSR_MIE_FIRQ15E; id++) {
+      neorv32_cpu_irq_disable(id);
+    }
   }
   else {
-    neorv32_uart_printf("skipped (not implemented)\n");
+    neorv32_uart_printf("skipped (on real HW)\n");
   }
 
-
-  // ----------------------------------------------------------
-  // Fast interrupt channel 3 (SPI)
-  // ----------------------------------------------------------
-  neorv32_cpu_csr_write(CSR_MCAUSE, 0);
-  neorv32_uart_printf("[%i] FIRQ3 (fast IRQ3) interrupt test (via SPI): ", cnt_test);
-
-  if (neorv32_spi_available()) {
-    cnt_test++;
-
-    // configure SPI, enable transfer-done IRQ
-    neorv32_spi_setup(CLK_PRSC_2, 0, 0, 1);
-
-    // trigger SPI IRQ
-    neorv32_spi_trans(0);
-    while(neorv32_spi_busy()); // wait for current transfer to finish
-
-    // wait some time for the IRQ to arrive the CPU
-    asm volatile("nop");
-    asm volatile("nop");
-
-    if (neorv32_cpu_csr_read(CSR_MCAUSE) == TRAP_CODE_FIRQ_3) {
-      test_ok();
-    }
-    else {
-      test_fail();
-    }
-
-    // disable SPI
-    neorv32_spi_disable();
-  }
-  else {
-    neorv32_uart_printf("skipped (not implemented)\n");
-  }
-
-
-  // ----------------------------------------------------------
-  // Fast interrupt channel 3 (TWI)
-  // ----------------------------------------------------------
-  neorv32_cpu_csr_write(CSR_MCAUSE, 0);
-  neorv32_uart_printf("[%i] FIRQ3 (fast IRQ3) interrupt test (via TWI): ", cnt_test);
-
-  if (neorv32_twi_available()) {
-    cnt_test++;
-
-    // configure TWI, fastest clock, transfer-done IRQ enable, disable peripheral clock stretching
-    neorv32_twi_setup(CLK_PRSC_2, 1, 0);
-
-    // trigger TWI IRQ
-    neorv32_twi_generate_start();
-    neorv32_twi_trans(0);
-    neorv32_twi_generate_stop();
-
-    // wait some time for the IRQ to arrive the CPU
-    asm volatile("nop");
-    asm volatile("nop");
-
-    if (neorv32_cpu_csr_read(CSR_MCAUSE) == TRAP_CODE_FIRQ_3) {
-      test_ok();
-    }
-    else {
-      test_fail();
-    }
-
-    // disable TWI
-    neorv32_twi_disable();
-  }
-  else {
-    neorv32_uart_printf("skipped (not implemented)\n");
-  }
+  neorv32_cpu_eint(); // re-enable IRQs globally
 
 
   // ----------------------------------------------------------
   // Test WFI ("sleep") instructions, wakeup via MTIME
   // ----------------------------------------------------------
   neorv32_cpu_csr_write(CSR_MCAUSE, 0);
-  neorv32_uart_printf("[%i] WFI (wait for interrupt / sleep instruction) test (wake-up via MTIME): ", cnt_test);
+  neorv32_uart_printf("[%i] WFI (sleep instruction) test (wake-up via MTIME): ", cnt_test);
 
   if (neorv32_mtime_available()) {
     cnt_test++;
@@ -1227,7 +1412,7 @@ int main() {
 
   }
   else {
-    neorv32_uart_printf("skipped (not possible when U-EXT disabled)\n");
+    neorv32_uart_printf("skipped (n.a. without U-ext)\n");
   }
 
 
@@ -1261,12 +1446,12 @@ int main() {
   // ----------------------------------------------------------
   // Test physical memory protection
   // ----------------------------------------------------------
-  neorv32_uart_printf("[%i] Physical memory protection (PMP): ", cnt_test);
+  neorv32_uart_printf("[%i] PMP - Physical memory protection: ", cnt_test);
 
   // check if PMP is implemented
   if (neorv32_cpu_pmp_get_num_regions() != 0)  {
 
-    // Test access to protected region
+    // Create PMP protected region
     // ---------------------------------------------
     neorv32_cpu_csr_write(CSR_MCAUSE, 0);
     cnt_test++;
@@ -1289,7 +1474,7 @@ int main() {
 
 
     // ------ EXECUTE: should fail ------
-    neorv32_uart_printf("[%i] - PMP: U-mode [!X,!W,R] execute test:  ", cnt_test);
+    neorv32_uart_printf("[%i] PMP: U-mode [!X,!W,R] execute test:  ", cnt_test);
     cnt_test++;
     neorv32_cpu_csr_write(CSR_MCAUSE, 0);
 
@@ -1314,7 +1499,7 @@ int main() {
 
 
     // ------ LOAD: should work ------
-    neorv32_uart_printf("[%i] - PMP: U-mode [!X,!W,R] read test:     ", cnt_test);
+    neorv32_uart_printf("[%i] PMP: U-mode [!X,!W,R] read test:     ", cnt_test);
     cnt_test++;
     neorv32_cpu_csr_write(CSR_MCAUSE, 0);
 
@@ -1339,7 +1524,7 @@ int main() {
 
 
     // ------ STORE: should fail ------
-    neorv32_uart_printf("[%i] - PMP: U-mode [!X,!W,R] write test:    ", cnt_test);
+    neorv32_uart_printf("[%i] PMP: U-mode [!X,!W,R] write test:    ", cnt_test);
     cnt_test++;
     neorv32_cpu_csr_write(CSR_MCAUSE, 0);
 
@@ -1363,8 +1548,8 @@ int main() {
     }
 
 
-    // ------ Lock test - pmpcfg0.0 ------
-    neorv32_uart_printf("[%i] - PMP: pmpcfg0.0 [mode=off] lock test: ", cnt_test);
+    // ------ Lock test - pmpcfg0.0 / pmpaddr0 ------
+    neorv32_uart_printf("[%i] PMP: Entry [mode=off] lock test: ", cnt_test);
     cnt_test++;
     neorv32_cpu_csr_write(CSR_MCAUSE, 0);
 
@@ -1374,26 +1559,10 @@ int main() {
     tmp_a = neorv32_cpu_csr_read(CSR_PMPCFG0);
     neorv32_cpu_csr_write(CSR_PMPCFG0, 0b00011001); // try to re-write CFG content
 
-    if ((tmp_a != neorv32_cpu_csr_read(CSR_PMPCFG0)) || (neorv32_cpu_csr_read(CSR_MCAUSE) != 0)) {
-      test_fail();
-    }
-    else {
-      test_ok();
-    }
-
-
-    // ------ Lock test - pmpaddr0 ------
-    neorv32_uart_printf("[%i] - PMP: pmpaddr0 [mode=off] lock test:  ", cnt_test);
-    cnt_test++;
-    neorv32_cpu_csr_write(CSR_MCAUSE, 0);
-
-    neorv32_cpu_csr_write(CSR_PMPCFG0, 0b10000001); // locked, but entry is deactivated (mode = off)
-
-    // make sure a locked cfg cannot be written
-    tmp_a = neorv32_cpu_csr_read(CSR_PMPADDR0);
+    tmp_b = neorv32_cpu_csr_read(CSR_PMPADDR0);
     neorv32_cpu_csr_write(CSR_PMPADDR0, 0xABABCDCD); // try to re-write ADDR content
 
-    if ((tmp_a != neorv32_cpu_csr_read(CSR_PMPADDR0)) || (neorv32_cpu_csr_read(CSR_MCAUSE) != 0)) {
+    if ((tmp_a != neorv32_cpu_csr_read(CSR_PMPCFG0)) || (tmp_b != neorv32_cpu_csr_read(CSR_PMPADDR0)) || (neorv32_cpu_csr_read(CSR_MCAUSE) != 0)) {
       test_fail();
     }
     else {
@@ -1413,7 +1582,7 @@ int main() {
   neorv32_uart_printf("[%i] Atomic access (LR+SC) test (succeeding access): ", cnt_test);
 
 #ifdef __riscv_atomic
-  if ((UART_CT & (1 << UART_CT_SIM_MODE)) != 0) { // check if this is a simulation
+  if (is_simulation) { // check if this is a simulation
 
     // skip if A-mode is not implemented
     if ((neorv32_cpu_csr_read(CSR_MISA) & (1<<CSR_MISA_A_EXT)) != 0) {
@@ -1450,7 +1619,7 @@ int main() {
   neorv32_uart_printf("[%i] Atomic access (LR+SC) test (failing access): ", cnt_test);
 
 #ifdef __riscv_atomic
-  if ((UART_CT & (1 << UART_CT_SIM_MODE)) != 0) { // check if this is a simulation
+  if (is_simulation) { // check if this is a simulation
 
     // skip if A-mode is not implemented
     if ((neorv32_cpu_csr_read(CSR_MISA) & (1<<CSR_MISA_A_EXT)) != 0) {
@@ -1480,56 +1649,25 @@ int main() {
 
 
   // ----------------------------------------------------------
-  // Test AMO atomic operation - should raise illegal instruction exception
-  // ----------------------------------------------------------
-  neorv32_cpu_csr_write(CSR_MCAUSE, 0);
-  neorv32_uart_printf("[%i] Atomic AMOSWAP test (should raise illegal CMD exception): ", cnt_test);
-
-#ifdef __riscv_atomic
-  // skip if A-mode is not implemented
-  if ((neorv32_cpu_csr_read(CSR_MISA) & (1<<CSR_MISA_A_EXT)) != 0) {
-
-    cnt_test++;
-
-    // AMO operations are not implemented!
-    // this should cause an illegal instruction exception
-    asm volatile ("amoswap.w x0, x0, (x0)");
-
-    // atomic compare-and-swap
-    if (neorv32_cpu_csr_read(CSR_MCAUSE) == TRAP_CODE_I_ILLEGAL) {
-      test_ok();
-    }
-    else {
-      test_fail();
-    }
-  }
-  else {
-    neorv32_uart_printf("skipped (not implemented)\n");
-  }
-#else
-  neorv32_uart_printf("skipped (not implemented)\n");
-#endif
-
-
-  // ----------------------------------------------------------
   // HPM reports
   // ----------------------------------------------------------
   neorv32_cpu_csr_write(CSR_MCOUNTINHIBIT, -1); // stop all counters
-  neorv32_uart_printf("\n\n-- HPM reports (%u HPMs available) --\n", num_hpm_cnts_global);
-  neorv32_uart_printf("#IR - Total number of instructions: %u\n", (uint32_t)neorv32_cpu_csr_read(CSR_INSTRET)); // = HPM_0
-  neorv32_uart_printf("#CY - Total number of clock cycles: %u\n", (uint32_t)neorv32_cpu_csr_read(CSR_CYCLE));   // = HPM_2
-  neorv32_uart_printf("#03 - Retired compr. instructions:  %u\n", (uint32_t)neorv32_cpu_csr_read(CSR_MHPMCOUNTER3));
-  neorv32_uart_printf("#04 - I-fetch wait cycles:          %u\n", (uint32_t)neorv32_cpu_csr_read(CSR_MHPMCOUNTER4));
-  neorv32_uart_printf("#05 - I-issue wait cycles:          %u\n", (uint32_t)neorv32_cpu_csr_read(CSR_MHPMCOUNTER5));
-  neorv32_uart_printf("#06 - Multi-cycle ALU wait cycles:  %u\n", (uint32_t)neorv32_cpu_csr_read(CSR_MHPMCOUNTER6));
-  neorv32_uart_printf("#07 - Load operations:              %u\n", (uint32_t)neorv32_cpu_csr_read(CSR_MHPMCOUNTER7));
-  neorv32_uart_printf("#08 - Store operations:             %u\n", (uint32_t)neorv32_cpu_csr_read(CSR_MHPMCOUNTER8));
-  neorv32_uart_printf("#09 - Load/store wait cycles:       %u\n", (uint32_t)neorv32_cpu_csr_read(CSR_MHPMCOUNTER9));
-  neorv32_uart_printf("#10 - Unconditional jumps:          %u\n", (uint32_t)neorv32_cpu_csr_read(CSR_MHPMCOUNTER10));
-  neorv32_uart_printf("#11 - Conditional branches (all):   %u\n", (uint32_t)neorv32_cpu_csr_read(CSR_MHPMCOUNTER11));
-  neorv32_uart_printf("#12 - Conditional branches (taken): %u\n", (uint32_t)neorv32_cpu_csr_read(CSR_MHPMCOUNTER12));
-  neorv32_uart_printf("#13 - Entered traps:                %u\n", (uint32_t)neorv32_cpu_csr_read(CSR_MHPMCOUNTER13));
-  neorv32_uart_printf("#14 - Illegal operations:           %u\n", (uint32_t)neorv32_cpu_csr_read(CSR_MHPMCOUNTER14));
+  neorv32_uart_printf("\n\n-- HPM reports LOW (%u HPMs available) --\n", num_hpm_cnts_global);
+  neorv32_uart_printf("#IR - Total number of instr.:   %u\n", (uint32_t)neorv32_cpu_csr_read(CSR_INSTRET)); // = "HPM_0"
+//neorv32_uart_printf("#TM - Current system time:      %u\n", (uint32_t)neorv32_cpu_csr_read(CSR_TIME)); // = "HPM_1"
+  neorv32_uart_printf("#CY - Total number of clk cyc.: %u\n", (uint32_t)neorv32_cpu_csr_read(CSR_CYCLE)); // = "HPM_2"
+  neorv32_uart_printf("#03 - Retired compr. instr.:    %u\n", (uint32_t)neorv32_cpu_csr_read(CSR_MHPMCOUNTER3));
+  neorv32_uart_printf("#04 - I-fetch wait cyc.:        %u\n", (uint32_t)neorv32_cpu_csr_read(CSR_MHPMCOUNTER4));
+  neorv32_uart_printf("#05 - I-issue wait cyc.:        %u\n", (uint32_t)neorv32_cpu_csr_read(CSR_MHPMCOUNTER5));
+  neorv32_uart_printf("#06 - Multi-cyc. ALU wait cyc.: %u\n", (uint32_t)neorv32_cpu_csr_read(CSR_MHPMCOUNTER6));
+  neorv32_uart_printf("#07 - Load operations:          %u\n", (uint32_t)neorv32_cpu_csr_read(CSR_MHPMCOUNTER7));
+  neorv32_uart_printf("#08 - Store operations:         %u\n", (uint32_t)neorv32_cpu_csr_read(CSR_MHPMCOUNTER8));
+  neorv32_uart_printf("#09 - Load/store wait cycles:   %u\n", (uint32_t)neorv32_cpu_csr_read(CSR_MHPMCOUNTER9));
+  neorv32_uart_printf("#10 - Unconditional jumps:      %u\n", (uint32_t)neorv32_cpu_csr_read(CSR_MHPMCOUNTER10));
+  neorv32_uart_printf("#11 - Cond. branches (all):     %u\n", (uint32_t)neorv32_cpu_csr_read(CSR_MHPMCOUNTER11));
+  neorv32_uart_printf("#12 - Cond. branches (taken):   %u\n", (uint32_t)neorv32_cpu_csr_read(CSR_MHPMCOUNTER12));
+  neorv32_uart_printf("#13 - Entered traps:            %u\n", (uint32_t)neorv32_cpu_csr_read(CSR_MHPMCOUNTER13));
+  neorv32_uart_printf("#14 - Illegal operations:       %u\n", (uint32_t)neorv32_cpu_csr_read(CSR_MHPMCOUNTER14));
 
 
   // ----------------------------------------------------------
@@ -1546,6 +1684,17 @@ int main() {
   }
 
   return 0;
+}
+
+
+/**********************************************************************//**
+ * Simulation-based function to trigger CPU interrupts (MSI, MEI, FIRQ4..7).
+ *
+ * @param[in] sel IRQ select mask (bit positions according to #NEORV32_CSR_MIE_enum).
+ **************************************************************************/
+void sim_irq_trigger(uint32_t sel) {
+
+  *(IO_REG32 (0xFF000000)) = sel;
 }
 
 

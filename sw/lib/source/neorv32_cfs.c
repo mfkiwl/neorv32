@@ -1,5 +1,5 @@
 // #################################################################################################
-// # << NEORV32: neorv32_uart.h - Universal Asynchronous Receiver/Transmitter (UART) HW Driver >>  #
+// # << NEORV32: neorv32_cfs.c - Custom Functions Subsystem (CFS) HW Driver (stub) >>              #
 // # ********************************************************************************************* #
 // # BSD 3-Clause License                                                                          #
 // #                                                                                               #
@@ -34,61 +34,32 @@
 
 
 /**********************************************************************//**
- * @file neorv32_uart.h
+ * @file neorv32_cfs.c
  * @author Stephan Nolting
- * @brief Universal asynchronous receiver/transmitter (UART0/UART1) HW driver header file
+ * @brief Custom Functions Subsystem (CFS) HW driver source file.
  *
- * @warning UART0 (primary UART) is used as default user console interface for all NEORV32 software framework/library functions.
+ * @warning There are no "real" CFS driver functions available here, because these functions are defined by the actual hardware.
+ * @warning Hence, the CFS designer has to provide the actual driver functions.
  *
- * @note These functions should only be used if the UART0/UART1 unit was synthesized (IO_UART0_EN = true / IO_UART1_EN = true).
+ * @note These functions should only be used if the CFS was synthesized (IO_CFS_EN = true).
  **************************************************************************/
 
-#ifndef neorv32_uart_h
-#define neorv32_uart_h
+#include "neorv32.h"
+#include "neorv32_cfs.h"
 
-// Libs required by functions
-#include <stdarg.h>
 
-// compatibility wrappers (mapping to primary UART -> UART0)
-int  neorv32_uart_available(void);
-void neorv32_uart_setup(uint32_t baudrate, uint8_t parity, uint8_t flow_con);
-void neorv32_uart_disable(void);
-void neorv32_uart_putc(char c);
-int  neorv32_uart_tx_busy(void);
-char neorv32_uart_getc(void);
-int  neorv32_uart_char_received(void);
-int  neorv32_uart_getc_safe(char *data);
-char neorv32_uart_char_received_get(void);
-void neorv32_uart_print(const char *s);
-void neorv32_uart_printf(const char *format, ...);
-int  neorv32_uart_scan(char *buffer, int max_size, int echo);
+/**********************************************************************//**
+ * Check if custom functions unit 0 was synthesized.
+ *
+ * @return 0 if CFS was not synthesized, 1 if CFS is available.
+ **************************************************************************/
+int neorv32_cfs_available(void) {
 
-// prototypes for UART0 (primary UART)
-int  neorv32_uart0_available(void);
-void neorv32_uart0_setup(uint32_t baudrate, uint8_t parity, uint8_t flow_con);
-void neorv32_uart0_disable(void);
-void neorv32_uart0_putc(char c);
-int  neorv32_uart0_tx_busy(void);
-char neorv32_uart0_getc(void);
-int  neorv32_uart0_char_received(void);
-int  neorv32_uart0_getc_safe(char *data);
-char neorv32_uart0_char_received_get(void);
-void neorv32_uart0_print(const char *s);
-void neorv32_uart0_printf(const char *format, ...);
-int  neorv32_uart0_scan(char *buffer, int max_size, int echo);
+  if (SYSINFO_FEATURES & (1 << SYSINFO_FEATURES_IO_CFS)) {
+    return 1;
+  }
+  else {
+    return 0;
+  }
+}
 
-// prototypes for UART1 (secondary UART)
-int  neorv32_uart1_available(void);
-void neorv32_uart1_setup(uint32_t baudrate, uint8_t parity, uint8_t flow_con);
-void neorv32_uart1_disable(void);
-void neorv32_uart1_putc(char c);
-int  neorv32_uart1_tx_busy(void);
-char neorv32_uart1_getc(void);
-int  neorv32_uart1_char_received(void);
-int  neorv32_uart1_getc_safe(char *data);
-char neorv32_uart1_char_received_get(void);
-void neorv32_uart1_print(const char *s);
-void neorv32_uart1_printf(const char *format, ...);
-int  neorv32_uart1_scan(char *buffer, int max_size, int echo);
-
-#endif // neorv32_uart_h

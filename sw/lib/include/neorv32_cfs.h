@@ -1,5 +1,5 @@
 // #################################################################################################
-// # << NEORV32: neorv32_cfu.h - Custom Functions Unit 0/1 (CFU0/CFU1) HW Driver (stub) >>         #
+// # << NEORV32: neorv32_cfs.h - Custom Functions Subsystem (CFS)) HW Driver (stub) >>             #
 // # ********************************************************************************************* #
 // # BSD 3-Clause License                                                                          #
 // #                                                                                               #
@@ -34,21 +34,20 @@
 
 
 /**********************************************************************//**
- * @file neorv32_cfu.h
+ * @file neorv32_cfs.h
  * @author Stephan Nolting
- * @brief Custom Functions Unit 0/1 (CFU0/CFU1) HW driver header file.
+ * @brief Custom Functions Subsystem (CFS)) HW driver header file.
  *
- * @warning There are no "real" CFU driver functions available here, because these functions are defined by the actual hardware.
- * @warning Hence, the CFU designer has to provide the actual driver functions.
+ * @warning There are no "real" CFS driver functions available here, because these functions are defined by the actual hardware.
+ * @warning Hence, the CFS designer has to provide the actual driver functions.
  *
- * @note These functions should only be used if the CFU0/CFU1 was synthesized (IO_CFU0_EN/IO_CFU1_EN = true).
+ * @note These functions should only be used if the CFS was synthesized (IO_CFS_EN = true).
  **************************************************************************/
 
-#ifndef neorv32_cfu_h
-#define neorv32_cfu_h
+#ifndef neorv32_cfs_h
+#define neorv32_cfs_h
 
 // prototypes
-int neorv32_cfu0_available(void);
-int neorv32_cfu1_available(void);
+int neorv32_cfs_available(void);
 
-#endif // neorv32_cfu_h
+#endif // neorv32_cfs_h

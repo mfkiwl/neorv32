@@ -4,7 +4,7 @@
 set -e
 
 # Default simulation configuration
-SIM_CONFIG=--stop-time=6ms
+SIM_CONFIG=--stop-time=7ms
 
 # Project home folder
 homedir="$( cd "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
@@ -42,8 +42,7 @@ ghdl -a --work=neorv32 $srcdir_core/neorv32_bootloader_image.vhd
 ghdl -a --work=neorv32 $srcdir_core/neorv32_boot_rom.vhd
 ghdl -a --work=neorv32 $srcdir_core/neorv32_busswitch.vhd
 ghdl -a --work=neorv32 $srcdir_core/neorv32_icache.vhd
-ghdl -a --work=neorv32 $srcdir_core/neorv32_cfu0.vhd
-ghdl -a --work=neorv32 $srcdir_core/neorv32_cfu1.vhd
+ghdl -a --work=neorv32 $srcdir_core/neorv32_cfs.vhd
 ghdl -a --work=neorv32 $srcdir_core/neorv32_cpu.vhd
 ghdl -a --work=neorv32 $srcdir_core/neorv32_cpu_alu.vhd
 ghdl -a --work=neorv32 $srcdir_core/neorv32_cpu_bus.vhd
@@ -56,6 +55,7 @@ ghdl -a --work=neorv32 $srcdir_core/neorv32_dmem.vhd
 ghdl -a --work=neorv32 $srcdir_core/neorv32_gpio.vhd
 ghdl -a --work=neorv32 $srcdir_core/neorv32_imem.vhd
 ghdl -a --work=neorv32 $srcdir_core/neorv32_mtime.vhd
+ghdl -a --work=neorv32 $srcdir_core/neorv32_nco.vhd
 ghdl -a --work=neorv32 $srcdir_core/neorv32_pwm.vhd
 ghdl -a --work=neorv32 $srcdir_core/neorv32_spi.vhd
 ghdl -a --work=neorv32 $srcdir_core/neorv32_sysinfo.vhd
@@ -72,13 +72,25 @@ ghdl -a --work=neorv32 $srcdir_top_templates/neorv32_top_stdlogic.vhd
 #
 ghdl -a --work=neorv32 $srcdir_sim/neorv32_tb.vhd
 
-# Prepare simulation output files
-touch neorv32.testbench_uart.out
-chmod 777 neorv32.testbench_uart.out
-touch neorv32.uart.sim_mode.text.out
-chmod 777 neorv32.uart.sim_mode.text.out
-touch neorv32.uart.sim_mode.data.out
-chmod 777 neorv32.uart.sim_mode.data.out
+# Prepare simulation output files for UART0
+# Testbench receiver log file
+touch neorv32.testbench_uart0.out
+chmod 777 neorv32.testbench_uart0.out
+# UART0 direct simulation output
+touch neorv32.uart0.sim_mode.text.out
+chmod 777 neorv32.uart0.sim_mode.text.out
+touch neorv32.uart0.sim_mode.data.out
+chmod 777 neorv32.uart0.sim_mode.data.out
+
+# Prepare simulation output files for UART1
+# Testbench receiver log file
+touch neorv32.testbench_uart1.out
+chmod 777 neorv32.testbench_uart1.out
+# UART1 direct simulation output
+touch neorv32.uart1.sim_mode.text.out
+chmod 777 neorv32.uart1.sim_mode.text.out
+touch neorv32.uart1.sim_mode.data.out
+chmod 777 neorv32.uart1.sim_mode.data.out
 
 # Run simulation
 ghdl -e --work=neorv32 neorv32_tb

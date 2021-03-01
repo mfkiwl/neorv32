@@ -47,13 +47,13 @@ use neorv32.neorv32_package.all;
 entity neorv32_test_setup is
   port (
     -- Global control --
-    clk_i      : in  std_ulogic := '0'; -- global clock, rising edge
-    rstn_i     : in  std_ulogic := '0'; -- global reset, low-active, async
+    clk_i       : in  std_ulogic := '0'; -- global clock, rising edge
+    rstn_i      : in  std_ulogic := '0'; -- global reset, low-active, async
     -- GPIO --
-    gpio_o     : out std_ulogic_vector(7 downto 0); -- parallel output
-    -- UART --
-    uart_txd_o : out std_ulogic; -- UART send data
-    uart_rxd_i : in  std_ulogic := '0' -- UART receive data
+    gpio_o      : out std_ulogic_vector(7 downto 0); -- parallel output
+    -- UART0 --
+    uart0_txd_o : out std_ulogic; -- UART0 send data
+    uart0_rxd_i : in  std_ulogic := '0' -- UART0 receive data
   );
 end neorv32_test_setup;
 
@@ -72,16 +72,16 @@ begin
     CLOCK_FREQUENCY              => 100000000,   -- clock frequency of clk_i in Hz
     BOOTLOADER_EN                => true,        -- implement processor-internal bootloader?
     USER_CODE                    => x"00000000", -- custom user code
-    HW_THREAD_ID                 => x"00000000", -- hardware thread id (hartid)
+    HW_THREAD_ID                 => 0,           -- hardware thread id (hartid)
     -- RISC-V CPU Extensions --
-    CPU_EXTENSION_RISCV_A        => true,        -- implement atomic extension?
+    CPU_EXTENSION_RISCV_A        => false,       -- implement atomic extension?
     CPU_EXTENSION_RISCV_B        => false,       -- implement bit manipulation extensions?
     CPU_EXTENSION_RISCV_C        => true,        -- implement compressed extension?
     CPU_EXTENSION_RISCV_E        => false,       -- implement embedded RF extension?
     CPU_EXTENSION_RISCV_M        => true,        -- implement muld/div extension?
     CPU_EXTENSION_RISCV_U        => true,        -- implement user mode extension?
     CPU_EXTENSION_RISCV_Zicsr    => true,        -- implement CSR system?
-    CPU_EXTENSION_RISCV_Zifencei => true,        -- implement instruction stream sync.?
+    CPU_EXTENSION_RISCV_Zifencei => false,       -- implement instruction stream sync.?
     -- Extension Options --
     FAST_MUL_EN                  => false,       -- use DSPs for M extension's multiplier
     FAST_SHIFT_EN                => false,       -- use barrel shifter for shift operations
@@ -89,7 +89,7 @@ begin
     PMP_NUM_REGIONS              => 2,           -- number of regions (0..64)
     PMP_MIN_GRANULARITY          => 64*1024,     -- minimal region granularity in bytes, has to be a power of 2, min 8 bytes
     -- Hardware Performance Monitors (HPM) --
-    HPM_NUM_CNTS                 => 2,           -- number of inmplemnted HPM counters (0..29)
+    HPM_NUM_CNTS                 => 2,           -- number of implemented HPM counters (0..29)
     -- Internal Instruction memory --
     MEM_INT_IMEM_EN              => true,        -- implement processor-internal instruction memory
     MEM_INT_IMEM_SIZE            => 16*1024,     -- size of processor-internal instruction memory in bytes
@@ -107,20 +107,22 @@ begin
     -- Processor peripherals --
     IO_GPIO_EN                   => true,        -- implement general purpose input/output port unit (GPIO)?
     IO_MTIME_EN                  => true,        -- implement machine system timer (MTIME)?
-    IO_UART_EN                   => true,        -- implement universal asynchronous receiver/transmitter (UART)?
+    IO_UART0_EN                  => true,        -- implement primary universal asynchronous receiver/transmitter (UART0)?
+    IO_UART1_EN                  => false,       -- implement secondary universal asynchronous receiver/transmitter (UART1)?
     IO_SPI_EN                    => false,       -- implement serial peripheral interface (SPI)?
     IO_TWI_EN                    => false,       -- implement two-wire interface (TWI)?
     IO_PWM_EN                    => false,       -- implement pulse-width modulation unit (PWM)?
     IO_WDT_EN                    => true,        -- implement watch dog timer (WDT)?
     IO_TRNG_EN                   => false,       -- implement true random number generator (TRNG)?
-    IO_CFU0_EN                   => false,       -- implement custom functions unit 0 (CFU0)?
-    IO_CFU1_EN                   => false        -- implement custom functions unit 1 (CFU1)?
+    IO_CFS_EN                    => false,       -- implement custom functions subsystem (CFS)?
+    IO_CFS_CONFIG                => x"00000000", -- custom CFS configuration generic
+    IO_NCO_EN                    => false        -- implement numerically-controlled oscillator (NCO)?
   )
   port map (
     -- Global control --
     clk_i       => clk_i,           -- global clock, rising edge
     rstn_i      => rstn_i,          -- global reset, low-active, async
-    -- Wishbone bus interface --
+    -- Wishbone bus interface (available if MEM_EXT_EN = true) --
     wb_tag_o    => open,            -- tag
     wb_adr_o    => open,            -- address
     wb_dat_i    => (others => '0'), -- read data
@@ -132,28 +134,41 @@ begin
     wb_lock_o   => open,            -- locked/exclusive bus access
     wb_ack_i    => '0',             -- transfer acknowledge
     wb_err_i    => '0',             -- transfer error
-    -- Advanced memory control signals --
+    -- Advanced memory control signals (available if MEM_EXT_EN = true) --
     fence_o     => open,            -- indicates an executed FENCE operation
     fencei_o    => open,            -- indicates an executed FENCEI operation
-    -- GPIO --
+    -- GPIO (available if IO_GPIO_EN = true) --
     gpio_o      => gpio_out,        -- parallel output
     gpio_i      => (others => '0'), -- parallel input
-    -- UART --
-    uart_txd_o  => uart_txd_o,      -- UART send data
-    uart_rxd_i  => uart_rxd_i,      -- UART receive data
-    -- SPI --
+    -- primary UART0 (available if IO_UART0_EN = true) --
+    uart0_txd_o => uart0_txd_o,     -- UART0 send data
+    uart0_rxd_i => uart0_rxd_i,     -- UART0 receive data
+    uart0_rts_o => open,            -- hw flow control: UART0.RX ready to receive ("RTR"), low-active, optional
+    uart0_cts_i => '0',             -- hw flow control: UART0.TX allowed to transmit, low-active, optional
+    -- secondary UART1 (available if IO_UART1_EN = true) --
+    uart1_txd_o => open,            -- UART1 send data
+    uart1_rxd_i => '0',             -- UART1 receive data
+    uart1_rts_o => open,            -- hw flow control: UART1.RX ready to receive ("RTR"), low-active, optional
+    uart1_cts_i => '0',             -- hw flow control: UART1.TX allowed to transmit, low-active, optional
+    -- SPI (available if IO_SPI_EN = true) --
     spi_sck_o   => open,            -- SPI serial clock
     spi_sdo_o   => open,            -- controller data out, peripheral data in
     spi_sdi_i   => '0',             -- controller data in, peripheral data out
     spi_csn_o   => open,            -- SPI CS
-    -- TWI --
+    -- TWI (available if IO_TWI_EN = true) --
     twi_sda_io  => open,            -- twi serial data line
     twi_scl_io  => open,            -- twi serial clock line
-    -- PWM --
+    -- PWM (available if IO_PWM_EN = true) --
     pwm_o       => open,            -- pwm channels
+    -- Custom Functions Subsystem IO --
+    cfs_in_i    => (others => '0'), -- custom inputs
+    cfs_out_o   => open,            -- custom outputs
+    -- NCO output (available if IO_NCO_EN = true) --
+    nco_o       => open,            -- numerically-controlled oscillator channels
     -- system time input from external MTIME (available if IO_MTIME_EN = false) --
     mtime_i     => (others => '0'), -- current system time
     -- Interrupts --
+    soc_firq_i  => (others => '0'), -- fast interrupt channels
     mtime_irq_i => '0',             -- machine timer interrupt, available if IO_MTIME_EN = false
     msw_irq_i   => '0',             -- machine software interrupt
     mext_irq_i  => '0'              -- machine external interrupt

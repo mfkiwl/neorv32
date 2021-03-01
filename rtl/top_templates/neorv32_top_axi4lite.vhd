@@ -1,7 +1,7 @@
 -- #################################################################################################
 -- # << NEORV32 - Processor Top Entity with AXI4-Lite Compatible Master Interface >>               #
 -- # ********************************************************************************************* #
--- # "AXI", "AXI4" and "AXI4-Lite" are trademarks of Arm Holdings plc.                             #
+-- # (c) "AXI", "AXI4" and "AXI4-Lite" are trademarks of Arm Holdings plc.                         #
 -- # ********************************************************************************************* #
 -- # BSD 3-Clause License                                                                          #
 -- #                                                                                               #
@@ -43,11 +43,14 @@ use neorv32.neorv32_package.all;
 
 entity neorv32_top_axi4lite is
   generic (
+    -- ------------------------------------------------------------
+    -- Configuration Generics --
+    -- ------------------------------------------------------------
     -- General --
     CLOCK_FREQUENCY              : natural := 0;      -- clock frequency of clk_i in Hz
     BOOTLOADER_EN                : boolean := true;   -- implement processor-internal bootloader?
     USER_CODE                    : std_logic_vector(31 downto 0) := x"00000000"; -- custom user code
-    HW_THREAD_ID                 : std_logic_vector(31 downto 0) := (others => '0'); -- hardware thread id (hartid)
+    HW_THREAD_ID                 : natural := 0;      -- hardware thread id (32-bit)
     -- RISC-V CPU Extensions --
     CPU_EXTENSION_RISCV_A        : boolean := false;  -- implement atomic extension?
     CPU_EXTENSION_RISCV_B        : boolean := false;  -- implement bit manipulation extensions?
@@ -64,7 +67,7 @@ entity neorv32_top_axi4lite is
     PMP_NUM_REGIONS              : natural := 0;      -- number of regions (0..64)
     PMP_MIN_GRANULARITY          : natural := 64*1024; -- minimal region granularity in bytes, has to be a power of 2, min 8 bytes
     -- Hardware Performance Monitors (HPM) --
-    HPM_NUM_CNTS                 : natural := 0;      -- number of inmplemnted HPM counters (0..29)
+    HPM_NUM_CNTS                 : natural := 0;      -- number of implemented HPM counters (0..29)
     -- Internal Instruction memory --
     MEM_INT_IMEM_EN              : boolean := true;   -- implement processor-internal instruction memory
     MEM_INT_IMEM_SIZE            : natural := 16*1024; -- size of processor-internal instruction memory in bytes
@@ -80,17 +83,21 @@ entity neorv32_top_axi4lite is
     -- Processor peripherals --
     IO_GPIO_EN                   : boolean := true;   -- implement general purpose input/output port unit (GPIO)?
     IO_MTIME_EN                  : boolean := true;   -- implement machine system timer (MTIME)?
-    IO_UART_EN                   : boolean := true;   -- implement universal asynchronous receiver/transmitter (UART)?
+    IO_UART0_EN                  : boolean := true;   -- implement primary universal asynchronous receiver/transmitter (UART0)?
+    IO_UART1_EN                  : boolean := true;   -- implement secondary universal asynchronous receiver/transmitter (UART1)?
     IO_SPI_EN                    : boolean := true;   -- implement serial peripheral interface (SPI)?
     IO_TWI_EN                    : boolean := true;   -- implement two-wire interface (TWI)?
     IO_PWM_EN                    : boolean := true;   -- implement pulse-width modulation unit (PWM)?
     IO_WDT_EN                    : boolean := true;   -- implement watch dog timer (WDT)?
     IO_TRNG_EN                   : boolean := false;  -- implement true random number generator (TRNG)?
-    IO_CFU0_EN                   : boolean := false;  -- implement custom functions unit 0 (CFU0)?
-    IO_CFU1_EN                   : boolean := false   -- implement custom functions unit 1 (CFU1)?
+    IO_CFS_EN                    : boolean := false;  -- implement custom functions subsystem (CFS)?
+    IO_CFS_CONFIG                : std_logic_vector(31 downto 0) := x"00000000"; -- custom CFS configuration generic
+    IO_NCO_EN                    : boolean := true    -- implement numerically-controlled oscillator (NCO)?
   );
   port (
-    -- AXI Lite-Compatible Master Interface --
+    -- ------------------------------------------------------------
+    -- AXI4-Lite-Compatible Master Interface --
+    -- ------------------------------------------------------------
     -- Clock and Reset --
     m_axi_aclk    : in  std_logic;
     m_axi_aresetn : in  std_logic;
@@ -119,23 +126,38 @@ entity neorv32_top_axi4lite is
     m_axi_bvalid  : in  std_logic;
     m_axi_bready  : out std_logic;
     -- ------------------------------------------------------------
-    -- GPIO --
+    -- Processor IO --
+    -- ------------------------------------------------------------
+    -- GPIO (available if IO_GPIO_EN = true) --
     gpio_o      : out std_logic_vector(31 downto 0); -- parallel output
     gpio_i      : in  std_logic_vector(31 downto 0) := (others => '0'); -- parallel input
-    -- UART --
-    uart_txd_o  : out std_logic; -- UART send data
-    uart_rxd_i  : in  std_logic := '0'; -- UART receive data
-    -- SPI --
+    -- primary UART0 (available if IO_UART0_EN = true) --
+    uart0_txd_o : out std_logic; -- UART0 send data
+    uart0_rxd_i : in  std_logic := '0'; -- UART0 receive data
+    uart0_rts_o : out std_logic; -- hw flow control: UART0.RX ready to receive ("RTR"), low-active, optional
+    uart0_cts_i : in  std_logic := '0'; -- hw flow control: UART0.TX allowed to transmit, low-active, optional
+    -- secondary UART1 (available if IO_UART1_EN = true) --
+    uart1_txd_o : out std_logic; -- UART1 send data
+    uart1_rxd_i : in  std_logic := '0'; -- UART1 receive data
+    uart1_rts_o : out std_logic; -- hw flow control: UART1.RX ready to receive ("RTR"), low-active, optional
+    uart1_cts_i : in  std_logic := '0'; -- hw flow control: UART1.TX allowed to transmit, low-active, optional
+    -- SPI (available if IO_SPI_EN = true) --
     spi_sck_o   : out std_logic; -- SPI serial clock
     spi_sdo_o   : out std_logic; -- controller data out, peripheral data in
     spi_sdi_i   : in  std_logic := '0'; -- controller data in, peripheral data out
     spi_csn_o   : out std_logic_vector(07 downto 0); -- SPI CS
-    -- TWI --
+    -- TWI (available if IO_TWI_EN = true) --
     twi_sda_io  : inout std_logic; -- twi serial data line
     twi_scl_io  : inout std_logic; -- twi serial clock line
-    -- PWM --
+    -- PWM (available if IO_PWM_EN = true) --
     pwm_o       : out std_logic_vector(03 downto 0);  -- pwm channels
+    -- Custom Functions Subsystem IO (available if IO_CFS_EN = true) --
+    cfs_in_i    : in  std_logic_vector(31 downto 0); -- custom inputs
+    cfs_out_o   : out std_logic_vector(31 downto 0); -- custom outputs
+    -- NCO output (available if IO_NCO_EN = true) --
+    nco_o       : out std_logic_vector(02 downto 0); -- numerically-controlled oscillator channels
     -- Interrupts --
+    soc_firq_i  : in  std_logic_vector(5 downto 0) := (others => '0'); -- fast interrupt channels
     mtime_irq_i : in  std_logic := '0'; -- machine timer interrupt, available if IO_MTIME_EN = false
     msw_irq_i   : in  std_logic := '0'; -- machine software interrupt
     mext_irq_i  : in  std_logic := '0'  -- machine external interrupt
@@ -145,8 +167,8 @@ end neorv32_top_axi4lite;
 architecture neorv32_top_axi4lite_rtl of neorv32_top_axi4lite is
 
   -- type conversion --
-  constant USER_CODE_INT    : std_ulogic_vector(31 downto 0) := std_ulogic_vector(USER_CODE);
-  constant HW_THREAD_ID_INT : std_ulogic_vector(31 downto 0) := std_ulogic_vector(HW_THREAD_ID);
+  constant USER_CODE_INT     : std_ulogic_vector(31 downto 0) := std_ulogic_vector(USER_CODE);
+  constant IO_CFS_CONFIG_INT : std_ulogic_vector(31 downto 0) := std_ulogic_vector(IO_CFS_CONFIG);
   --
   signal clk_i_int       : std_ulogic;
   signal rstn_i_int      : std_ulogic;
@@ -154,8 +176,15 @@ architecture neorv32_top_axi4lite_rtl of neorv32_top_axi4lite is
   signal gpio_o_int      : std_ulogic_vector(31 downto 0);
   signal gpio_i_int      : std_ulogic_vector(31 downto 0);
   --
-  signal uart_txd_o_int  : std_ulogic;
-  signal uart_rxd_i_int  : std_ulogic;
+  signal uart0_txd_o_int : std_ulogic;
+  signal uart0_rxd_i_int : std_ulogic;
+  signal uart0_rts_o_int : std_ulogic;
+  signal uart0_cts_i_int : std_ulogic;
+  --
+  signal uart1_txd_o_int : std_ulogic;
+  signal uart1_rxd_i_int : std_ulogic;
+  signal uart1_rts_o_int : std_ulogic;
+  signal uart1_cts_i_int : std_ulogic;
   --
   signal spi_sck_o_int   : std_ulogic;
   signal spi_sdo_o_int   : std_ulogic;
@@ -164,6 +193,12 @@ architecture neorv32_top_axi4lite_rtl of neorv32_top_axi4lite is
   --
   signal pwm_o_int       : std_ulogic_vector(03 downto 0);
   --
+  signal cfs_in_i_int    : std_ulogic_vector(31 downto 0);
+  signal cfs_out_o_int   : std_ulogic_vector(31 downto 0);
+  --
+  signal nco_o_int       : std_ulogic_vector(02 downto 0);
+  --
+  signal soc_firq_i_int  : std_ulogic_vector(05 downto 0);
   signal mtime_irq_i_int : std_ulogic;
   signal msw_irq_i_int   : std_ulogic;
   signal mext_irq_i_int  : std_ulogic;
@@ -210,7 +245,7 @@ begin
     CLOCK_FREQUENCY              => CLOCK_FREQUENCY,    -- clock frequency of clk_i in Hz
     BOOTLOADER_EN                => BOOTLOADER_EN ,     -- implement processor-internal bootloader?
     USER_CODE                    => USER_CODE_INT,      -- custom user code
-    HW_THREAD_ID                 => HW_THREAD_ID_INT,   -- hardware thread id (hartid)
+    HW_THREAD_ID                 => HW_THREAD_ID,       -- hardware thread id (hartid)
     -- RISC-V CPU Extensions --
     CPU_EXTENSION_RISCV_A        => CPU_EXTENSION_RISCV_A,        -- implement atomic extension?
     CPU_EXTENSION_RISCV_B        => CPU_EXTENSION_RISCV_B,        -- implement bit manipulation extensions?
@@ -227,7 +262,7 @@ begin
     PMP_NUM_REGIONS              => PMP_NUM_REGIONS,    -- number of regions (0..64)
     PMP_MIN_GRANULARITY          => PMP_MIN_GRANULARITY, -- minimal region granularity in bytes, has to be a power of 2, min 8 bytes
     -- Hardware Performance Monitors (HPM) --
-    HPM_NUM_CNTS                 => HPM_NUM_CNTS,       -- number of inmplemnted HPM counters (0..29)
+    HPM_NUM_CNTS                 => HPM_NUM_CNTS,       -- number of implemented HPM counters (0..29)
     -- Internal Instruction memory --
     MEM_INT_IMEM_EN              => MEM_INT_IMEM_EN,    -- implement processor-internal instruction memory
     MEM_INT_IMEM_SIZE            => MEM_INT_IMEM_SIZE,  -- size of processor-internal instruction memory in bytes
@@ -245,20 +280,22 @@ begin
     -- Processor peripherals --
     IO_GPIO_EN                   => IO_GPIO_EN,         -- implement general purpose input/output port unit (GPIO)?
     IO_MTIME_EN                  => IO_MTIME_EN,        -- implement machine system timer (MTIME)?
-    IO_UART_EN                   => IO_UART_EN,         -- implement universal asynchronous receiver/transmitter (UART)?
+    IO_UART0_EN                  => IO_UART0_EN,        -- implement primary universal asynchronous receiver/transmitter (UART0)?
+    IO_UART1_EN                  => IO_UART1_EN,        -- implement secondary universal asynchronous receiver/transmitter (UART1)?
     IO_SPI_EN                    => IO_SPI_EN,          -- implement serial peripheral interface (SPI)?
     IO_TWI_EN                    => IO_TWI_EN,          -- implement two-wire interface (TWI)?
     IO_PWM_EN                    => IO_PWM_EN,          -- implement pulse-width modulation unit (PWM)?
     IO_WDT_EN                    => IO_WDT_EN,          -- implement watch dog timer (WDT)?
     IO_TRNG_EN                   => IO_TRNG_EN,         -- implement true random number generator (TRNG)?
-    IO_CFU0_EN                   => IO_CFU0_EN,         -- implement custom functions unit 0 (CFU0)?
-    IO_CFU1_EN                   => IO_CFU1_EN          -- implement custom functions unit 1 (CFU1)?
+    IO_CFS_EN                    => IO_CFS_EN,          -- implement custom functions subsystem (CFS)?
+    IO_CFS_CONFIG                => IO_CFS_CONFIG_INT,  -- custom CFS configuration generic
+    IO_NCO_EN                    => IO_NCO_EN           -- implement numerically-controlled oscillator (NCO)?
   )
   port map (
     -- Global control --
     clk_i       => clk_i_int,       -- global clock, rising edge
     rstn_i      => rstn_i_int,      -- global reset, low-active, async
-    -- Wishbone bus interface --
+    -- Wishbone bus interface (available if MEM_EXT_EN = true) --
     wb_tag_o    => wb_core.tag,     -- tag
     wb_adr_o    => wb_core.adr,     -- address
     wb_dat_i    => wb_core.di,      -- read data
@@ -270,49 +307,70 @@ begin
     wb_lock_o   => open,            -- locked/exclusive bus access
     wb_ack_i    => wb_core.ack,     -- transfer acknowledge
     wb_err_i    => wb_core.err,     -- transfer error
-    -- Advanced memory control signals --
+    -- Advanced memory control signals (available if MEM_EXT_EN = true) --
     fence_o     => open,            -- indicates an executed FENCE operation
     fencei_o    => open,            -- indicates an executed FENCEI operation
-    -- GPIO --
+    -- GPIO (available if IO_GPIO_EN = true) --
     gpio_o      => gpio_o_int,      -- parallel output
     gpio_i      => gpio_i_int,      -- parallel input
-    -- UART --
-    uart_txd_o  => uart_txd_o_int,  -- UART send data
-    uart_rxd_i  => uart_rxd_i_int,  -- UART receive data
-    -- SPI --
+    -- primary UART0 (available if IO_UART0_EN = true) --
+    uart0_txd_o => uart0_txd_o_int, -- UART0 send data
+    uart0_rxd_i => uart0_rxd_i_int, -- UART0 receive data
+    uart0_rts_o => uart0_rts_o_int, -- hw flow control: UART0.RX ready to receive ("RTR"), low-active, optional
+    uart0_cts_i => uart0_cts_i_int, -- hw flow control: UART0.TX allowed to transmit, low-active, optional
+    -- secondary UART1 (available if IO_UART1_EN = true) --
+    uart1_txd_o => uart1_txd_o_int, -- UART1 send data
+    uart1_rxd_i => uart1_rxd_i_int, -- UART1 receive data
+    uart1_rts_o => uart1_rts_o_int, -- hw flow control: UART1.RX ready to receive ("RTR"), low-active, optional
+    uart1_cts_i => uart1_cts_i_int, -- hw flow control: UART1.TX allowed to transmit, low-active, optional
+    -- SPI (available if IO_SPI_EN = true) --
     spi_sck_o   => spi_sck_o_int,   -- SPI serial clock
     spi_sdo_o   => spi_sdo_o_int,   -- controller data out, peripheral data in
     spi_sdi_i   => spi_sdi_i_int,   -- controller data in, peripheral data out
     spi_csn_o   => spi_csn_o_int,   -- SPI CS
-    -- TWI --
+    -- TWI (available if IO_TWI_EN = true) --
     twi_sda_io  => twi_sda_io,      -- twi serial data line
     twi_scl_io  => twi_scl_io,      -- twi serial clock line
-    -- PWM --
+    -- PWM available if IO_PWM_EN = true) --
     pwm_o       => pwm_o_int,       -- pwm channels
+    -- Custom Functions Subsystem IO (available if IO_CFS_EN = true) --
+    cfs_in_i    => cfs_in_i_int,    -- custom inputs
+    cfs_out_o   => cfs_out_o_int,   -- custom outputs
+    -- NCO output (available if IO_NCO_EN = true) --
+    nco_o       => nco_o_int,       -- numerically-controlled oscillator channels
     -- system time input from external MTIME (available if IO_MTIME_EN = false) --
     mtime_i     => (others => '0'), -- current system time
     -- Interrupts --
+    soc_firq_i  => soc_firq_i_int,  -- fast interrupt channels
     mtime_irq_i => mtime_irq_i_int, -- machine timer interrupt, available if IO_MTIME_EN = false
     msw_irq_i   => msw_irq_i_int,   -- machine software interrupt
     mext_irq_i  => mext_irq_i_int   -- machine external interrupt
   );
 
   -- type conversion --
-  gpio_o         <= std_logic_vector(gpio_o_int);
-  gpio_i_int     <= std_ulogic_vector(gpio_i);
+  gpio_o          <= std_logic_vector(gpio_o_int);
+  gpio_i_int      <= std_ulogic_vector(gpio_i);
 
-  uart_txd_o     <= std_logic(uart_txd_o_int);
-  uart_rxd_i_int <= std_ulogic(uart_rxd_i);
+  uart0_txd_o     <= std_logic(uart0_txd_o_int);
+  uart0_rxd_i_int <= std_ulogic(uart0_rxd_i);
+  uart1_txd_o     <= std_logic(uart0_txd_o_int);
+  uart1_rxd_i_int <= std_ulogic(uart0_rxd_i);
 
-  spi_sck_o      <= std_logic(spi_sck_o_int);
-  spi_sdo_o      <= std_logic(spi_sdo_o_int);
-  spi_sdi_i_int  <= std_ulogic(spi_sdi_i);
-  spi_csn_o      <= std_logic_vector(spi_csn_o_int);
+  spi_sck_o       <= std_logic(spi_sck_o_int);
+  spi_sdo_o       <= std_logic(spi_sdo_o_int);
+  spi_sdi_i_int   <= std_ulogic(spi_sdi_i);
+  spi_csn_o       <= std_logic_vector(spi_csn_o_int);
 
-  pwm_o          <= std_logic_vector(pwm_o_int);
+  pwm_o           <= std_logic_vector(pwm_o_int);
 
-  msw_irq_i_int  <= std_ulogic(msw_irq_i);
-  mext_irq_i_int <= std_ulogic(mext_irq_i);
+  cfs_in_i_int    <= std_ulogic_vector(cfs_in_i);
+  cfs_out_o       <= std_logic_vector(cfs_out_o_int);
+
+  nco_o           <= std_logic_vector(nco_o_int);
+
+  soc_firq_i_int  <= std_ulogic_vector(soc_firq_i);
+  msw_irq_i_int   <= std_ulogic(msw_irq_i);
+  mext_irq_i_int  <= std_ulogic(mext_irq_i);
   
 
   -- Wishbone to AXI4-Lite Bridge -----------------------------------------------------------
@@ -333,19 +391,19 @@ begin
       else -- busy
         -- "read address received" flag --
         if (wb_core.we = '0') then -- pending READ
-          if (m_axi_arready = '1') then -- read address received?
+          if (m_axi_arready = '1') then -- read address received by interconnect?
             ctrl.radr_received <= '1';
           end if;
         end if;
         -- "write address received" flag --
         if (wb_core.we = '1') then -- pending WRITE
-          if (m_axi_awready = '1') then -- write address received?
+          if (m_axi_awready = '1') then -- write address received by interconnect?
             ctrl.wadr_received <= '1';
           end if;
         end if;
         -- "write data received" flag --
         if (wb_core.we = '1') then -- pending WRITE
-          if (m_axi_wready = '1') then
+          if (m_axi_wready = '1') then -- write data received by interconnect?
             ctrl.wdat_received <= '1';
           end if;
         end if;

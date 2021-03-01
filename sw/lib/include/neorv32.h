@@ -366,13 +366,26 @@ enum NEORV32_CSR_MCOUNTINHIBIT_enum {
  * CPU <b>mie</b> CSR (r/w): Machine interrupt enable (RISC-V spec.)
  **************************************************************************/
 enum NEORV32_CSR_MIE_enum {
-  CSR_MIE_MSIE   =  3, /**< CPU mie CSR  (3): MSIE - Machine software interrupt enable (r/w) */
-  CSR_MIE_MTIE   =  7, /**< CPU mie CSR  (7): MTIE - Machine timer interrupt enable bit (r/w) */
-  CSR_MIE_MEIE   = 11, /**< CPU mie CSR (11): MEIE - Machine external interrupt enable bit (r/w) */
-  CSR_MIE_FIRQ0E = 16, /**< CPU mie CSR (16): FIRQ0E - Fast interrupt channel 0 enable bit (r/w) */
-  CSR_MIE_FIRQ1E = 17, /**< CPU mie CSR (17): FIRQ1E - Fast interrupt channel 1 enable bit (r/w) */
-  CSR_MIE_FIRQ2E = 18, /**< CPU mie CSR (18): FIRQ2E - Fast interrupt channel 2 enable bit (r/w) */
-  CSR_MIE_FIRQ3E = 19  /**< CPU mie CSR (19): FIRQ3E - Fast interrupt channel 3 enable bit (r/w) */
+  CSR_MIE_MSIE    =  3, /**< CPU mie CSR  (3): MSIE - Machine software interrupt enable (r/w) */
+  CSR_MIE_MTIE    =  7, /**< CPU mie CSR  (7): MTIE - Machine timer interrupt enable bit (r/w) */
+  CSR_MIE_MEIE    = 11, /**< CPU mie CSR (11): MEIE - Machine external interrupt enable bit (r/w) */
+
+  CSR_MIE_FIRQ0E  = 16, /**< CPU mie CSR (16): FIRQ0E - Fast interrupt channel 0 enable bit (r/w) */
+  CSR_MIE_FIRQ1E  = 17, /**< CPU mie CSR (17): FIRQ1E - Fast interrupt channel 1 enable bit (r/w) */
+  CSR_MIE_FIRQ2E  = 18, /**< CPU mie CSR (18): FIRQ2E - Fast interrupt channel 2 enable bit (r/w) */
+  CSR_MIE_FIRQ3E  = 19, /**< CPU mie CSR (19): FIRQ3E - Fast interrupt channel 3 enable bit (r/w) */
+  CSR_MIE_FIRQ4E  = 20, /**< CPU mie CSR (20): FIRQ4E - Fast interrupt channel 4 enable bit (r/w) */
+  CSR_MIE_FIRQ5E  = 21, /**< CPU mie CSR (21): FIRQ5E - Fast interrupt channel 5 enable bit (r/w) */
+  CSR_MIE_FIRQ6E  = 22, /**< CPU mie CSR (22): FIRQ6E - Fast interrupt channel 6 enable bit (r/w) */
+  CSR_MIE_FIRQ7E  = 23, /**< CPU mie CSR (23): FIRQ7E - Fast interrupt channel 7 enable bit (r/w) */
+  CSR_MIE_FIRQ8E  = 24, /**< CPU mie CSR (24): FIRQ8E - Fast interrupt channel 8 enable bit (r/w) */
+  CSR_MIE_FIRQ9E  = 25, /**< CPU mie CSR (25): FIRQ9E - Fast interrupt channel 9 enable bit (r/w) */
+  CSR_MIE_FIRQ10E = 26, /**< CPU mie CSR (26): FIRQ10E - Fast interrupt channel 10 enable bit (r/w) */
+  CSR_MIE_FIRQ11E = 27, /**< CPU mie CSR (27): FIRQ11E - Fast interrupt channel 11 enable bit (r/w) */
+  CSR_MIE_FIRQ12E = 28, /**< CPU mie CSR (28): FIRQ12E - Fast interrupt channel 12 enable bit (r/w) */
+  CSR_MIE_FIRQ13E = 29, /**< CPU mie CSR (29): FIRQ13E - Fast interrupt channel 13 enable bit (r/w) */
+  CSR_MIE_FIRQ14E = 30, /**< CPU mie CSR (30): FIRQ14E - Fast interrupt channel 14 enable bit (r/w) */
+  CSR_MIE_FIRQ15E = 31  /**< CPU mie CSR (31): FIRQ15E - Fast interrupt channel 15 enable bit (r/w) */
 };
 
 
@@ -380,14 +393,27 @@ enum NEORV32_CSR_MIE_enum {
  * CPU <b>mip</b> CSR (r/-): Machine interrupt pending (RISC-V spec.)
  **************************************************************************/
 enum NEORV32_CSR_MIP_enum {
-  CSR_MIP_MSIP   =  3, /**< CPU mip CSR  (3): MSIP - Machine software interrupt pending (r/-) */
-  CSR_MIP_MTIP   =  7, /**< CPU mip CSR  (7): MTIP - Machine timer interrupt pending (r/-) */
-  CSR_MIP_MEIP   = 11, /**< CPU mip CSR (11): MEIP - Machine external interrupt pending (r/-) */
+  CSR_MIP_MSIP    =  3, /**< CPU mip CSR  (3): MSIP - Machine software interrupt pending (r/-) */
+  CSR_MIP_MTIP    =  7, /**< CPU mip CSR  (7): MTIP - Machine timer interrupt pending (r/-) */
+  CSR_MIP_MEIP    = 11, /**< CPU mip CSR (11): MEIP - Machine external interrupt pending (r/-) */
 
-  CSR_MIP_FIRQ0P = 16, /**< CPU mip CSR (16): FIRQ0P - Fast interrupt channel 0 pending (r/-) */
-  CSR_MIP_FIRQ1P = 17, /**< CPU mip CSR (17): FIRQ1P - Fast interrupt channel 1 pending (r/-) */
-  CSR_MIP_FIRQ2P = 18, /**< CPU mip CSR (18): FIRQ2P - Fast interrupt channel 2 pending (r/-) */
-  CSR_MIP_FIRQ3P = 19  /**< CPU mip CSR (19): FIRQ3P - Fast interrupt channel 3 pending (r/-) */
+  CSR_MIP_FIRQ0P  = 16, /**< CPU mip CSR (16): FIRQ0P - Fast interrupt channel 0 pending (r/-) */
+  CSR_MIP_FIRQ1P  = 17, /**< CPU mip CSR (17): FIRQ1P - Fast interrupt channel 1 pending (r/-) */
+  CSR_MIP_FIRQ2P  = 18, /**< CPU mip CSR (18): FIRQ2P - Fast interrupt channel 2 pending (r/-) */
+  CSR_MIP_FIRQ3P  = 19, /**< CPU mip CSR (19): FIRQ3P - Fast interrupt channel 3 pending (r/-) */
+  CSR_MIP_FIRQ4P  = 20, /**< CPU mip CSR (20): FIRQ4P - Fast interrupt channel 4 pending (r/-) */
+  CSR_MIP_FIRQ5P  = 21, /**< CPU mip CSR (21): FIRQ5P - Fast interrupt channel 5 pending (r/-) */
+  CSR_MIP_FIRQ6P  = 22, /**< CPU mip CSR (22): FIRQ6P - Fast interrupt channel 6 pending (r/-) */
+  CSR_MIP_FIRQ7P  = 23, /**< CPU mip CSR (23): FIRQ7P - Fast interrupt channel 7 pending (r/-) */
+
+  CSR_MIP_FIRQ8P  = 24, /**< CPU mip CSR (24): FIRQ8P - Fast interrupt channel 8 pending (r/-) */
+  CSR_MIP_FIRQ9P  = 25, /**< CPU mip CSR (25): FIRQ9P - Fast interrupt channel 9 pending (r/-) */
+  CSR_MIP_FIRQ10P = 26, /**< CPU mip CSR (26): FIRQ10P - Fast interrupt channel 10 pending (r/-) */
+  CSR_MIP_FIRQ11P = 27, /**< CPU mip CSR (27): FIRQ11P - Fast interrupt channel 11 pending (r/-) */
+  CSR_MIP_FIRQ12P = 28, /**< CPU mip CSR (28): FIRQ12P - Fast interrupt channel 12 pending (r/-) */
+  CSR_MIP_FIRQ13P = 29, /**< CPU mip CSR (29): FIRQ13P - Fast interrupt channel 13 pending (r/-) */
+  CSR_MIP_FIRQ14P = 30, /**< CPU mip CSR (30): FIRQ14P - Fast interrupt channel 14 pending (r/-) */
+  CSR_MIP_FIRQ15P = 31  /**< CPU mip CSR (31): FIRQ15P - Fast interrupt channel 15 pending (r/-) */
 };
 
 
@@ -414,7 +440,8 @@ enum NEORV32_CSR_MISA_enum {
 enum NEORV32_CSR_MZEXT_enum {
   CSR_MZEXT_ZICSR    = 0, /**< CPU mzext CSR (0): Zicsr extension available when set (r/-) */
   CSR_MZEXT_ZIFENCEI = 1, /**< CPU mzext CSR (1): Zifencei extension available when set (r/-) */
-  CSR_MZEXT_ZBB      = 2  /**< CPU mzext CSR (2): Zbb extension available when set (r/-) */
+  CSR_MZEXT_ZBB      = 2, /**< CPU mzext CSR (2): Zbb extension available when set (r/-) */
+  CSR_MZEXT_ZBS      = 3  /**< CPU mzext CSR (3): Zbs extension available when set (r/-) */
 };
 
 
@@ -463,7 +490,19 @@ enum NEORV32_EXCEPTION_CODES_enum {
   TRAP_CODE_FIRQ_0       = 0x80000010, /**< 1.16: Fast interrupt channel 0 */
   TRAP_CODE_FIRQ_1       = 0x80000011, /**< 1.17: Fast interrupt channel 1 */
   TRAP_CODE_FIRQ_2       = 0x80000012, /**< 1.18: Fast interrupt channel 2 */
-  TRAP_CODE_FIRQ_3       = 0x80000013  /**< 1.19: Fast interrupt channel 3 */
+  TRAP_CODE_FIRQ_3       = 0x80000013, /**< 1.19: Fast interrupt channel 3 */
+  TRAP_CODE_FIRQ_4       = 0x80000014, /**< 1.20: Fast interrupt channel 4 */
+  TRAP_CODE_FIRQ_5       = 0x80000015, /**< 1.21: Fast interrupt channel 5 */
+  TRAP_CODE_FIRQ_6       = 0x80000016, /**< 1.22: Fast interrupt channel 6 */
+  TRAP_CODE_FIRQ_7       = 0x80000017, /**< 1.23: Fast interrupt channel 7 */
+  TRAP_CODE_FIRQ_8       = 0x80000018, /**< 1.24: Fast interrupt channel 8 */
+  TRAP_CODE_FIRQ_9       = 0x80000019, /**< 1.25: Fast interrupt channel 9 */
+  TRAP_CODE_FIRQ_10      = 0x8000001a, /**< 1.26: Fast interrupt channel 10 */
+  TRAP_CODE_FIRQ_11      = 0x8000001b, /**< 1.27: Fast interrupt channel 11 */
+  TRAP_CODE_FIRQ_12      = 0x8000001c, /**< 1.28: Fast interrupt channel 12 */
+  TRAP_CODE_FIRQ_13      = 0x8000001d, /**< 1.29: Fast interrupt channel 13 */
+  TRAP_CODE_FIRQ_14      = 0x8000001e, /**< 1.30: Fast interrupt channel 14 */
+  TRAP_CODE_FIRQ_15      = 0x8000001f  /**< 1.31: Fast interrupt channel 15 */
 };
 
 
@@ -471,14 +510,14 @@ enum NEORV32_EXCEPTION_CODES_enum {
  * Processor clock prescalers 
  **************************************************************************/
 enum NEORV32_CLOCK_PRSC_enum {
-  CLK_PRSC_2    =  0, /**< CPU_CLK / 2 */
-  CLK_PRSC_4    =  1, /**< CPU_CLK / 4 */
-  CLK_PRSC_8    =  2, /**< CPU_CLK / 8 */
-  CLK_PRSC_64   =  3, /**< CPU_CLK / 64 */
-  CLK_PRSC_128  =  4, /**< CPU_CLK / 128 */
-  CLK_PRSC_1024 =  5, /**< CPU_CLK / 1024 */
-  CLK_PRSC_2048 =  6, /**< CPU_CLK / 2048 */
-  CLK_PRSC_4096 =  7  /**< CPU_CLK / 4096 */
+  CLK_PRSC_2    = 0, /**< CPU_CLK (from clk_i top signal) / 2 */
+  CLK_PRSC_4    = 1, /**< CPU_CLK (from clk_i top signal) / 4 */
+  CLK_PRSC_8    = 2, /**< CPU_CLK (from clk_i top signal) / 8 */
+  CLK_PRSC_64   = 3, /**< CPU_CLK (from clk_i top signal) / 64 */
+  CLK_PRSC_128  = 4, /**< CPU_CLK (from clk_i top signal) / 128 */
+  CLK_PRSC_1024 = 5, /**< CPU_CLK (from clk_i top signal) / 1024 */
+  CLK_PRSC_2048 = 6, /**< CPU_CLK (from clk_i top signal) / 2048 */
+  CLK_PRSC_4096 = 7  /**< CPU_CLK (from clk_i top signal) / 4096 */
 };
 
 
@@ -523,7 +562,78 @@ enum NEORV32_CLOCK_PRSC_enum {
 /** bootloader memory base address (r/-/x) */
 #define BOOTLOADER_BASE_ADDRESS (0xFFFF0000UL)
 /** peripheral/IO devices memory base address (r/w/x) */
-#define IO_BASE_ADDRESS (0xFFFFFF80UL)
+#define IO_BASE_ADDRESS (0xFFFFFF00UL)
+/**@}*/
+
+
+/**********************************************************************//**
+ * @name IO Device: Custom Functions Subsystem (CFS)
+ **************************************************************************/
+/**@{*/
+/** custom CFS register 0 */
+#define CFS_REG_0  (*(IO_REG32 0xFFFFFF00UL)) // /**< (r)/(w): CFS register 0, user-defined */
+/** custom CFS register 1 */
+#define CFS_REG_1  (*(IO_REG32 0xFFFFFF04UL)) // /**< (r)/(w): CFS register 1, user-defined */
+/** custom CFS register 2 */
+#define CFS_REG_2  (*(IO_REG32 0xFFFFFF08UL)) // /**< (r)/(w): CFS register 2, user-defined */
+/** custom CFS register 3 */
+#define CFS_REG_3  (*(IO_REG32 0xFFFFFF0CUL)) // /**< (r)/(w): CFS register 3, user-defined */
+/** custom CFS register 4 */
+#define CFS_REG_4  (*(IO_REG32 0xFFFFFF10UL)) // /**< (r)/(w): CFS register 4, user-defined */
+/** custom CFS register 5 */
+#define CFS_REG_5  (*(IO_REG32 0xFFFFFF14UL)) // /**< (r)/(w): CFS register 5, user-defined */
+/** custom CFS register 6 */
+#define CFS_REG_6  (*(IO_REG32 0xFFFFFF18UL)) // /**< (r)/(w): CFS register 6, user-defined */
+/** custom CFS register 7 */
+#define CFS_REG_7  (*(IO_REG32 0xFFFFFF1CUL)) // /**< (r)/(w): CFS register 7, user-defined */
+/** custom CFS register 8 */
+#define CFS_REG_8  (*(IO_REG32 0xFFFFFF20UL)) // /**< (r)/(w): CFS register 8, user-defined */
+/** custom CFS register 9 */
+#define CFS_REG_9  (*(IO_REG32 0xFFFFFF24UL)) // /**< (r)/(w): CFS register 9, user-defined */
+/** custom CFS register 10 */
+#define CFS_REG_10 (*(IO_REG32 0xFFFFFF28UL)) // /**< (r)/(w): CFS register 10, user-defined */
+/** custom CFS register 11 */
+#define CFS_REG_11 (*(IO_REG32 0xFFFFFF2CUL)) // /**< (r)/(w): CFS register 11, user-defined */
+/** custom CFS register 12 */
+#define CFS_REG_12 (*(IO_REG32 0xFFFFFF30UL)) // /**< (r)/(w): CFS register 12, user-defined */
+/** custom CFS register 13 */
+#define CFS_REG_13 (*(IO_REG32 0xFFFFFF34UL)) // /**< (r)/(w): CFS register 13, user-defined */
+/** custom CFS register 14 */
+#define CFS_REG_14 (*(IO_REG32 0xFFFFFF38UL)) // /**< (r)/(w): CFS register 14, user-defined */
+/** custom CFS register 15 */
+#define CFS_REG_15 (*(IO_REG32 0xFFFFFF3CUL)) // /**< (r)/(w): CFS register 15, user-defined */
+/** custom CFS register 16 */
+#define CFS_REG_16 (*(IO_REG32 0xFFFFFF40UL)) // /**< (r)/(w): CFS register 16, user-defined */
+/** custom CFS register 17 */
+#define CFS_REG_17 (*(IO_REG32 0xFFFFFF44UL)) // /**< (r)/(w): CFS register 17, user-defined */
+/** custom CFS register 18 */
+#define CFS_REG_18 (*(IO_REG32 0xFFFFFF48UL)) // /**< (r)/(w): CFS register 18, user-defined */
+/** custom CFS register 19 */
+#define CFS_REG_19 (*(IO_REG32 0xFFFFFF4CUL)) // /**< (r)/(w): CFS register 19, user-defined */
+/** custom CFS register 20 */
+#define CFS_REG_20 (*(IO_REG32 0xFFFFFF50UL)) // /**< (r)/(w): CFS register 20, user-defined */
+/** custom CFS register 21 */
+#define CFS_REG_21 (*(IO_REG32 0xFFFFFF54UL)) // /**< (r)/(w): CFS register 21, user-defined */
+/** custom CFS register 22 */
+#define CFS_REG_22 (*(IO_REG32 0xFFFFFF58UL)) // /**< (r)/(w): CFS register 22, user-defined */
+/** custom CFS register 23 */
+#define CFS_REG_23 (*(IO_REG32 0xFFFFFF5CUL)) // /**< (r)/(w): CFS register 23, user-defined */
+/** custom CFS register 24 */
+#define CFS_REG_24 (*(IO_REG32 0xFFFFFF60UL)) // /**< (r)/(w): CFS register 24, user-defined */
+/** custom CFS register 25 */
+#define CFS_REG_25 (*(IO_REG32 0xFFFFFF64UL)) // /**< (r)/(w): CFS register 25, user-defined */
+/** custom CFS register 26 */
+#define CFS_REG_26 (*(IO_REG32 0xFFFFFF68UL)) // /**< (r)/(w): CFS register 26, user-defined */
+/** custom CFS register 27 */
+#define CFS_REG_27 (*(IO_REG32 0xFFFFFF6CUL)) // /**< (r)/(w): CFS register 27, user-defined */
+/** custom CFS register 28 */
+#define CFS_REG_28 (*(IO_REG32 0xFFFFFF70UL)) // /**< (r)/(w): CFS register 28, user-defined */
+/** custom CFS register 29 */
+#define CFS_REG_29 (*(IO_REG32 0xFFFFFF74UL)) // /**< (r)/(w): CFS register 29, user-defined */
+/** custom CFS register 30 */
+#define CFS_REG_30 (*(IO_REG32 0xFFFFFF78UL)) // /**< (r)/(w): CFS register 30, user-defined */
+/** custom CFS register 31 */
+#define CFS_REG_31 (*(IO_REG32 0xFFFFFF7CUL)) // /**< (r)/(w): CFS register 31, user-defined */
 /**@}*/
 
 
@@ -547,12 +657,11 @@ enum NEORV32_CLOCK_PRSC_enum {
 
 /** TRNG control/data register bits */
 enum NEORV32_TRNG_CT_enum {
-  TRNG_CT_DATA_LSB =  0, /**< TRNG data/control register(0)  (r/-): Random data (8-bit) LSB */
-  TRNG_CT_DATA_MSB =  7, /**< TRNG data/control register(7)  (r/-): Random data (8-bit) MSB */
-  TRNG_CT_VALID    = 15, /**< TRNG data/control register(15) (r/-): Random data output valid */
-  TRNG_CT_ERROR_0  = 16, /**< TRNG data/control register(16) (r/-): Stuck-at-zero error */
-  TRNG_CT_ERROR_1  = 17, /**< TRNG data/control register(17) (r/-): Stuck-at-one error */
-  TRNG_CT_EN       = 31  /**< TRNG data/control register(31) (r/w): TRNG enable */
+  TRNG_CT_DATA_LSB =  0, /**< TRNG data/control register(0)  (r/-): Random data byte LSB */
+  TRNG_CT_DATA_MSB =  7, /**< TRNG data/control register(7)  (r/-): Random data byte MSB */
+
+  TRNG_CT_EN       = 30, /**< TRNG data/control register(30) (r/w): TRNG enable */
+  TRNG_CT_VALID    = 31  /**< TRNG data/control register(31) (r/-): Random data output valid */
 };
 /**@}*/
 
@@ -566,20 +675,16 @@ enum NEORV32_TRNG_CT_enum {
 
 /** WTD control register bits */
 enum NEORV32_WDT_CT_enum {
-  WDT_CT_CLK_SEL0     =  0, /**< WDT control register(0) (r/w): Clock prescaler select bit 0 */
-  WDT_CT_CLK_SEL1     =  1, /**< WDT control register(1) (r/w): Clock prescaler select bit 1 */
-  WDT_CT_CLK_SEL2     =  2, /**< WDT control register(2) (r/w): Clock prescaler select bit 2 */
-  WDT_CT_EN           =  3, /**< WDT control register(3) (r/w): Watchdog enable */
-  WDT_CT_MODE         =  4, /**< WDT control register(4) (r/w): Watchdog mode; when 0: timeout causes interrupt; when 1: timeout causes processor reset */
-  WDT_CT_CAUSE        =  5, /**< WDT control register(5) (r/-): Last action (reset/IRQ) cause (0: external reset, 1: watchdog timeout) */
-  WDT_CT_PWFAIL       =  6, /**< WDT control register(6) (r/-): Last Watchdog action (reset/IRQ) caused by wrong password when 1 */
-
-  WDT_CT_PASSWORD_LSB =  8, /**< WDT control register(8)  (-/w): First bit / position begin for watchdog access password */
-  WDT_CT_PASSWORD_MSB = 15  /**< WDT control register(15) (-/w): Last bit / position end for watchdog access password */
+  WDT_CT_EN       = 0, /**< WDT control register(0) (r/w): Watchdog enable */
+  WDT_CT_CLK_SEL0 = 1, /**< WDT control register(1) (r/w): Clock prescaler select bit 0 */
+  WDT_CT_CLK_SEL1 = 2, /**< WDT control register(2) (r/w): Clock prescaler select bit 1 */
+  WDT_CT_CLK_SEL2 = 3, /**< WDT control register(3) (r/w): Clock prescaler select bit 2 */
+  WDT_CT_MODE     = 4, /**< WDT control register(4) (r/w): Watchdog mode: 0=timeout causes interrupt, 1=timeout causes processor reset */
+  WDT_CT_RCAUSE   = 5, /**< WDT control register(5) (r/-): Cause of last system reset: 0=external reset, 1=watchdog */
+  WDT_CT_RESET    = 6, /**< WDT control register(6) (-/w): Reset WDT counter when set, auto-clears */
+  WDT_CT_FORCE    = 7, /**< WDT control register(7) (-/w): Force WDT action, auto-clears */
+  WDT_CT_LOCK     = 8  /**< WDT control register(8) (r/w): Lock write access to control register, clears on reset (HW or WDT) only */
 };
-
-/** Watchdog access passwort, must be set in WDT_CT bits 15:8 for every control register access */
-#define WDT_PASSWORD 0x47
 /**@}*/
 
 
@@ -604,47 +709,68 @@ enum NEORV32_WDT_CT_enum {
 
 
 /**********************************************************************//**
- * @name IO Device: Universal Asynchronous Receiver and Transmitter (UART)
+ * @name IO Device: Primary/Secondary Universal Asynchronous Receiver and Transmitter (UART0 / UART1)
  **************************************************************************/
 /**@{*/
-/** UART control register (r/w) */
-#define UART_CT  (*(IO_REG32 0xFFFFFFA0UL))
-/** UART receive/transmit data register (r/w) */
-#define UART_DATA (*(IO_REG32 0xFFFFFFA4UL))
+/** UART0 control register (r/w) */
+#define UART0_CT  (*(IO_REG32 0xFFFFFFA0UL))
+/** UART0 receive/transmit data register (r/w) */
+#define UART0_DATA (*(IO_REG32 0xFFFFFFA4UL))
 
-/** UART control register bits */
+/** UART1 control register (r/w) */
+#define UART1_CT  (*(IO_REG32 0xFFFFFFD0UL))
+/** UART1 receive/transmit data register (r/w) */
+#define UART1_DATA (*(IO_REG32 0xFFFFFFD4UL))
+
+/** UART0/UART1 control register bits */
 enum NEORV32_UART_CT_enum {
-  UART_CT_BAUD00   =  0, /**< UART control register(0)  (r/w): BAUD rate config value lsb (12-bi, bit 0) */
-  UART_CT_BAUD01   =  1, /**< UART control register(1)  (r/w): BAUD rate config value (12-bi, bit 1) */
-  UART_CT_BAUD02   =  2, /**< UART control register(2)  (r/w): BAUD rate config value (12-bi, bit 2) */
-  UART_CT_BAUD03   =  3, /**< UART control register(3)  (r/w): BAUD rate config value (12-bi, bit 3) */
-  UART_CT_BAUD04   =  4, /**< UART control register(4)  (r/w): BAUD rate config value (12-bi, bit 4) */
-  UART_CT_BAUD05   =  5, /**< UART control register(5)  (r/w): BAUD rate config value (12-bi, bit 4) */
-  UART_CT_BAUD06   =  6, /**< UART control register(6)  (r/w): BAUD rate config value (12-bi, bit 5) */
-  UART_CT_BAUD07   =  7, /**< UART control register(7)  (r/w): BAUD rate config value (12-bi, bit 6) */
-  UART_CT_BAUD08   =  8, /**< UART control register(8)  (r/w): BAUD rate config value (12-bi, bit 7) */
-  UART_CT_BAUD09   =  9, /**< UART control register(9)  (r/w): BAUD rate config value (12-bi, bit 8) */
-  UART_CT_BAUD10   = 10, /**< UART control register(10) (r/w): BAUD rate config value (12-bi, bit 9) */
-  UART_CT_BAUD11   = 11, /**< UART control register(11) (r/w): BAUD rate config value msb (12-bi, bit 0) */
-
+  UART_CT_BAUD00   =  0, /**< UART control register(0)  (r/w): BAUD rate config value lsb (12-bit, bit 0) */
+  UART_CT_BAUD01   =  1, /**< UART control register(1)  (r/w): BAUD rate config value (12-bit, bit 1) */
+  UART_CT_BAUD02   =  2, /**< UART control register(2)  (r/w): BAUD rate config value (12-bit, bit 2) */
+  UART_CT_BAUD03   =  3, /**< UART control register(3)  (r/w): BAUD rate config value (12-bit, bit 3) */
+  UART_CT_BAUD04   =  4, /**< UART control register(4)  (r/w): BAUD rate config value (12-bit, bit 4) */
+  UART_CT_BAUD05   =  5, /**< UART control register(5)  (r/w): BAUD rate config value (12-bit, bit 4) */
+  UART_CT_BAUD06   =  6, /**< UART control register(6)  (r/w): BAUD rate config value (12-bit, bit 5) */
+  UART_CT_BAUD07   =  7, /**< UART control register(7)  (r/w): BAUD rate config value (12-bit, bit 6) */
+  UART_CT_BAUD08   =  8, /**< UART control register(8)  (r/w): BAUD rate config value (12-bit, bit 7) */
+  UART_CT_BAUD09   =  9, /**< UART control register(9)  (r/w): BAUD rate config value (12-bit, bit 8) */
+  UART_CT_BAUD10   = 10, /**< UART control register(10) (r/w): BAUD rate config value (12-bit, bit 9) */
+  UART_CT_BAUD11   = 11, /**< UART control register(11) (r/w): BAUD rate config value msb (12-bit, bit 0) */
   UART_CT_SIM_MODE = 12, /**< UART control register(12) (r/w): Simulation output override enable, for use in simulation only */
 
+  UART_CT_RTS_EN   = 20, /**< UART control register(20) (r/w): Enable hardware flow control: Assert RTS output if UART.RX is ready to receive */
+  UART_CT_CTS_EN   = 21, /**< UART control register(21) (r/w): Enable hardware flow control: UART.TX starts sending only if CTS input is asserted */
   UART_CT_PMODE0   = 22, /**< UART control register(22) (r/w): Parity configuration (0=even; 1=odd) */
   UART_CT_PMODE1   = 23, /**< UART control register(23) (r/w): Parity bit enabled when set */
   UART_CT_PRSC0    = 24, /**< UART control register(24) (r/w): BAUD rate clock prescaler select bit 0 */
   UART_CT_PRSC1    = 25, /**< UART control register(25) (r/w): BAUD rate clock prescaler select bit 1 */
   UART_CT_PRSC2    = 26, /**< UART control register(26) (r/w): BAUD rate clock prescaler select bit 2 */
-
+  UART_CT_CTS      = 27, /**< UART control register(27) (r/-): current state of CTS input */
   UART_CT_EN       = 28, /**< UART control register(28) (r/w): UART global enable */
-  UART_CT_RX_IRQ   = 29, /**< UART control register(29) (r/w): Activate interrupt on RX done */
-  UART_CT_TX_IRQ   = 30, /**< UART control register(30) (r/w): Activate interrupt on TX done */
+
   UART_CT_TX_BUSY  = 31  /**< UART control register(31) (r/-): Transmitter is busy when set */
 };
 
-/** UART receive/transmit data register bits */
+/** UART0/UART1 parity configuration */
+enum NEORV32_UART_PARITY_enum {
+  PARITY_NONE = 0b00, /**< 0b00: No parity bit at all */
+  PARITY_EVEN = 0b10, /**< 0b10: Even parity */
+  PARITY_ODD  = 0b11  /**< 0b11: Odd parity */
+};
+
+/** UART0/UART1 hardware flow control configuration */
+enum NEORV32_UART_FLOW_CONTROL_enum {
+  FLOW_CONTROL_NONE   = 0b00, /**< 0b00: No hardware flow control */
+  FLOW_CONTROL_RTS    = 0b01, /**< 0b01: Assert RTS output if UART.RX is ready to receive */
+  FLOW_CONTROL_CTS    = 0b10, /**< 0b10: UART.TX starts sending only if CTS input is asserted */
+  FLOW_CONTROL_RTSCTS = 0b11  /**< 0b11: Assert RTS output if UART.RX is ready to receive & UART.TX starts sending only if CTS input is asserted */
+};
+
+/** UART0/UART1 receive/transmit data register bits */
 enum NEORV32_UART_DATA_enum {
   UART_DATA_LSB   =  0, /**< UART receive/transmit data register(0)  (r/w): Receive/transmit data LSB (bit 0) */
   UART_DATA_MSB   =  7, /**< UART receive/transmit data register(7)  (r/w): Receive/transmit data MSB (bit 7) */
+
   UART_DATA_PERR  = 28, /**< UART receive/transmit data register(18) (r/-): RX parity error detected when set */
   UART_DATA_FERR  = 29, /**< UART receive/transmit data register(29) (r/-): RX frame error (not valid stop bit) wdetected when set */
   UART_DATA_OVERR = 30, /**< UART receive/transmit data register(30) (r/-): RX data overrun when set */
@@ -664,23 +790,21 @@ enum NEORV32_UART_DATA_enum {
 
 /** SPI control register bits */
 enum NEORV32_SPI_CT_enum {
-  SPI_CT_CS0    =  0, /**< UART control register(0) (r/w): Direct chip select line 0 (output is low when set) */
-  SPI_CT_CS1    =  1, /**< UART control register(1) (r/w): Direct chip select line 1 (output is low when set) */
-  SPI_CT_CS2    =  2, /**< UART control register(2) (r/w): Direct chip select line 2 (output is low when set) */
-  SPI_CT_CS3    =  3, /**< UART control register(3) (r/w): Direct chip select line 3 (output is low when set) */
-  SPI_CT_CS4    =  4, /**< UART control register(4) (r/w): Direct chip select line 4 (output is low when set) */
-  SPI_CT_CS5    =  5, /**< UART control register(5) (r/w): Direct chip select line 5 (output is low when set) */
-  SPI_CT_CS6    =  6, /**< UART control register(6) (r/w): Direct chip select line 6 (output is low when set) */
-  SPI_CT_CS7    =  7, /**< UART control register(7) (r/w): Direct chip select line 7 (output is low when set) */
-
-  SPI_CT_EN     =  8, /**< UART control register(8) (r/w): SPI unit enable */
-  SPI_CT_CPHA   =  9, /**< UART control register(9) (r/w): Clock polarity (idle polarity) */
+  SPI_CT_CS0    =  0, /**< UART control register(0)  (r/w): Direct chip select line 0 (output is low when set) */
+  SPI_CT_CS1    =  1, /**< UART control register(1)  (r/w): Direct chip select line 1 (output is low when set) */
+  SPI_CT_CS2    =  2, /**< UART control register(2)  (r/w): Direct chip select line 2 (output is low when set) */
+  SPI_CT_CS3    =  3, /**< UART control register(3)  (r/w): Direct chip select line 3 (output is low when set) */
+  SPI_CT_CS4    =  4, /**< UART control register(4)  (r/w): Direct chip select line 4 (output is low when set) */
+  SPI_CT_CS5    =  5, /**< UART control register(5)  (r/w): Direct chip select line 5 (output is low when set) */
+  SPI_CT_CS6    =  6, /**< UART control register(6)  (r/w): Direct chip select line 6 (output is low when set) */
+  SPI_CT_CS7    =  7, /**< UART control register(7)  (r/w): Direct chip select line 7 (output is low when set) */
+  SPI_CT_EN     =  8, /**< UART control register(8)  (r/w): SPI unit enable */
+  SPI_CT_CPHA   =  9, /**< UART control register(9)  (r/w): Clock polarity (idle polarity) */
   SPI_CT_PRSC0  = 10, /**< UART control register(10) (r/w): Clock prescaler select bit 0 */
   SPI_CT_PRSC1  = 11, /**< UART control register(11) (r/w): Clock prescaler select bit 1 */
   SPI_CT_PRSC2  = 12, /**< UART control register(12) (r/w): Clock prescaler select bit 2 */
   SPI_CT_SIZE0  = 13, /**< UART control register(13) (r/w): Transfer data size lsb (00: 8-bit, 01: 16-bit, 10: 24-bit, 11: 32-bit) */
   SPI_CT_SIZE1  = 14, /**< UART control register(14) (r/w): Transfer data size msb (00: 8-bit, 01: 16-bit, 10: 24-bit, 11: 32-bit) */
-  SPI_CT_IRQ_EN = 15, /**< UART control register(15) (r/w): Transfer done interrupt enable */
 
   SPI_CT_BUSY   = 31  /**< UART control register(31) (r/-): SPI busy flag */
 };
@@ -701,12 +825,11 @@ enum NEORV32_TWI_CT_enum {
   TWI_CT_EN     =  0, /**< TWI control register(0) (r/w): TWI enable */
   TWI_CT_START  =  1, /**< TWI control register(1) (-/w): Generate START condition, auto-clears */
   TWI_CT_STOP   =  2, /**< TWI control register(2) (-/w): Generate STOP condition, auto-clears */
-  TWI_CT_IRQ_EN =  3, /**< TWI control register(3) (r/w): Enable transmission done interrupt */
-  TWI_CT_PRSC0  =  4, /**< TWI control register(4) (r/w): Clock prescaler select bit 0 */
-  TWI_CT_PRSC1  =  5, /**< TWI control register(5) (r/w): Clock prescaler select bit 1 */
-  TWI_CT_PRSC2  =  6, /**< TWI control register(6) (r/w): Clock prescaler select bit 2 */
-  TWI_CT_MACK   =  7, /**< TWI control register(7) (r/w): Generate controller ACK for each transmission */
-  TWI_CT_CKSTEN =  8, /**< TWI control register(8) (r/w): Enable clock stretching (by peripheral) */
+  TWI_CT_PRSC0  =  3, /**< TWI control register(3) (r/w): Clock prescaler select bit 0 */
+  TWI_CT_PRSC1  =  4, /**< TWI control register(4) (r/w): Clock prescaler select bit 1 */
+  TWI_CT_PRSC2  =  5, /**< TWI control register(5) (r/w): Clock prescaler select bit 2 */
+  TWI_CT_MACK   =  6, /**< TWI control register(6) (r/w): Generate controller ACK for each transmission */
+  TWI_CT_CKSTEN =  7, /**< TWI control register(7) (r/w): Enable clock stretching (by peripheral) */
 
   TWI_CT_ACK    = 30, /**< TWI control register(30) (r/-): ACK received when set */
   TWI_CT_BUSY   = 31  /**< TWI control register(31) (r/-): Transfer in progress, busy flag */
@@ -752,32 +875,58 @@ enum NEORV32_PWM_DUTY_enum {
 
 
 /**********************************************************************//**
- * @name IO Device: Custom Functions Unit 0 (CFU0)
+ * @name IO Device: Numerically-Controlled Oscillator (NCO)
  **************************************************************************/
 /**@{*/
-/** CFU0 register 0 ((r)/(w)) */
-#define CFU0_REG_0 (*(IO_REG32 0xFFFFFFC0UL)) // (r)/(w): CFU0 register 0, user-defined
-/** CFU0 register 1 ((r)/(w)) */
-#define CFU0_REG_1 (*(IO_REG32 0xFFFFFFC4UL)) // (r)/(w): CFU0 register 1, user-defined
-/** CFU0 register 2 ((r)/(w)) */
-#define CFU0_REG_2 (*(IO_REG32 0xFFFFFFC8UL)) // (r)/(w): CFU0 register 2, user-defined
-/** CFU0 register 3 ((r)/(w)) */
-#define CFU0_REG_3 (*(IO_REG32 0xFFFFFFCCUL)) // (r)/(w): CFU0 register 3, user-defined
-/**@}*/
+/** NCO control register (r/w) */
+#define NCO_CT       (*(IO_REG32 0xFFFFFFC0UL)) // r/w: control register
+/** NCO channel 0 tuning word (r/w) */
+#define NCO_TUNE_CH0 (*(IO_REG32 0xFFFFFFC4UL)) // r/w: tuning word channel 0
+/** NCO channel 1 tuning word (r/w) */
+#define NCO_TUNE_CH1 (*(IO_REG32 0xFFFFFFC8UL)) // r/w: tuning word channel 1
+/** NCO channel 2 tuning word (r/w) */
+#define NCO_TUNE_CH2 (*(IO_REG32 0xFFFFFFCCUL)) // r/w: tuning word channel 2
 
+/** NCO control register bits */
+enum NEORV32_NCO_CT_enum {
+  NCO_CT_EN           =  0, /**< NCO control register(0) (r/w): NCO global enable */
+  // channel 0
+  NCO_CT_CH0_MODE     =  1, /**< NCO control register(1)  - channel 0 (r/w): Output mode (0=fixed 50% duty cycle; 1=pulse mode) */
+  NCO_CT_CH0_IDLE_POL =  2, /**< NCO control register(2)  - channel 0 (r/w): Output idle polarity (0=low, 1=high) */
+  NCO_CT_CH0_OE       =  3, /**< NCO control register(3)  - channel 0 (r/w): Enable processor output pin */
+  NCO_CT_CH0_OUTPUT   =  4, /**< NCO control register(4)  - channel 0 (r/-): Current channel output state */
+  NCO_CT_CH0_PRSC0    =  5, /**< NCO control register(5)  - channel 0 (r/w): Clock prescaler select bit 0 */
+  NCO_CT_CH0_PRSC1    =  6, /**< NCO control register(6)  - channel 0 (r/w): Clock prescaler select bit 1 */
+  NCO_CT_CH0_PRSC2    =  7, /**< NCO control register(7)  - channel 0 (r/w): Clock prescaler select bit 2 */
+  NCO_CT_CH0_PULSE0   =  8, /**< NCO control register(8)  - channel 0 (r/w): Pulse-mode: Pulse length select bit 0 */
+  NCO_CT_CH0_PULSE1   =  9, /**< NCO control register(9)  - channel 0 (r/w): Pulse-mode: Pulse length select bit 1 */
+  NCO_CT_CH0_PULSE2   = 10, /**< NCO control register(10) - channel 0 (r/w): Pulse-mode: Pulse length select bit 2 */
+  // channel 1
+  NCO_CT_CH1_MODE     = 11, /**< NCO control register(11) - channel 1 (r/w): Output mode (0=fixed 50% duty cycle; 1=pulse mode) */
+  NCO_CT_CH1_IDLE_POL = 12, /**< NCO control register(12) - channel 1 (r/w): Output idle polarity (0=low, 1=high) */
+  NCO_CT_CH1_OE       = 13, /**< NCO control register(13) - channel 1 (r/w): Enable processor output pin */
+  NCO_CT_CH1_OUTPUT   = 14, /**< NCO control register(14) - channel 1 (r/-): Current channel output state */
+  NCO_CT_CH1_PRSC0    = 15, /**< NCO control register(15) - channel 1 (r/w): Clock prescaler select bit 0 */
+  NCO_CT_CH1_PRSC1    = 16, /**< NCO control register(16) - channel 1 (r/w): Clock prescaler select bit 1 */
+  NCO_CT_CH1_PRSC2    = 17, /**< NCO control register(17) - channel 1 (r/w): Clock prescaler select bit 2 */
+  NCO_CT_CH1_PULSE0   = 18, /**< NCO control register(18) - channel 1 (r/w): Pulse-mode: Pulse length select bit 0 */
+  NCO_CT_CH1_PULSE1   = 19, /**< NCO control register(19) - channel 1 (r/w): Pulse-mode: Pulse length select bit 1 */
+  NCO_CT_CH1_PULSE2   = 20, /**< NCO control register(20) - channel 1 (r/w): Pulse-mode: Pulse length select bit 2 */
+  // channel 2
+  NCO_CT_CH2_MODE     = 21, /**< NCO control register(21) - channel 2 (r/w): Output mode (0=fixed 50% duty cycle; 1=pulse mode) */
+  NCO_CT_CH2_IDLE_POL = 22, /**< NCO control register(22) - channel 2 (r/w): Output idle polarity (0=low, 1=high) */
+  NCO_CT_CH2_OE       = 23, /**< NCO control register(23) - channel 2 (r/w): Enable processor output pin */
+  NCO_CT_CH2_OUTPUT   = 24, /**< NCO control register(24) - channel 2 (r/-): Current channel output state */
+  NCO_CT_CH2_PRSC0    = 25, /**< NCO control register(25) - channel 2 (r/w): Clock prescaler select bit 0 */
+  NCO_CT_CH2_PRSC1    = 26, /**< NCO control register(26) - channel 2 (r/w): Clock prescaler select bit 1 */
+  NCO_CT_CH2_PRSC2    = 27, /**< NCO control register(27) - channel 2 (r/w): Clock prescaler select bit 2 */
+  NCO_CT_CH2_PULSE0   = 28, /**< NCO control register(28) - channel 2 (r/w): Pulse-mode: Pulse length select bit 0 */
+  NCO_CT_CH2_PULSE1   = 29, /**< NCO control register(29) - channel 2 (r/w): Pulse-mode: Pulse length select bit 1 */
+  NCO_CT_CH2_PULSE2   = 20  /**< NCO control register(30) - channel 2 (r/w): Pulse-mode: Pulse length select bit 2 */
+};
 
-/**********************************************************************//**
- * @name IO Device: Custom Functions Unit 1 (CFU1)
- **************************************************************************/
-/**@{*/
-/** CFU1 register 0 ((r)/(w)) */
-#define CFU1_REG_0 (*(IO_REG32 0xFFFFFFD0UL)) // (r)/(w): CFU1 register 0, user-defined
-/** CFU1 register 1 ((r)/(w)) */
-#define CFU1_REG_1 (*(IO_REG32 0xFFFFFFD4UL)) // (r)/(w): CFU1 register 1, user-defined
-/** CFU1 register 2 ((r)/(w)) */
-#define CFU1_REG_2 (*(IO_REG32 0xFFFFFFD8UL)) // (r)/(w): CFU1 register 2, user-defined
-/** CFU1 register 3 ((r)/(w)) */
-#define CFU1_REG_3 (*(IO_REG32 0xFFFFFFDCUL)) // (r)/(w): CFU1 register 3, user-defined
+/** Size of one "channel entry" in control register in bits */
+#define NCO_CHX_WIDTH 10 // Size of one "channel entry" in control register in bits
 /**@}*/
 
 
@@ -817,14 +966,15 @@ enum NEORV32_PWM_DUTY_enum {
 
   SYSINFO_FEATURES_IO_GPIO          = 16, /**< SYSINFO_FEATURES (16) (r/-): General purpose input/output port unit implemented when 1 (via IO_GPIO_EN generic) */
   SYSINFO_FEATURES_IO_MTIME         = 17, /**< SYSINFO_FEATURES (17) (r/-): Machine system timer implemented when 1 (via IO_MTIME_EN generic) */
-  SYSINFO_FEATURES_IO_UART          = 18, /**< SYSINFO_FEATURES (18) (r/-): Universal asynchronous receiver/transmitter implemented when 1 (via IO_UART_EN generic) */
+  SYSINFO_FEATURES_IO_UART0         = 18, /**< SYSINFO_FEATURES (18) (r/-): Primary universal asynchronous receiver/transmitter 0 implemented when 1 (via IO_UART0_EN generic) */
   SYSINFO_FEATURES_IO_SPI           = 19, /**< SYSINFO_FEATURES (19) (r/-): Serial peripheral interface implemented when 1 (via IO_SPI_EN generic) */
   SYSINFO_FEATURES_IO_TWI           = 20, /**< SYSINFO_FEATURES (20) (r/-): Two-wire interface implemented when 1 (via IO_TWI_EN generic) */
   SYSINFO_FEATURES_IO_PWM           = 21, /**< SYSINFO_FEATURES (21) (r/-): Pulse-width modulation unit implemented when 1 (via IO_PWM_EN generic) */
   SYSINFO_FEATURES_IO_WDT           = 22, /**< SYSINFO_FEATURES (22) (r/-): Watchdog timer implemented when 1 (via IO_WDT_EN generic) */
-  SYSINFO_FEATURES_IO_CFU0          = 23, /**< SYSINFO_FEATURES (23) (r/-): Custom functions unit 0 implemented when 1 (via IO_CFU0_EN generic) */
+  SYSINFO_FEATURES_IO_CFS           = 23, /**< SYSINFO_FEATURES (23) (r/-): Custom functions subsystem implemented when 1 (via IO_CFS_EN generic) */
   SYSINFO_FEATURES_IO_TRNG          = 24, /**< SYSINFO_FEATURES (24) (r/-): True random number generator implemented when 1 (via IO_TRNG_EN generic) */
-  SYSINFO_FEATURES_IO_CFU1          = 25  /**< SYSINFO_FEATURES (25) (r/-): Custom functions unit 1 implemented when 1 (via IO_CFU1_EN generic) */
+  SYSINFO_FEATURES_IO_NCO           = 25, /**< SYSINFO_FEATURES (25) (r/-): Numerically-controlled oscillator implemented when 1 (via IO_NCO_EN generic) */
+  SYSINFO_FEATURES_IO_UART1         = 26  /**< SYSINFO_FEATURES (26) (r/-): Secondary universal asynchronous receiver/transmitter 1 implemented when 1 (via IO_UART1_EN generic) */
 };
 
 /**********************************************************************//**
@@ -863,9 +1013,10 @@ enum NEORV32_PWM_DUTY_enum {
 #include "neorv32_rte.h"
 
 // io/peripheral devices
-#include "neorv32_cfu.h"
+#include "neorv32_cfs.h"
 #include "neorv32_gpio.h"
 #include "neorv32_mtime.h"
+#include "neorv32_nco.h"
 #include "neorv32_pwm.h"
 #include "neorv32_spi.h"
 #include "neorv32_trng.h"

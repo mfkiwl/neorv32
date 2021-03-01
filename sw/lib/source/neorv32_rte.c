@@ -45,7 +45,7 @@
 /**********************************************************************//**
  * The >private< trap vector look-up table of the NEORV32 RTE.
  **************************************************************************/
-static uint32_t __neorv32_rte_vector_lut[17] __attribute__((unused)); // trap handler vector table
+static uint32_t __neorv32_rte_vector_lut[29] __attribute__((unused)); // trap handler vector table
 
 // private functions
 static void __attribute__((__interrupt__)) __neorv32_rte_core(void) __attribute__((aligned(16))) __attribute__((unused));
@@ -93,14 +93,8 @@ void neorv32_rte_setup(void) {
 int neorv32_rte_exception_install(uint8_t id, void (*handler)(void)) {
 
   // id valid?
-  if ((id == RTE_TRAP_I_MISALIGNED) || (id == RTE_TRAP_I_ACCESS)     || (id == RTE_TRAP_I_ILLEGAL) ||
-      (id == RTE_TRAP_BREAKPOINT)   || (id == RTE_TRAP_L_MISALIGNED) || (id == RTE_TRAP_L_ACCESS)  ||
-      (id == RTE_TRAP_S_MISALIGNED) || (id == RTE_TRAP_S_ACCESS)     || (id == RTE_TRAP_MENV_CALL) || (id == RTE_TRAP_UENV_CALL) || 
-      (id == RTE_TRAP_MSI)          || (id == RTE_TRAP_MTI)          || (id == RTE_TRAP_MEI)       ||
-      (id == RTE_TRAP_FIRQ_0)       || (id == RTE_TRAP_FIRQ_1)       || (id == RTE_TRAP_FIRQ_2)    || (id == RTE_TRAP_FIRQ_3)) {
-
+  if ((id >= RTE_TRAP_I_MISALIGNED) && (id <= CSR_MIE_FIRQ15E)) {
     __neorv32_rte_vector_lut[id] = (uint32_t)handler; // install handler
-
     return 0;
   }
   return 1; 
@@ -120,14 +114,8 @@ int neorv32_rte_exception_install(uint8_t id, void (*handler)(void)) {
 int neorv32_rte_exception_uninstall(uint8_t id) {
 
   // id valid?
-  if ((id == RTE_TRAP_I_MISALIGNED) || (id == RTE_TRAP_I_ACCESS)     || (id == RTE_TRAP_I_ILLEGAL) ||
-      (id == RTE_TRAP_BREAKPOINT)   || (id == RTE_TRAP_L_MISALIGNED) || (id == RTE_TRAP_L_ACCESS)  ||
-      (id == RTE_TRAP_S_MISALIGNED) || (id == RTE_TRAP_S_ACCESS)     || (id == RTE_TRAP_MENV_CALL) || (id == RTE_TRAP_UENV_CALL) ||
-      (id == RTE_TRAP_MSI)          || (id == RTE_TRAP_MTI)          || (id == RTE_TRAP_MEI)       ||
-      (id == RTE_TRAP_FIRQ_0)       || (id == RTE_TRAP_FIRQ_1)       || (id == RTE_TRAP_FIRQ_2)    || (id == RTE_TRAP_FIRQ_3)) {
-
+  if ((id >= RTE_TRAP_I_MISALIGNED) && (id <= CSR_MIE_FIRQ15E)) {
     __neorv32_rte_vector_lut[id] = (uint32_t)(&__neorv32_rte_debug_exc_handler); // use dummy handler in case the exception is accidently triggered
-
     return 0;
   }
   return 1; 
@@ -186,6 +174,18 @@ static void __attribute__((__interrupt__)) __attribute__((aligned(16)))  __neorv
     case TRAP_CODE_FIRQ_1:       rte_handler = __neorv32_rte_vector_lut[RTE_TRAP_FIRQ_1]; break;
     case TRAP_CODE_FIRQ_2:       rte_handler = __neorv32_rte_vector_lut[RTE_TRAP_FIRQ_2]; break;
     case TRAP_CODE_FIRQ_3:       rte_handler = __neorv32_rte_vector_lut[RTE_TRAP_FIRQ_3]; break;
+    case TRAP_CODE_FIRQ_4:       rte_handler = __neorv32_rte_vector_lut[RTE_TRAP_FIRQ_4]; break;
+    case TRAP_CODE_FIRQ_5:       rte_handler = __neorv32_rte_vector_lut[RTE_TRAP_FIRQ_5]; break;
+    case TRAP_CODE_FIRQ_6:       rte_handler = __neorv32_rte_vector_lut[RTE_TRAP_FIRQ_6]; break;
+    case TRAP_CODE_FIRQ_7:       rte_handler = __neorv32_rte_vector_lut[RTE_TRAP_FIRQ_7]; break;
+    case TRAP_CODE_FIRQ_8:       rte_handler = __neorv32_rte_vector_lut[RTE_TRAP_FIRQ_8]; break;
+    case TRAP_CODE_FIRQ_9:       rte_handler = __neorv32_rte_vector_lut[RTE_TRAP_FIRQ_9]; break;
+    case TRAP_CODE_FIRQ_10:      rte_handler = __neorv32_rte_vector_lut[RTE_TRAP_FIRQ_10]; break;
+    case TRAP_CODE_FIRQ_11:      rte_handler = __neorv32_rte_vector_lut[RTE_TRAP_FIRQ_11]; break;
+    case TRAP_CODE_FIRQ_12:      rte_handler = __neorv32_rte_vector_lut[RTE_TRAP_FIRQ_12]; break;
+    case TRAP_CODE_FIRQ_13:      rte_handler = __neorv32_rte_vector_lut[RTE_TRAP_FIRQ_13]; break;
+    case TRAP_CODE_FIRQ_14:      rte_handler = __neorv32_rte_vector_lut[RTE_TRAP_FIRQ_14]; break;
+    case TRAP_CODE_FIRQ_15:      rte_handler = __neorv32_rte_vector_lut[RTE_TRAP_FIRQ_15]; break;
     default: break;
   }
 
@@ -202,11 +202,20 @@ static void __attribute__((__interrupt__)) __attribute__((aligned(16)))  __neorv
  **************************************************************************/
 static void __neorv32_rte_debug_exc_handler(void) {
 
+  char tmp;
+
   // intro
   neorv32_uart_print("<RTE> ");
 
   // cause
   register uint32_t trap_cause = neorv32_cpu_csr_read(CSR_MCAUSE);
+  tmp = (char)(trap_cause & 0xf);
+  if (tmp >= 10) {
+    tmp = 'a' + (tmp - 10);
+  }
+  else {
+    tmp = '0' + tmp;
+  }
   switch (trap_cause) {
     case TRAP_CODE_I_MISALIGNED: neorv32_uart_print("Instruction address misaligned"); break;
     case TRAP_CODE_I_ACCESS:     neorv32_uart_print("Instruction access fault"); break;
@@ -221,10 +230,22 @@ static void __neorv32_rte_debug_exc_handler(void) {
     case TRAP_CODE_MSI:          neorv32_uart_print("Machine software interrupt"); break;
     case TRAP_CODE_MTI:          neorv32_uart_print("Machine timer interrupt"); break;
     case TRAP_CODE_MEI:          neorv32_uart_print("Machine external interrupt"); break;
-    case TRAP_CODE_FIRQ_0:       neorv32_uart_print("Fast interrupt 0"); break;
-    case TRAP_CODE_FIRQ_1:       neorv32_uart_print("Fast interrupt 1"); break;
-    case TRAP_CODE_FIRQ_2:       neorv32_uart_print("Fast interrupt 2"); break;
-    case TRAP_CODE_FIRQ_3:       neorv32_uart_print("Fast interrupt 3"); break;
+    case TRAP_CODE_FIRQ_0:
+    case TRAP_CODE_FIRQ_1:
+    case TRAP_CODE_FIRQ_2:
+    case TRAP_CODE_FIRQ_3:
+    case TRAP_CODE_FIRQ_4:
+    case TRAP_CODE_FIRQ_5:
+    case TRAP_CODE_FIRQ_6:
+    case TRAP_CODE_FIRQ_7:
+    case TRAP_CODE_FIRQ_8:
+    case TRAP_CODE_FIRQ_9:
+    case TRAP_CODE_FIRQ_10:
+    case TRAP_CODE_FIRQ_11:
+    case TRAP_CODE_FIRQ_12:
+    case TRAP_CODE_FIRQ_13:
+    case TRAP_CODE_FIRQ_14:
+    case TRAP_CODE_FIRQ_15:      neorv32_uart_print("Fast interrupt "); neorv32_uart_putc(tmp); break;
     default:                     neorv32_uart_print("Unknown trap cause: "); __neorv32_rte_print_hex_word(trap_cause); break;
   }
 
@@ -248,10 +269,16 @@ void neorv32_rte_print_hw_config(void) {
   int i;
   char c;
 
-  neorv32_uart_printf("\n\n<< Hardware Configuration Overview >>\n");
+  neorv32_uart_printf("\n\n<<< Processor Configuration Overview >>>\n");
+
+  // Processor - general stuff
+  neorv32_uart_printf("\n=== << General >> ===\n");
+  neorv32_uart_printf("Clock:   %u Hz\n", SYSINFO_CLK);
+  neorv32_uart_printf("User ID: 0x%x\n", SYSINFO_USER_CODE);
+
 
   // CPU configuration
-  neorv32_uart_printf("\n---- Central Processing Unit ----\n");
+  neorv32_uart_printf("\n=== << CPU >> ===\n");
 
   // ID
   neorv32_uart_printf("Hart ID:           0x%x\n", neorv32_cpu_csr_read(CSR_MHARTID));
@@ -264,7 +291,7 @@ void neorv32_rte_print_hw_config(void) {
     neorv32_uart_printf(" (NEORV32)");
   }
 
-  // HW version
+  // hardware version
   neorv32_uart_printf("\nImplementation ID: 0x%x (", neorv32_cpu_csr_read(CSR_MIMPID));
   neorv32_rte_print_hw_version();
   neorv32_uart_printf(")\n");
@@ -317,6 +344,9 @@ void neorv32_rte_print_hw_config(void) {
   if (tmp & (1<<CSR_MZEXT_ZBB)) {
     neorv32_uart_printf("Zbb ");
   }
+  if (tmp & (1<<CSR_MZEXT_ZBS)) {
+    neorv32_uart_printf("Zbs ");
+  }
 
   // check physical memory protection
   neorv32_uart_printf("\nPMP:               ");
@@ -332,14 +362,8 @@ void neorv32_rte_print_hw_config(void) {
   neorv32_uart_printf("HPM Counters:      %u\n", neorv32_cpu_hpm_get_counters());
 
 
-  // Misc - system
-  neorv32_uart_printf("\n\n---- Processor - General ----\n");
-  neorv32_uart_printf("Clock:   %u Hz\n", SYSINFO_CLK);
-  neorv32_uart_printf("User ID: 0x%x\n", SYSINFO_USER_CODE);
-
-
   // Memory configuration
-  neorv32_uart_printf("\n---- Processor - Memory Configuration ----\n");
+  neorv32_uart_printf("\n=== << Memory Configuration >> ===\n");
 
   neorv32_uart_printf("Instr. base address:  0x%x\n", SYSINFO_ISPACE_BASE);
   neorv32_uart_printf("Internal IMEM:        ");
@@ -403,7 +427,7 @@ void neorv32_rte_print_hw_config(void) {
   }
 
   // peripherals
-  neorv32_uart_printf("\n\n---- Processor - Peripherals ----\n");
+  neorv32_uart_printf("\n=== << Peripherals >> ===\n");
 
   tmp = SYSINFO_FEATURES;
 
@@ -413,8 +437,11 @@ void neorv32_rte_print_hw_config(void) {
   neorv32_uart_printf("MTIME - ");
   __neorv32_rte_print_true_false(tmp & (1 << SYSINFO_FEATURES_IO_MTIME));
 
-  neorv32_uart_printf("UART  - ");
-  __neorv32_rte_print_true_false(tmp & (1 << SYSINFO_FEATURES_IO_UART));
+  neorv32_uart_printf("UART0 - ");
+  __neorv32_rte_print_true_false(tmp & (1 << SYSINFO_FEATURES_IO_UART0));
+
+  neorv32_uart_printf("UART1 - ");
+  __neorv32_rte_print_true_false(tmp & (1 << SYSINFO_FEATURES_IO_UART1));
 
   neorv32_uart_printf("SPI   - ");
   __neorv32_rte_print_true_false(tmp & (1 << SYSINFO_FEATURES_IO_SPI));
@@ -431,27 +458,27 @@ void neorv32_rte_print_hw_config(void) {
   neorv32_uart_printf("TRNG  - ");
   __neorv32_rte_print_true_false(tmp & (1 << SYSINFO_FEATURES_IO_TRNG));
 
-  neorv32_uart_printf("CFU0  - ");
-  __neorv32_rte_print_true_false(tmp & (1 << SYSINFO_FEATURES_IO_CFU0));
+  neorv32_uart_printf("CFS   - ");
+  __neorv32_rte_print_true_false(tmp & (1 << SYSINFO_FEATURES_IO_CFS));
 
-  neorv32_uart_printf("CFU1  - ");
-  __neorv32_rte_print_true_false(tmp & (1 << SYSINFO_FEATURES_IO_CFU1));
+  neorv32_uart_printf("NCO   - ");
+  __neorv32_rte_print_true_false(tmp & (1 << SYSINFO_FEATURES_IO_NCO));
 }
 
 
 /**********************************************************************//**
- * NEORV32 runtime environment: Private function to print true or false.
+ * NEORV32 runtime environment: Private function to print yes or no.
  * @note This function is used by neorv32_rte_print_hw_config(void) only.
  *
- * @param[in] state Print TRUE when !=0, print FALSE when 0
+ * @param[in] state Print 'yes' when !=0, print '0' when 0
  **************************************************************************/
 static void __neorv32_rte_print_true_false(int state) {
 
   if (state) {
-    neorv32_uart_print("True\n");
+    neorv32_uart_print("yes\n");
   }
   else {
-    neorv32_uart_print("False\n");
+    neorv32_uart_print("no\n");
   }
 }
 
@@ -474,7 +501,6 @@ void __neorv32_rte_print_hex_word(uint32_t num) {
     neorv32_uart_putc(hex_symbols[index]);
   }
 }
-
 
 
 /**********************************************************************//**
@@ -547,12 +573,13 @@ void neorv32_rte_print_logo(void) {
     for (v=0; v<4; v++) {
       tmp = logo_data_c[u][v];
       for (w=0; w<32; w++){
-        if (tmp & (1 << (31-w))) {
+        if (tmp & 0x80000000UL) { // check MSB
           neorv32_uart_putc('#');
         }
         else {
           neorv32_uart_putc(' ');
         }
+        tmp <<= 1;
       }
     }
   }
