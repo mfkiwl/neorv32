@@ -88,15 +88,18 @@ entity neorv32_top_stdlogic is
     IO_WDT_EN                    : boolean := true;   -- implement watch dog timer (WDT)?
     IO_TRNG_EN                   : boolean := false;  -- implement true random number generator (TRNG)?
     IO_CFS_EN                    : boolean := false;  -- implement custom functions subsystem (CFS)?
-    IO_CFS_CONFIG                : std_ulogic_vector(31 downto 0) := x"00000000"; -- custom CFS configuration generic
-    IO_NCO_EN                    : boolean := true    -- implement numerically-controlled oscillator (NCO)?
+    IO_CFS_CONFIG                : std_ulogic_vector(31 downto 0); -- custom CFS configuration generic
+    IO_CFS_IN_SIZE               : positive := 32;    -- size of CFS input conduit in bits
+    IO_CFS_OUT_SIZE              : positive := 32;    -- size of CFS output conduit in bits
+    IO_NCO_EN                    : boolean := true;   -- implement numerically-controlled oscillator (NCO)?
+    IO_NEOLED_EN                 : boolean := true    -- implement NeoPixel-compatible smart LED interface (NEOLED)?
   );
   port (
     -- Global control --
     clk_i       : in  std_logic := '0'; -- global clock, rising edge
     rstn_i      : in  std_logic := '0'; -- global reset, low-active, async
     -- Wishbone bus interface (available if MEM_EXT_EN = true) --
-    wb_tag_o    : out std_logic_vector(2 downto 0); -- tag
+    wb_tag_o    : out std_logic_vector(03 downto 0); -- tag
     wb_adr_o    : out std_logic_vector(31 downto 0); -- address
     wb_dat_i    : in  std_logic_vector(31 downto 0) := (others => '0'); -- read data
     wb_dat_o    : out std_logic_vector(31 downto 0); -- write data
@@ -104,7 +107,7 @@ entity neorv32_top_stdlogic is
     wb_sel_o    : out std_logic_vector(03 downto 0); -- byte enable
     wb_stb_o    : out std_logic; -- strobe
     wb_cyc_o    : out std_logic; -- valid cycle
-    wb_lock_o   : out std_logic; -- locked/exclusive bus access
+    wb_tag_i    : in  std_logic; -- response tag
     wb_ack_i    : in  std_logic := '0'; -- transfer acknowledge
     wb_err_i    : in  std_logic := '0'; -- transfer error
     -- Advanced memory control signals (available if MEM_EXT_EN = true) --
@@ -134,10 +137,12 @@ entity neorv32_top_stdlogic is
     -- PWM (available if IO_PWM_EN = true) --
     pwm_o       : out std_logic_vector(03 downto 0); -- pwm channels
     -- Custom Functions Subsystem IO (available if IO_CFS_EN = true) --
-    cfs_in_i    : in  std_logic_vector(31 downto 0); -- custom inputs
-    cfs_out_o   : out std_logic_vector(31 downto 0); -- custom outputs
+    cfs_in_i    : in  std_logic_vector(IO_CFS_IN_SIZE-1  downto 0); -- custom inputs
+    cfs_out_o   : out std_logic_vector(IO_CFS_OUT_SIZE-1 downto 0); -- custom outputs
     -- NCO output (available if IO_NCO_EN = true) --
     nco_o       : out std_logic_vector(02 downto 0); -- numerically-controlled oscillator channels
+    -- NeoPixel-compatible smart LED interface (available if IO_NEOLED_EN = true) --
+    neoled_o    : out std_logic; -- async serial data line
     -- system time input from external MTIME (available if IO_MTIME_EN = false) --
     mtime_i     : in  std_logic_vector(63 downto 0) := (others => '0'); -- current system time
     -- Interrupts --
@@ -157,7 +162,7 @@ architecture neorv32_top_stdlogic_rtl of neorv32_top_stdlogic is
   signal clk_i_int       : std_ulogic;
   signal rstn_i_int      : std_ulogic;
   --
-  signal wb_tag_o_int    : std_ulogic_vector(2 downto 0);
+  signal wb_tag_o_int    : std_ulogic_vector(03 downto 0);
   signal wb_adr_o_int    : std_ulogic_vector(31 downto 0);
   signal wb_dat_i_int    : std_ulogic_vector(31 downto 0);
   signal wb_dat_o_int    : std_ulogic_vector(31 downto 0);
@@ -165,7 +170,7 @@ architecture neorv32_top_stdlogic_rtl of neorv32_top_stdlogic is
   signal wb_sel_o_int    : std_ulogic_vector(03 downto 0);
   signal wb_stb_o_int    : std_ulogic;
   signal wb_cyc_o_int    : std_ulogic;
-  signal wb_lock_o_int   : std_ulogic;
+  signal wb_tag_i_int    : std_ulogic;
   signal wb_ack_i_int    : std_ulogic;
   signal wb_err_i_int    : std_ulogic;
   --
@@ -192,10 +197,12 @@ architecture neorv32_top_stdlogic_rtl of neorv32_top_stdlogic is
   --
   signal pwm_o_int       : std_ulogic_vector(03 downto 0);
   --
-  signal cfs_in_i_int    : std_ulogic_vector(31 downto 0);
-  signal cfs_out_o_int   : std_ulogic_vector(31 downto 0);
+  signal cfs_in_i_int    : std_ulogic_vector(IO_CFS_IN_SIZE-1  downto 0);
+  signal cfs_out_o_int   : std_ulogic_vector(IO_CFS_OUT_SIZE-1 downto 0);
   --
   signal nco_o_int       : std_ulogic_vector(02 downto 0);
+  --
+  signal neoled_o_int    : std_ulogic;
   --
   signal mtime_i_int     : std_ulogic_vector(63 downto 0);
   --
@@ -258,7 +265,10 @@ begin
     IO_TRNG_EN                   => IO_TRNG_EN,         -- implement true random number generator (TRNG)?
     IO_CFS_EN                    => IO_CFS_EN,          -- implement custom functions subsystem (CFS)?
     IO_CFS_CONFIG                => IO_CFS_CONFIG_INT,  -- custom CFS configuration generic
-    IO_NCO_EN                    => IO_NCO_EN           -- implement numerically-controlled oscillator (NCO)?
+    IO_CFS_IN_SIZE               => IO_CFS_IN_SIZE,     -- size of CFS input conduit in bits
+    IO_CFS_OUT_SIZE              => IO_CFS_OUT_SIZE,    -- size of CFS output conduit in bits
+    IO_NCO_EN                    => IO_NCO_EN,          -- implement numerically-controlled oscillator (NCO)?
+    IO_NEOLED_EN                 => IO_NEOLED_EN        -- implement NeoPixel-compatible smart LED interface (NEOLED)?
   )
   port map (
     -- Global control --
@@ -273,7 +283,7 @@ begin
     wb_sel_o    => wb_sel_o_int,    -- byte enable
     wb_stb_o    => wb_stb_o_int,    -- strobe
     wb_cyc_o    => wb_cyc_o_int,    -- valid cycle
-    wb_lock_o   => wb_lock_o_int,   -- locked/exclusive bus access
+    wb_tag_i    => wb_tag_i_int,    -- response tag
     wb_ack_i    => wb_ack_i_int,    -- transfer acknowledge
     wb_err_i    => wb_err_i_int,    -- transfer error
     -- Advanced memory control signals (available if MEM_EXT_EN = true) --
@@ -307,6 +317,8 @@ begin
     cfs_out_o   => cfs_out_o_int,   -- custom outputs
     -- NCO output (available if IO_NCO_EN = true) --
     nco_o       => nco_o_int,       -- numerically-controlled oscillator channels
+    -- NeoPixel-compatible smart LED interface (available if IO_NEOLED_EN = true) --
+    neoled_o    =>neoled_o_int,     -- async serial data line
     -- system time input from external MTIME (available if IO_MTIME_EN = false) --
     mtime_i     => mtime_i_int,     -- current system time
     -- Interrupts --
@@ -328,7 +340,6 @@ begin
   wb_sel_o        <= std_logic_vector(wb_sel_o_int);
   wb_stb_o        <= std_logic(wb_stb_o_int);
   wb_cyc_o        <= std_logic(wb_cyc_o_int);
-  wb_lock_o       <= std_logic(wb_lock_o_int);
   wb_ack_i_int    <= std_ulogic(wb_ack_i);
   wb_err_i_int    <= std_ulogic(wb_err_i);
 
@@ -354,6 +365,8 @@ begin
   cfs_out_o       <= std_logic_vector(cfs_out_o_int);
 
   nco_o           <= std_logic_vector(nco_o_int);
+
+  neoled_o        <= std_logic(neoled_o_int);
 
   mtime_i_int     <= std_ulogic_vector(mtime_i);
 

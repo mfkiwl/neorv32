@@ -3,7 +3,7 @@
 /* # ********************************************************************************************* # */
 /* # BSD 3-Clause License                                                                          # */
 /* #                                                                                               # */
-/* # Copyright (c) 2020, Stephan Nolting. All rights reserved.                                     # */
+/* # Copyright (c) 2021, Stephan Nolting. All rights reserved.                                     # */
 /* #                                                                                               # */
 /* # Redistribution and use in source and binary forms, with or without modification, are          # */
 /* # permitted provided that the following conditions are met:                                     # */
@@ -47,7 +47,7 @@ _start:
 .cfi_undefined ra
 
 // *********************************************************
-// Clear register file (lower half, assume E extension)
+// Clear integer register file (lower half, assume E extension)
 // *********************************************************
 __crt0_reg_file_clear:
 //addi  x0, x0, 0 // hardwired to zero
@@ -69,10 +69,18 @@ __crt0_reg_file_clear:
 
 
 // *********************************************************
-// Clear register file (upper half, if no E extension)
+// Initialize dummy trap handler base address
+// *********************************************************
+__crt0_neorv32_trap_init:
+  la    x11, __crt0_dummy_trap_handler
+  csrw  mtvec, x11 // set address of first-level exception handler
+
+
+// *********************************************************
+// Clear integer register file (upper half, if no E extension)
 // *********************************************************
 #ifndef __riscv_32e
-// save some program space if compiling bootloader
+// DO NOT DO THIS if compiling bootloader (to save some program space)
 #ifndef make_bootloader
   addi x16, x0, 0
   addi x17, x0, 0
@@ -114,14 +122,6 @@ __crt0_pointer_init:
   addi  fp, sp, 0          // frame pointer = stack pointer
   la gp, __global_pointer$ // global pointer
 .option pop
-
-
-// *********************************************************
-// Initialize dummy trap handler base address
-// *********************************************************
-__crt0_neorv32_trap_init:
-  la    x11, __crt0_dummy_trap_handler
-  csrw  mtvec, x11 // set address of first-level exception handler
 
 
 // *********************************************************
@@ -247,8 +247,8 @@ __crt0_dummy_trap_handler_exc_uncrompressed:
 
 __crt0_dummy_trap_handler_irq:
 
-  lw    x9, 0(sp)
-  lw    x8, 4(sp)
+  lw    x8, 0(sp)
+  lw    x9, 4(sp)
   addi  sp, sp, +8
 
   mret

@@ -52,15 +52,15 @@ package neorv32_package is
   -- CPU core --
   constant ipb_entries_c : natural := 2; -- entries in CPU instruction prefetch buffer, has to be a power of 2, default=2
 
-  -- "critical" number of PMP regions --
-  -- if more PMP regions (> pmp_num_regions_critical_c) are defined, another register stage is automatically
-  -- inserted into the memory interfaces increasing instruction fetch & data access latency by +1 cycle!
-  constant pmp_num_regions_critical_c : natural := 8;
+  -- "critical" number of implemented PMP regions --
+  -- if more PMP regions (> pmp_num_regions_critical_c) are defined, another register stage is automatically inserted into the memory interfaces
+  -- increasing instruction fetch & data access latency by +1 cycle but also reducing critical path length
+  constant pmp_num_regions_critical_c : natural := 8; -- default=8
 
   -- Architecture Constants (do not modify!) ------------------------------------------------
   -- -------------------------------------------------------------------------------------------
   constant data_width_c   : natural := 32; -- native data path width - do not change!
-  constant hw_version_c   : std_ulogic_vector(31 downto 0) := x"01050111"; -- no touchy!
+  constant hw_version_c   : std_ulogic_vector(31 downto 0) := x"01050208"; -- no touchy!
   constant pmp_max_r_c    : natural := 8; -- max PMP regions - FIXED!
   constant archid_c       : natural := 19; -- official NEORV32 architecture ID - hands off!
   constant rf_r0_is_reg_c : boolean := true; -- reg_file.r0 is a *physical register* that has to be initialized to zero by the CPU HW
@@ -203,9 +203,11 @@ package neorv32_package is
   constant uart1_ctrl_addr_c    : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFFD0";
   constant uart1_rtx_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFFD4";
 
-  -- reserved --
---constant reserved_base_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFFD8"; -- base address
---constant reserved_size_c      : natural := 2*4; -- module's address space in bytes
+  -- Smart LED (WS2811/WS2812) Interface (NEOLED) --
+  constant neoled_base_c        : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFFD8"; -- base address
+  constant neoled_size_c        : natural := 2*4; -- module's address space in bytes
+  constant neoled_ctrl_addr_c   : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFFD8";
+  constant neoled_data_addr_c   : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFFDC";
 
   -- System Information Memory (SYSINFO) --
   constant sysinfo_base_c       : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFFE0"; -- base address
@@ -257,7 +259,7 @@ package neorv32_package is
   constant ctrl_bus_derr_ack_c  : natural := 38; -- acknowledge data access bus exceptions
   constant ctrl_bus_fence_c     : natural := 39; -- executed fence operation
   constant ctrl_bus_fencei_c    : natural := 40; -- executed fencei operation
-  constant ctrl_bus_lock_c      : natural := 41; -- locked/exclusive bus access
+  constant ctrl_bus_excl_c      : natural := 41; -- exclusive bus access
   -- co-processors --
   constant ctrl_cp_id_lsb_c     : natural := 42; -- cp select ID lsb
   constant ctrl_cp_id_hsb_c     : natural := 43; -- cp select ID hsb
@@ -340,8 +342,10 @@ package neorv32_package is
   -- system/csr --
   constant opcode_fence_c  : std_ulogic_vector(6 downto 0) := "0001111"; -- fence / fence.i
   constant opcode_syscsr_c : std_ulogic_vector(6 downto 0) := "1110011"; -- system/csr access (type via funct3)
-  -- atomic operations (A) --
+  -- atomic memory access (A) --
   constant opcode_atomic_c : std_ulogic_vector(6 downto 0) := "0101111"; -- atomic operations (A extension)
+  -- floating point operations (Zfinx-only) (F/D/H/Q) --
+  constant opcode_fop_c    : std_ulogic_vector(6 downto 0) := "1010011"; -- dual/single opearand instruction
 
   -- RISC-V Funct3 --------------------------------------------------------------------------
   -- -------------------------------------------------------------------------------------------
@@ -396,14 +400,56 @@ package neorv32_package is
   constant funct5_a_lr_c : std_ulogic_vector(4 downto 0) := "00010"; -- LR
   constant funct5_a_sc_c : std_ulogic_vector(4 downto 0) := "00011"; -- SC
 
+  -- RISC-V Floating-Point Stuff ------------------------------------------------------------
+  -- -------------------------------------------------------------------------------------------
+  -- formats --
+  constant float_single_c : std_ulogic_vector(1 downto 0) := "00"; -- single-precision (32-bit)
+  constant float_double_c : std_ulogic_vector(1 downto 0) := "01"; -- double-precision (64-bit)
+  constant float_half_c   : std_ulogic_vector(1 downto 0) := "10"; -- half-precision (16-bit)
+  constant float_quad_c   : std_ulogic_vector(1 downto 0) := "11"; -- quad-precision (128-bit)
+
+  -- number class flags --
+  constant fp_class_neg_inf_c    : natural := 0; -- negative infinity
+  constant fp_class_neg_norm_c   : natural := 1; -- negative normal number
+  constant fp_class_neg_denorm_c : natural := 2; -- negative subnormal number
+  constant fp_class_neg_zero_c   : natural := 3; -- negative zero
+  constant fp_class_pos_zero_c   : natural := 4; -- positive zero
+  constant fp_class_pos_denorm_c : natural := 5; -- positive subnormal number
+  constant fp_class_pos_norm_c   : natural := 6; -- positive normal number
+  constant fp_class_pos_inf_c    : natural := 7; -- positive infinity
+  constant fp_class_snan_c       : natural := 8; -- signaling NaN (sNaN)
+  constant fp_class_qnan_c       : natural := 9; -- quiet NaN (qNaN)
+
+  -- exception flags --
+  constant fp_exc_nv_c : natural := 0; -- invalid operation
+  constant fp_exc_dz_c : natural := 1; -- divide by zero
+  constant fp_exc_of_c : natural := 2; -- overflow
+  constant fp_exc_uf_c : natural := 3; -- underflow
+  constant fp_exc_nx_c : natural := 4; -- inexact
+
+  -- special values (single-precision) --
+  constant fp_single_qnan_c     : std_ulogic_vector(31 downto 0) := x"7fc00000"; -- quiet NaN
+  constant fp_single_snan_c     : std_ulogic_vector(31 downto 0) := x"7fa00000"; -- signaling NaN
+  constant fp_single_pos_inf_c  : std_ulogic_vector(31 downto 0) := x"7f800000"; -- positive infinity
+  constant fp_single_neg_inf_c  : std_ulogic_vector(31 downto 0) := x"ff800000"; -- negative infinity
+  constant fp_single_pos_zero_c : std_ulogic_vector(31 downto 0) := x"00000000"; -- positive zero
+  constant fp_single_neg_zero_c : std_ulogic_vector(31 downto 0) := x"80000000"; -- negative zero
+
   -- RISC-V CSR Addresses -------------------------------------------------------------------
   -- -------------------------------------------------------------------------------------------
   -- read/write CSRs --
+  constant csr_class_float_c    : std_ulogic_vector(07 downto 0) := x"00"; -- floating point
+  constant csr_fflags_c         : std_ulogic_vector(11 downto 0) := x"001";
+  constant csr_frm_c            : std_ulogic_vector(11 downto 0) := x"002";
+  constant csr_fcsr_c           : std_ulogic_vector(11 downto 0) := x"003";
+  --
+  constant csr_setup_c          : std_ulogic_vector(07 downto 0) := x"30"; -- trap setup
   constant csr_mstatus_c        : std_ulogic_vector(11 downto 0) := x"300";
   constant csr_misa_c           : std_ulogic_vector(11 downto 0) := x"301";
   constant csr_mie_c            : std_ulogic_vector(11 downto 0) := x"304";
   constant csr_mtvec_c          : std_ulogic_vector(11 downto 0) := x"305";
   constant csr_mcounteren_c     : std_ulogic_vector(11 downto 0) := x"306";
+  --
   constant csr_mstatush_c       : std_ulogic_vector(11 downto 0) := x"310";
   --
   constant csr_mcountinhibit_c  : std_ulogic_vector(11 downto 0) := x"320";
@@ -438,12 +484,14 @@ package neorv32_package is
   constant csr_mhpmevent30_c    : std_ulogic_vector(11 downto 0) := x"33e";
   constant csr_mhpmevent31_c    : std_ulogic_vector(11 downto 0) := x"33f";
   --
+  constant csr_class_trap_c     : std_ulogic_vector(07 downto 0) := x"34"; -- machine trap handling
   constant csr_mscratch_c       : std_ulogic_vector(11 downto 0) := x"340";
   constant csr_mepc_c           : std_ulogic_vector(11 downto 0) := x"341";
   constant csr_mcause_c         : std_ulogic_vector(11 downto 0) := x"342";
   constant csr_mtval_c          : std_ulogic_vector(11 downto 0) := x"343";
   constant csr_mip_c            : std_ulogic_vector(11 downto 0) := x"344";
   --
+  constant csr_class_pmpcfg_c   : std_ulogic_vector(07 downto 0) := x"3a"; -- pmp configuration
   constant csr_pmpcfg0_c        : std_ulogic_vector(11 downto 0) := x"3a0";
   constant csr_pmpcfg1_c        : std_ulogic_vector(11 downto 0) := x"3a1";
   constant csr_pmpcfg2_c        : std_ulogic_vector(11 downto 0) := x"3a2";
@@ -675,10 +723,10 @@ package neorv32_package is
   constant cp_sel_atomic_c   : std_ulogic_vector(2 downto 0) := "001"; -- atomic operations; success/failure evaluation ('A' extension)
   constant cp_sel_bitmanip_c : std_ulogic_vector(2 downto 0) := "010"; -- bit manipulation ('B' extension)
   constant cp_sel_csr_rd_c   : std_ulogic_vector(2 downto 0) := "011"; -- CSR read access ('Zicsr' extension)
---constant cp_reserved_c     : std_ulogic_vector(2 downto 0) := "100"; -- reserved
---constant cp_reserved_c     : std_ulogic_vector(2 downto 0) := "101"; -- reserved
---constant cp_reserved_c     : std_ulogic_vector(2 downto 0) := "110"; -- reserved
---constant cp_reserved_c     : std_ulogic_vector(2 downto 0) := "111"; -- reserved
+  constant cp_sel_fpu_c      : std_ulogic_vector(2 downto 0) := "100"; -- loating-point unit ('Zfinx' extension)
+--constant cp_sel_crypto_c   : std_ulogic_vector(2 downto 0) := "101"; -- crypto operations ('K' extension)
+--constant cp_sel_reserved_c : std_ulogic_vector(2 downto 0) := "110"; -- reserved
+--constant cp_sel_reserved_c : std_ulogic_vector(2 downto 0) := "111"; -- reserved
 
   -- ALU Function Codes ---------------------------------------------------------------------
   -- -------------------------------------------------------------------------------------------
@@ -857,15 +905,18 @@ package neorv32_package is
       IO_WDT_EN                    : boolean := true;   -- implement watch dog timer (WDT)?
       IO_TRNG_EN                   : boolean := false;  -- implement true random number generator (TRNG)?
       IO_CFS_EN                    : boolean := false;  -- implement custom functions subsystem (CFS)?
-      IO_CFS_CONFIG                : std_ulogic_vector(31 downto 0) := x"00000000"; -- custom CFS configuration generic
-      IO_NCO_EN                    : boolean := true    -- implement numerically-controlled oscillator (NCO)?
+      IO_CFS_CONFIG                : std_ulogic_vector(31 downto 0); -- custom CFS configuration generic
+      IO_CFS_IN_SIZE               : positive := 32;    -- size of CFS input conduit in bits
+      IO_CFS_OUT_SIZE              : positive := 32;    -- size of CFS output conduit in bits
+      IO_NCO_EN                    : boolean := true;   -- implement numerically-controlled oscillator (NCO)?
+      IO_NEOLED_EN                 : boolean := true    -- implement NeoPixel-compatible smart LED interface (NEOLED)?
     );
     port (
       -- Global control --
       clk_i       : in  std_ulogic := '0'; -- global clock, rising edge
       rstn_i      : in  std_ulogic := '0'; -- global reset, low-active, async
       -- Wishbone bus interface (available if MEM_EXT_EN = true) --
-      wb_tag_o    : out std_ulogic_vector(02 downto 0); -- tag
+      wb_tag_o    : out std_ulogic_vector(03 downto 0); -- request tag
       wb_adr_o    : out std_ulogic_vector(31 downto 0); -- address
       wb_dat_i    : in  std_ulogic_vector(31 downto 0) := (others => '0'); -- read data
       wb_dat_o    : out std_ulogic_vector(31 downto 0); -- write data
@@ -873,7 +924,7 @@ package neorv32_package is
       wb_sel_o    : out std_ulogic_vector(03 downto 0); -- byte enable
       wb_stb_o    : out std_ulogic; -- strobe
       wb_cyc_o    : out std_ulogic; -- valid cycle
-      wb_lock_o   : out std_ulogic; -- locked/exclusive bus access
+      wb_tag_i    : in  std_ulogic; -- response tag
       wb_ack_i    : in  std_ulogic := '0'; -- transfer acknowledge
       wb_err_i    : in  std_ulogic := '0'; -- transfer error
       -- Advanced memory control signals (available if MEM_EXT_EN = true) --
@@ -903,10 +954,12 @@ package neorv32_package is
       -- PWM (available if IO_PWM_EN = true) --
       pwm_o       : out std_ulogic_vector(03 downto 0); -- pwm channels
       -- Custom Functions Subsystem IO --
-      cfs_in_i    : in  std_ulogic_vector(31 downto 0) := (others => '0'); -- custom CSF inputs
-      cfs_out_o   : out std_ulogic_vector(31 downto 0); -- custom CSF outputs
+      cfs_in_i    : in  std_ulogic_vector(IO_CFS_IN_SIZE-1  downto 0); -- custom CFS inputs conduit
+      cfs_out_o   : out std_ulogic_vector(IO_CFS_OUT_SIZE-1 downto 0); -- custom CFS outputs conduit
       -- NCO output (available if IO_NCO_EN = true) --
       nco_o       : out std_ulogic_vector(02 downto 0); -- numerically-controlled oscillator channels
+      -- NeoPixel-compatible smart LED interface (available if IO_NEOLED_EN = true) --
+      neoled_o    : out std_ulogic; -- async serial data line
       -- system time input from external MTIME (available if IO_MTIME_EN = false) --
       mtime_i     : in  std_ulogic_vector(63 downto 0) := (others => '0'); -- current system time
       -- Interrupts --
@@ -932,13 +985,14 @@ package neorv32_package is
       CPU_EXTENSION_RISCV_E        : boolean := false; -- implement embedded RF extension?
       CPU_EXTENSION_RISCV_M        : boolean := false; -- implement muld/div extension?
       CPU_EXTENSION_RISCV_U        : boolean := false; -- implement user mode extension?
+      CPU_EXTENSION_RISCV_Zfinx    : boolean := false; -- implement 32-bit floating-point extension (using INT reg!)
       CPU_EXTENSION_RISCV_Zicsr    : boolean := true;  -- implement CSR system?
       CPU_EXTENSION_RISCV_Zifencei : boolean := false; -- implement instruction stream sync.?
       -- Extension Options --
       FAST_MUL_EN                  : boolean := false; -- use DSPs for M extension's multiplier
       FAST_SHIFT_EN                : boolean := false; -- use barrel shifter for shift operations
       -- Physical Memory Protection (PMP) --
-      PMP_NUM_REGIONS              : natural := 0; -- number of regions (0..64)
+      PMP_NUM_REGIONS              : natural := 0;     -- number of regions (0..64)
       PMP_MIN_GRANULARITY          : natural := 64*1024; -- minimal region granularity in bytes, has to be a power of 2, min 8 bytes
       -- Hardware Performance Monitors (HPM) --
       HPM_NUM_CNTS                 : natural := 0      -- number of implemented HPM counters (0..29)
@@ -955,12 +1009,11 @@ package neorv32_package is
       i_bus_ben_o    : out std_ulogic_vector(03 downto 0); -- byte enable
       i_bus_we_o     : out std_ulogic; -- write enable
       i_bus_re_o     : out std_ulogic; -- read enable
-      i_bus_cancel_o : out std_ulogic; -- cancel current bus transaction
+      i_bus_cancel_o : out std_ulogic := '0'; -- cancel current bus transaction
       i_bus_ack_i    : in  std_ulogic := '0'; -- bus transfer acknowledge
       i_bus_err_i    : in  std_ulogic := '0'; -- bus transfer error
       i_bus_fence_o  : out std_ulogic; -- executed FENCEI operation
       i_bus_priv_o   : out std_ulogic_vector(1 downto 0); -- privilege level
-      i_bus_lock_o   : out std_ulogic; -- locked/exclusive access
       -- data bus interface --
       d_bus_addr_o   : out std_ulogic_vector(data_width_c-1 downto 0); -- bus access address
       d_bus_rdata_i  : in  std_ulogic_vector(data_width_c-1 downto 0) := (others => '0'); -- bus read data
@@ -973,7 +1026,8 @@ package neorv32_package is
       d_bus_err_i    : in  std_ulogic := '0'; -- bus transfer error
       d_bus_fence_o  : out std_ulogic; -- executed FENCE operation
       d_bus_priv_o   : out std_ulogic_vector(1 downto 0); -- privilege level
-      d_bus_lock_o   : out std_ulogic; -- locked/exclusive access
+      d_bus_excl_o   : out std_ulogic; -- exclusive access
+      d_bus_excl_i   : in  std_ulogic; -- state of exclusiv access (set if success)
       -- system time input from MTIME --
       time_i         : in  std_ulogic_vector(63 downto 0) := (others => '0'); -- current system time
       -- interrupts (risc-v compliant) --
@@ -1000,10 +1054,11 @@ package neorv32_package is
       CPU_EXTENSION_RISCV_E        : boolean := false; -- implement embedded RF extension?
       CPU_EXTENSION_RISCV_M        : boolean := false; -- implement muld/div extension?
       CPU_EXTENSION_RISCV_U        : boolean := false; -- implement user mode extension?
+      CPU_EXTENSION_RISCV_Zfinx    : boolean := false; -- implement 32-bit floating-point extension (using INT reg!)
       CPU_EXTENSION_RISCV_Zicsr    : boolean := true;  -- implement CSR system?
       CPU_EXTENSION_RISCV_Zifencei : boolean := false; -- implement instruction stream sync.?
       -- Physical memory protection (PMP) --
-      PMP_NUM_REGIONS              : natural := 0; -- number of regions (0..64)
+      PMP_NUM_REGIONS              : natural := 0;     -- number of regions (0..64)
       PMP_MIN_GRANULARITY          : natural := 64*1024; -- minimal region granularity in bytes, has to be a power of 2, min 8 bytes
       -- Hardware Performance Monitors (HPM) --
       HPM_NUM_CNTS                 : natural := 0      -- number of implemented HPM counters (0..29)
@@ -1021,12 +1076,15 @@ package neorv32_package is
       instr_i       : in  std_ulogic_vector(data_width_c-1 downto 0); -- instruction
       cmp_i         : in  std_ulogic_vector(1 downto 0); -- comparator status
       alu_add_i     : in  std_ulogic_vector(data_width_c-1 downto 0); -- ALU address result
-      rs1_i       : in  std_ulogic_vector(data_width_c-1 downto 0); -- rf source 1
+      rs1_i         : in  std_ulogic_vector(data_width_c-1 downto 0); -- rf source 1
       -- data output --
       imm_o         : out std_ulogic_vector(data_width_c-1 downto 0); -- immediate
       fetch_pc_o    : out std_ulogic_vector(data_width_c-1 downto 0); -- PC for instruction fetch
       curr_pc_o     : out std_ulogic_vector(data_width_c-1 downto 0); -- current PC (corresponding to current instruction)
       csr_rdata_o   : out std_ulogic_vector(data_width_c-1 downto 0); -- CSR read data
+      -- FPU interface --
+      fpu_rm_o      : out std_ulogic_vector(02 downto 0); -- rounding mode
+      fpu_flags_i   : in  std_ulogic_vector(04 downto 0); -- exception flags
       -- interrupts (risc-v compliant) --
       msw_irq_i     : in  std_ulogic; -- machine software interrupt
       mext_irq_i    : in  std_ulogic; -- machine external interrupt
@@ -1139,10 +1197,31 @@ package neorv32_package is
     );
   end component;
 
+  -- Component: CPU Co-Processor 32-bit FPU ('Zfinx' extension) -----------------------------
+  -- -------------------------------------------------------------------------------------------
+  component neorv32_cpu_cp_fpu
+    port (
+      -- global control --
+      clk_i    : in  std_ulogic; -- global clock, rising edge
+      rstn_i   : in  std_ulogic; -- global reset, low-active, async
+      ctrl_i   : in  std_ulogic_vector(ctrl_width_c-1 downto 0); -- main control bus
+      start_i  : in  std_ulogic; -- trigger operation
+      -- data input --
+      frm_i    : in  std_ulogic_vector(2 downto 0); -- rounding mode
+      rs1_i    : in  std_ulogic_vector(data_width_c-1 downto 0); -- rf source 1
+      rs2_i    : in  std_ulogic_vector(data_width_c-1 downto 0); -- rf source 2
+      -- result and status --
+      res_o    : out std_ulogic_vector(data_width_c-1 downto 0); -- operation result
+      fflags_o : out std_ulogic_vector(4 downto 0); -- exception flags
+      valid_o  : out std_ulogic -- data output valid
+    );
+  end component;
+
   -- Component: CPU Bus Interface -----------------------------------------------------------
   -- -------------------------------------------------------------------------------------------
   component neorv32_cpu_bus
     generic (
+      CPU_EXTENSION_RISCV_A : boolean := false; -- implement atomic extension?
       CPU_EXTENSION_RISCV_C : boolean := true;  -- implement compressed extension?
       -- Physical memory protection (PMP) --
       PMP_NUM_REGIONS       : natural := 0;       -- number of regions (0..64)
@@ -1169,6 +1248,7 @@ package neorv32_package is
       mar_o          : out std_ulogic_vector(data_width_c-1 downto 0); -- current memory address register
       d_wait_o       : out std_ulogic; -- wait for access to complete
       --
+      bus_excl_ok_o  : out std_ulogic; -- bus exclusive access successful
       ma_load_o      : out std_ulogic; -- misaligned load data address
       ma_store_o     : out std_ulogic; -- misaligned store data address
       be_load_o      : out std_ulogic; -- bus error on load data access
@@ -1187,7 +1267,6 @@ package neorv32_package is
       i_bus_ack_i    : in  std_ulogic; -- bus transfer acknowledge
       i_bus_err_i    : in  std_ulogic; -- bus transfer error
       i_bus_fence_o  : out std_ulogic; -- fence operation
-      i_bus_lock_o   : out std_ulogic; -- locked/exclusive access
       -- data bus --
       d_bus_addr_o   : out std_ulogic_vector(data_width_c-1 downto 0); -- bus access address
       d_bus_rdata_i  : in  std_ulogic_vector(data_width_c-1 downto 0); -- bus read data
@@ -1199,7 +1278,8 @@ package neorv32_package is
       d_bus_ack_i    : in  std_ulogic; -- bus transfer acknowledge
       d_bus_err_i    : in  std_ulogic; -- bus transfer error
       d_bus_fence_o  : out std_ulogic; -- fence operation
-      d_bus_lock_o   : out std_ulogic  -- locked/exclusive access
+      d_bus_excl_o   : out std_ulogic; -- exclusive access request
+      d_bus_excl_i   : in  std_ulogic  -- state of exclusiv access (set if success)
     );
   end component;
 
@@ -1224,7 +1304,6 @@ package neorv32_package is
       host_we_i     : in  std_ulogic; -- write enable
       host_re_i     : in  std_ulogic; -- read enable
       host_cancel_i : in  std_ulogic; -- cancel current bus transaction
-      host_lock_i   : in  std_ulogic; -- locked/exclusive access
       host_ack_o    : out std_ulogic; -- bus transfer acknowledge
       host_err_o    : out std_ulogic; -- bus transfer error
       -- peripheral bus interface --
@@ -1235,7 +1314,6 @@ package neorv32_package is
       bus_we_o      : out std_ulogic; -- write enable
       bus_re_o      : out std_ulogic; -- read enable
       bus_cancel_o  : out std_ulogic; -- cancel current bus transaction
-      bus_lock_o    : out std_ulogic; -- locked/exclusive access
       bus_ack_i     : in  std_ulogic; -- bus transfer acknowledge
       bus_err_i     : in  std_ulogic  -- bus transfer error
     );
@@ -1260,7 +1338,7 @@ package neorv32_package is
       ca_bus_we_i     : in  std_ulogic; -- write enable
       ca_bus_re_i     : in  std_ulogic; -- read enable
       ca_bus_cancel_i : in  std_ulogic; -- cancel current bus transaction
-      ca_bus_lock_i   : in  std_ulogic; -- locked/exclusive access
+      ca_bus_excl_i   : in  std_ulogic; -- exclusive access
       ca_bus_ack_o    : out std_ulogic; -- bus transfer acknowledge
       ca_bus_err_o    : out std_ulogic; -- bus transfer error
       -- controller interface b --
@@ -1271,7 +1349,7 @@ package neorv32_package is
       cb_bus_we_i     : in  std_ulogic; -- write enable
       cb_bus_re_i     : in  std_ulogic; -- read enable
       cb_bus_cancel_i : in  std_ulogic; -- cancel current bus transaction
-      cb_bus_lock_i   : in  std_ulogic; -- locked/exclusive access
+      cb_bus_excl_i   : in  std_ulogic; -- exclusive access
       cb_bus_ack_o    : out std_ulogic; -- bus transfer acknowledge
       cb_bus_err_o    : out std_ulogic; -- bus transfer error
       -- peripheral bus --
@@ -1283,7 +1361,7 @@ package neorv32_package is
       p_bus_we_o      : out std_ulogic; -- write enable
       p_bus_re_o      : out std_ulogic; -- read enable
       p_bus_cancel_o  : out std_ulogic; -- cancel current bus transaction
-      p_bus_lock_o    : out std_ulogic; -- locked/exclusive access
+      p_bus_excl_o    : out std_ulogic; -- exclusive access
       p_bus_ack_i     : in  std_ulogic; -- bus transfer acknowledge
       p_bus_err_i     : in  std_ulogic  -- bus transfer error
     );
@@ -1546,33 +1624,34 @@ package neorv32_package is
     );
     port (
       -- global control --
-      clk_i     : in  std_ulogic; -- global clock line
-      rstn_i    : in  std_ulogic; -- global reset line, low-active
+      clk_i    : in  std_ulogic; -- global clock line
+      rstn_i   : in  std_ulogic; -- global reset line, low-active
       -- host access --
-      src_i     : in  std_ulogic; -- access type (0: data, 1:instruction)
-      addr_i    : in  std_ulogic_vector(31 downto 0); -- address
-      rden_i    : in  std_ulogic; -- read enable
-      wren_i    : in  std_ulogic; -- write enable
-      ben_i     : in  std_ulogic_vector(03 downto 0); -- byte write enable
-      data_i    : in  std_ulogic_vector(31 downto 0); -- data in
-      data_o    : out std_ulogic_vector(31 downto 0); -- data out
-      cancel_i  : in  std_ulogic; -- cancel current bus transaction
-      lock_i    : in  std_ulogic; -- locked/exclusive bus access
-      ack_o     : out std_ulogic; -- transfer acknowledge
-      err_o     : out std_ulogic; -- transfer error
-      priv_i    : in  std_ulogic_vector(1 downto 0); -- current CPU privilege level
+      src_i    : in  std_ulogic; -- access type (0: data, 1:instruction)
+      addr_i   : in  std_ulogic_vector(31 downto 0); -- address
+      rden_i   : in  std_ulogic; -- read enable
+      wren_i   : in  std_ulogic; -- write enable
+      ben_i    : in  std_ulogic_vector(03 downto 0); -- byte write enable
+      data_i   : in  std_ulogic_vector(31 downto 0); -- data in
+      data_o   : out std_ulogic_vector(31 downto 0); -- data out
+      cancel_i : in  std_ulogic; -- cancel current bus transaction
+      excl_i   : in  std_ulogic; -- exclusive access request
+      excl_o   : out std_ulogic; -- state of exclusiv access (set if success)
+      ack_o    : out std_ulogic; -- transfer acknowledge
+      err_o    : out std_ulogic; -- transfer error
+      priv_i   : in  std_ulogic_vector(01 downto 0); -- current CPU privilege level
       -- wishbone interface --
-      wb_tag_o  : out std_ulogic_vector(2 downto 0); -- tag
-      wb_adr_o  : out std_ulogic_vector(31 downto 0); -- address
-      wb_dat_i  : in  std_ulogic_vector(31 downto 0); -- read data
-      wb_dat_o  : out std_ulogic_vector(31 downto 0); -- write data
-      wb_we_o   : out std_ulogic; -- read/write
-      wb_sel_o  : out std_ulogic_vector(03 downto 0); -- byte enable
-      wb_stb_o  : out std_ulogic; -- strobe
-      wb_cyc_o  : out std_ulogic; -- valid cycle
-      wb_lock_o : out std_ulogic; -- locked/exclusive bus access
-      wb_ack_i  : in  std_ulogic; -- transfer acknowledge
-      wb_err_i  : in  std_ulogic  -- transfer error
+      wb_tag_o : out std_ulogic_vector(03 downto 0); -- request tag
+      wb_adr_o : out std_ulogic_vector(31 downto 0); -- address
+      wb_dat_i : in  std_ulogic_vector(31 downto 0); -- read data
+      wb_dat_o : out std_ulogic_vector(31 downto 0); -- write data
+      wb_we_o  : out std_ulogic; -- read/write
+      wb_sel_o : out std_ulogic_vector(03 downto 0); -- byte enable
+      wb_stb_o : out std_ulogic; -- strobe
+      wb_cyc_o : out std_ulogic; -- valid cycle
+      wb_tag_i : in  std_ulogic; -- response tag
+      wb_ack_i : in  std_ulogic; -- transfer acknowledge
+      wb_err_i : in  std_ulogic  -- transfer error
     );
   end component;
 
@@ -1580,7 +1659,9 @@ package neorv32_package is
   -- -------------------------------------------------------------------------------------------
   component neorv32_cfs
     generic (
-      CFS_CONFIG : std_ulogic_vector(31 downto 0) := x"00000000" -- custom CFS configuration generic
+      CFS_CONFIG   : std_ulogic_vector(31 downto 0); -- custom CFS configuration generic
+      CFS_IN_SIZE  : positive := 32;  -- size of CFS input conduit in bits
+      CFS_OUT_SIZE : positive := 32   -- size of CFS output conduit in bits
     );
     port (
       -- host access --
@@ -1601,8 +1682,8 @@ package neorv32_package is
       irq_o       : out std_ulogic; -- interrupt request
       irq_ack_i   : in  std_ulogic; -- interrupt acknowledge
       -- custom io (conduit) --
-      cfs_in_i    : in  std_ulogic_vector(31 downto 0); -- custom inputs
-      cfs_out_o   : out std_ulogic_vector(31 downto 0)  -- custom outputs
+      cfs_in_i    : in  std_ulogic_vector(CFS_IN_SIZE-1 downto 0);  -- custom inputs
+      cfs_out_o   : out std_ulogic_vector(CFS_OUT_SIZE-1 downto 0)  -- custom outputs
     );
   end component;
 
@@ -1623,6 +1704,28 @@ package neorv32_package is
       clkgen_i    : in  std_ulogic_vector(07 downto 0);
       -- NCO output --
       nco_o       : out std_ulogic_vector(02 downto 0)
+    );
+  end component;
+
+  -- Component: Smart LED (WS2811/WS2812) Interface (NEOLED) --------------------------------
+  -- -------------------------------------------------------------------------------------------
+  component neorv32_neoled
+    port (
+      -- host access --
+      clk_i       : in  std_ulogic; -- global clock line
+      addr_i      : in  std_ulogic_vector(31 downto 0); -- address
+      rden_i      : in  std_ulogic; -- read enable
+      wren_i      : in  std_ulogic; -- write enable
+      data_i      : in  std_ulogic_vector(31 downto 0); -- data in
+      data_o      : out std_ulogic_vector(31 downto 0); -- data out
+      ack_o       : out std_ulogic; -- transfer acknowledge
+      -- clock generator --
+      clkgen_en_o : out std_ulogic; -- enable clock generator
+      clkgen_i    : in  std_ulogic_vector(07 downto 0);
+      -- interrupt --
+      irq_o       : out std_ulogic; -- interrupt request
+      -- NEOLED output --
+      neoled_o    : out std_ulogic -- serial async data line
     );
   end component;
 
@@ -1659,7 +1762,8 @@ package neorv32_package is
       IO_WDT_EN            : boolean := true;   -- implement watch dog timer (WDT)?
       IO_TRNG_EN           : boolean := true;   -- implement true random number generator (TRNG)?
       IO_CFS_EN            : boolean := true;   -- implement custom functions subsystem (CFS)?
-      IO_NCO_EN            : boolean := true    -- implement numerically-controlled oscillator (NCO)?
+      IO_NCO_EN            : boolean := true;   -- implement numerically-controlled oscillator (NCO)?
+      IO_NEOLED_EN         : boolean := true    -- implement NeoPixel-compatible smart LED interface (NEOLED)?
     );
     port (
       -- host access --

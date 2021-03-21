@@ -436,31 +436,31 @@ int main() {
     neorv32_uart_printf("skipped (on real HW)\n");
   }
 
-/*
-  // ----------------------------------------------------------
-  // Test FENCE.I instruction (instruction buffer / i-cache clear & reload)
-  // ----------------------------------------------------------
-  neorv32_cpu_csr_write(CSR_MCAUSE, 0);
-  neorv32_uart_printf("[%i] FENCE.I test: ", cnt_test);
 
-  // check if implemented
-  if (neorv32_cpu_csr_read(CSR_MZEXT) & (1 << CSR_MZEXT_ZIFENCEI)) {
-    cnt_test++;
+//// ----------------------------------------------------------
+//// Test FENCE.I instruction (instruction buffer / i-cache clear & reload)
+//// ----------------------------------------------------------
+//neorv32_cpu_csr_write(CSR_MCAUSE, 0);
+//neorv32_uart_printf("[%i] FENCE.I test: ", cnt_test);
+//
+//// check if implemented
+//if (neorv32_cpu_csr_read(CSR_MZEXT) & (1 << CSR_MZEXT_ZIFENCEI)) {
+//  cnt_test++;
+//
+//  asm volatile ("fence.i");
+//
+//  // make sure there was no exception (and that the cpu did not crash...)
+//  if (neorv32_cpu_csr_read(CSR_MCAUSE) == 0) {
+//    test_ok();
+//  }
+//  else {
+//    test_fail();
+//  }
+//}
+//else {
+//  neorv32_uart_printf("skipped (not implemented)\n");
+//}
 
-    asm volatile ("fence.i");
-
-    // make sure there was no exception (and that the cpu did not crash...)
-    if (neorv32_cpu_csr_read(CSR_MCAUSE) == 0) {
-      test_ok();
-    }
-    else {
-      test_fail();
-    }
-  }
-  else {
-    neorv32_uart_printf("skipped (not implemented)\n");
-  }
-*/
 
   // ----------------------------------------------------------
   // Illegal CSR access (CSR not implemented)
@@ -608,7 +608,7 @@ int main() {
   // Unaligned instruction address
   // ----------------------------------------------------------
   neorv32_cpu_csr_write(CSR_MCAUSE, 0);
-  neorv32_uart_printf("[%i] I_ALIGN (instr. alignment) exception test: ", cnt_test);
+  neorv32_uart_printf("[%i] I_ALIGN (instr. alignment) EXC test: ", cnt_test);
 
   // skip if C-mode is implemented
   if ((neorv32_cpu_csr_read(CSR_MISA) & (1<<CSR_MISA_C_EXT)) == 0) {
@@ -636,7 +636,7 @@ int main() {
   // Instruction access fault
   // ----------------------------------------------------------
   neorv32_cpu_csr_write(CSR_MCAUSE, 0);
-  neorv32_uart_printf("[%i] I_ACC (instr. bus access) exception test: ", cnt_test);
+  neorv32_uart_printf("[%i] I_ACC (instr. bus access) EXC test: ", cnt_test);
   cnt_test++;
 
   // call unreachable aligned address
@@ -654,7 +654,7 @@ int main() {
   // Illegal instruction
   // ----------------------------------------------------------
   neorv32_cpu_csr_write(CSR_MCAUSE, 0);
-  neorv32_uart_printf("[%i] I_ILLEG (illegal instr.) exception test: ", cnt_test);
+  neorv32_uart_printf("[%i] I_ILLEG (illegal instr.) EXC test: ", cnt_test);
 
   cnt_test++;
 
@@ -680,7 +680,7 @@ int main() {
   // Illegal compressed instruction
   // ----------------------------------------------------------
   neorv32_cpu_csr_write(CSR_MCAUSE, 0);
-  neorv32_uart_printf("[%i] CI_ILLEG (illegal compr. instr.) exception test: ", cnt_test);
+  neorv32_uart_printf("[%i] CI_ILLEG (illegal compr. instr.) EXC test: ", cnt_test);
 
   // skip if C-mode is not implemented
   if ((neorv32_cpu_csr_read(CSR_MISA) & (1<<CSR_MISA_C_EXT)) != 0) {
@@ -712,7 +712,7 @@ int main() {
   // Breakpoint instruction
   // ----------------------------------------------------------
   neorv32_cpu_csr_write(CSR_MCAUSE, 0);
-  neorv32_uart_printf("[%i] BREAK (break instr.) exception test: ", cnt_test);
+  neorv32_uart_printf("[%i] BREAK (break instr.) EXC test: ", cnt_test);
   cnt_test++;
 
   asm volatile("EBREAK");
@@ -729,7 +729,7 @@ int main() {
   // Unaligned load address
   // ----------------------------------------------------------
   neorv32_cpu_csr_write(CSR_MCAUSE, 0);
-  neorv32_uart_printf("[%i] L_ALIGN (load addr alignment) exception test: ", cnt_test);
+  neorv32_uart_printf("[%i] L_ALIGN (load addr alignment) EXC test: ", cnt_test);
   cnt_test++;
 
   // load from unaligned address
@@ -747,7 +747,7 @@ int main() {
   // Load access fault
   // ----------------------------------------------------------
   neorv32_cpu_csr_write(CSR_MCAUSE, 0);
-  neorv32_uart_printf("[%i] L_ACC (load bus access) exception test: ", cnt_test);
+  neorv32_uart_printf("[%i] L_ACC (load bus access) EXC test: ", cnt_test);
   cnt_test++;
 
   // load from unreachable aligned address
@@ -765,7 +765,7 @@ int main() {
   // Unaligned store address
   // ----------------------------------------------------------
   neorv32_cpu_csr_write(CSR_MCAUSE, 0);
-  neorv32_uart_printf("[%i] S_ALIGN (store addr alignment) exception test: ", cnt_test);
+  neorv32_uart_printf("[%i] S_ALIGN (store addr alignment) EXC test: ", cnt_test);
   cnt_test++;
 
   // store to unaligned address
@@ -783,7 +783,7 @@ int main() {
   // Store access fault
   // ----------------------------------------------------------
   neorv32_cpu_csr_write(CSR_MCAUSE, 0);
-  neorv32_uart_printf("[%i] S_ACC (store bus access) exception test: ", cnt_test);
+  neorv32_uart_printf("[%i] S_ACC (store bus access) EXC test: ", cnt_test);
   cnt_test++;
 
   // store to unreachable aligned address
@@ -801,7 +801,7 @@ int main() {
   // Environment call from M-mode
   // ----------------------------------------------------------
   neorv32_cpu_csr_write(CSR_MCAUSE, 0);
-  neorv32_uart_printf("[%i] ENVCALL (ecall instr.) from M-mode exception test: ", cnt_test);
+  neorv32_uart_printf("[%i] ENVCALL (ecall instr.) from M-mode EXC test: ", cnt_test);
   cnt_test++;
 
   asm volatile("ECALL");
@@ -818,7 +818,7 @@ int main() {
   // Environment call from U-mode
   // ----------------------------------------------------------
   neorv32_cpu_csr_write(CSR_MCAUSE, 0);
-  neorv32_uart_printf("[%i] ENVCALL (ecall instr.) from U-mode exception test: ", cnt_test);
+  neorv32_uart_printf("[%i] ENVCALL (ecall instr.) from U-mode EXC test: ", cnt_test);
 
   // skip if U-mode is not implemented
   if (neorv32_cpu_csr_read(CSR_MISA) & (1<<CSR_MISA_U_EXT)) {
@@ -848,7 +848,7 @@ int main() {
   // Machine timer interrupt (MTIME)
   // ----------------------------------------------------------
   neorv32_cpu_csr_write(CSR_MCAUSE, 0);
-  neorv32_uart_printf("[%i] MTI (machine timer) interrupt test: ", cnt_test);
+  neorv32_uart_printf("[%i] MTI (machine timer) IRQ test: ", cnt_test);
 
   if (neorv32_mtime_available()) {
     cnt_test++;
@@ -879,7 +879,7 @@ int main() {
   // Machine software interrupt (MSI) via testbench
   // ----------------------------------------------------------
   neorv32_cpu_csr_write(CSR_MCAUSE, 0);
-  neorv32_uart_printf("[%i] MSI (via testbench) interrupt test: ", cnt_test);
+  neorv32_uart_printf("[%i] MSI (via testbench) IRQ test: ", cnt_test);
 
   if (is_simulation) { // check if this is a simulation
     cnt_test++;
@@ -907,7 +907,7 @@ int main() {
   // Machine external interrupt (MEI) via testbench
   // ----------------------------------------------------------
   neorv32_cpu_csr_write(CSR_MCAUSE, 0);
-  neorv32_uart_printf("[%i] MEI (via testbench) interrupt test: ", cnt_test);
+  neorv32_uart_printf("[%i] MEI (via testbench) IRQ test: ", cnt_test);
 
   if (is_simulation) { // check if this is a simulation
     cnt_test++;
@@ -1592,8 +1592,9 @@ int main() {
       ATOMIC_SUCCESS = 0x11223344;
 
       // atomic compare-and-swap
-      if ((neorv32_cpu_atomic_cas((uint32_t)(&ATOMIC_SUCCESS), 0x11223344, 0xAABBCCDD) == 0) &&
-          (ATOMIC_SUCCESS == 0xAABBCCDD) && (neorv32_cpu_csr_read(CSR_MCAUSE) == 0)) {
+      if ((neorv32_cpu_atomic_cas((uint32_t)(&ATOMIC_SUCCESS), 0x11223344, 0xAABBCCDD) == 0) && // status: success
+          (ATOMIC_SUCCESS == 0xAABBCCDD) && // data written correctly
+          (neorv32_cpu_csr_read(CSR_MCAUSE) == 0)) { // no exception triggered
         test_ok();
       }
       else {
@@ -1629,7 +1630,8 @@ int main() {
       ATOMIC_FAILURE = 0x55667788;
 
       // atomic compare-and-swap
-      if ((neorv32_cpu_atomic_cas((uint32_t)(&ATOMIC_FAILURE), 0x55667788, 0xEEFFDDBB) != 0) && (ATOMIC_FAILURE == 0x55667788)) {
+      if ((neorv32_cpu_atomic_cas((uint32_t)(&ATOMIC_FAILURE), 0x55667788, 0xEEFFDDBB) != 0) && // staus: failed
+          (neorv32_cpu_csr_read(CSR_MCAUSE) == 0)) { // no exception triggered
         test_ok();
       }
       else {

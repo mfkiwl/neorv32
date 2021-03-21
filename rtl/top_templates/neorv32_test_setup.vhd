@@ -116,7 +116,10 @@ begin
     IO_TRNG_EN                   => false,       -- implement true random number generator (TRNG)?
     IO_CFS_EN                    => false,       -- implement custom functions subsystem (CFS)?
     IO_CFS_CONFIG                => x"00000000", -- custom CFS configuration generic
-    IO_NCO_EN                    => false        -- implement numerically-controlled oscillator (NCO)?
+    IO_CFS_IN_SIZE               => 32,          -- size of CFS input conduit in bits
+    IO_CFS_OUT_SIZE              => 32,          -- size of CFS output conduit in bits
+    IO_NCO_EN                    => false,       -- implement numerically-controlled oscillator (NCO)?
+    IO_NEOLED_EN                 => false        -- implement NeoPixel-compatible smart LED interface (NEOLED)?
   )
   port map (
     -- Global control --
@@ -131,7 +134,7 @@ begin
     wb_sel_o    => open,            -- byte enable
     wb_stb_o    => open,            -- strobe
     wb_cyc_o    => open,            -- valid cycle
-    wb_lock_o   => open,            -- locked/exclusive bus access
+    wb_tag_i    => '0',             -- response tag
     wb_ack_i    => '0',             -- transfer acknowledge
     wb_err_i    => '0',             -- transfer error
     -- Advanced memory control signals (available if MEM_EXT_EN = true) --
@@ -165,6 +168,8 @@ begin
     cfs_out_o   => open,            -- custom outputs
     -- NCO output (available if IO_NCO_EN = true) --
     nco_o       => open,            -- numerically-controlled oscillator channels
+    -- NeoPixel-compatible smart LED interface (available if IO_NEOLED_EN = true) --
+    neoled_o    => open,            -- async serial data line
     -- system time input from external MTIME (available if IO_MTIME_EN = false) --
     mtime_i     => (others => '0'), -- current system time
     -- Interrupts --

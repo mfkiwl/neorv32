@@ -347,6 +347,12 @@ void neorv32_rte_print_hw_config(void) {
   if (tmp & (1<<CSR_MZEXT_ZBS)) {
     neorv32_uart_printf("Zbs ");
   }
+  if (tmp & (1<<CSR_MZEXT_ZBA)) {
+    neorv32_uart_printf("Zba ");
+  }
+  if (tmp & (1<<CSR_MZEXT_ZFINX)) {
+    neorv32_uart_printf("Zfinx ");
+  }
 
   // check physical memory protection
   neorv32_uart_printf("\nPMP:               ");
@@ -431,38 +437,41 @@ void neorv32_rte_print_hw_config(void) {
 
   tmp = SYSINFO_FEATURES;
 
-  neorv32_uart_printf("GPIO  - ");
+  neorv32_uart_printf("GPIO   - ");
   __neorv32_rte_print_true_false(tmp & (1 << SYSINFO_FEATURES_IO_GPIO));
 
-  neorv32_uart_printf("MTIME - ");
+  neorv32_uart_printf("MTIME  - ");
   __neorv32_rte_print_true_false(tmp & (1 << SYSINFO_FEATURES_IO_MTIME));
 
-  neorv32_uart_printf("UART0 - ");
+  neorv32_uart_printf("UART0  - ");
   __neorv32_rte_print_true_false(tmp & (1 << SYSINFO_FEATURES_IO_UART0));
 
-  neorv32_uart_printf("UART1 - ");
+  neorv32_uart_printf("UART1  - ");
   __neorv32_rte_print_true_false(tmp & (1 << SYSINFO_FEATURES_IO_UART1));
 
-  neorv32_uart_printf("SPI   - ");
+  neorv32_uart_printf("SPI    - ");
   __neorv32_rte_print_true_false(tmp & (1 << SYSINFO_FEATURES_IO_SPI));
 
-  neorv32_uart_printf("TWI   - ");
+  neorv32_uart_printf("TWI    - ");
   __neorv32_rte_print_true_false(tmp & (1 << SYSINFO_FEATURES_IO_TWI));
 
-  neorv32_uart_printf("PWM   - ");
+  neorv32_uart_printf("PWM    - ");
   __neorv32_rte_print_true_false(tmp & (1 << SYSINFO_FEATURES_IO_PWM));
 
-  neorv32_uart_printf("WDT   - ");
+  neorv32_uart_printf("WDT    - ");
   __neorv32_rte_print_true_false(tmp & (1 << SYSINFO_FEATURES_IO_WDT));
 
-  neorv32_uart_printf("TRNG  - ");
+  neorv32_uart_printf("TRNG   - ");
   __neorv32_rte_print_true_false(tmp & (1 << SYSINFO_FEATURES_IO_TRNG));
 
-  neorv32_uart_printf("CFS   - ");
+  neorv32_uart_printf("CFS    - ");
   __neorv32_rte_print_true_false(tmp & (1 << SYSINFO_FEATURES_IO_CFS));
 
-  neorv32_uart_printf("NCO   - ");
+  neorv32_uart_printf("NCO    - ");
   __neorv32_rte_print_true_false(tmp & (1 << SYSINFO_FEATURES_IO_NCO));
+
+  neorv32_uart_printf("NEOLED - ");
+  __neorv32_rte_print_true_false(tmp & (1 << SYSINFO_FEATURES_IO_NEOLED));
 }
 
 
@@ -636,12 +645,20 @@ uint32_t neorv32_rte_get_compiler_isa(void) {
 
   uint32_t misa_cc = 0;
 
-#ifdef __riscv_atomic
+#if defined __riscv_atomic || defined __riscv_a
   misa_cc |= 1 << CSR_MISA_A_EXT;
 #endif
 
-#ifdef __riscv_compressed
+#ifdef __riscv_b
+  misa_cc |= 1 << CSR_MISA_B_EXT;
+#endif
+
+#if defined __riscv_compressed || defined __riscv_c
   misa_cc |= 1 << CSR_MISA_C_EXT;
+#endif
+
+#if (__riscv_flen == 64) || defined __riscv_d
+  misa_cc |= 1 << CSR_MISA_D_EXT;
 #endif
 
 #ifdef __riscv_32e
@@ -650,7 +667,11 @@ uint32_t neorv32_rte_get_compiler_isa(void) {
   misa_cc |= 1 << CSR_MISA_I_EXT;
 #endif
 
-#ifdef __riscv_mul
+#if (__riscv_flen == 32) || defined __riscv_f
+  misa_cc |= 1 << CSR_MISA_F_EXT;
+#endif
+
+#if defined __riscv_mul || defined __riscv_m
   misa_cc |= 1 << CSR_MISA_M_EXT;
 #endif
 

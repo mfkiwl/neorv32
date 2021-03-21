@@ -53,6 +53,10 @@
  * Available CPU Control and Status Registers (CSRs)
  **************************************************************************/
 enum NEORV32_CSR_enum {
+  CSR_FFLAGS         = 0x001, /**< 0x001 - fflags     (r/w): Floating-point accrued exception flags */
+  CSR_FRM            = 0x002, /**< 0x002 - frm        (r/w): Floating-point dynamic rounding mode */
+  CSR_FCSR           = 0x003, /**< 0x003 - fcsr       (r/w): Floating-point control/staturs register (frm + fflags) */
+
   CSR_MSTATUS        = 0x300, /**< 0x300 - mstatus    (r/w): Machine status register */
   CSR_MISA           = 0x301, /**< 0x301 - misa       (r/-): CPU ISA and extensions (read-only in NEORV32) */
   CSR_MIE            = 0x304, /**< 0x304 - mie        (r/w): Machine interrupt-enable register */
@@ -424,7 +428,9 @@ enum NEORV32_CSR_MISA_enum {
   CSR_MISA_A_EXT      =  0, /**< CPU misa CSR  (0): A: Atomic instructions CPU extension available (r/-)*/
   CSR_MISA_B_EXT      =  1, /**< CPU misa CSR  (1): B: Bit manipulation CPU extension available (r/-)*/
   CSR_MISA_C_EXT      =  2, /**< CPU misa CSR  (2): C: Compressed instructions CPU extension available (r/-)*/
+  CSR_MISA_D_EXT      =  3, /**< CPU misa CSR  (3): D: Double-precision floating-point extension available (r/-)*/
   CSR_MISA_E_EXT      =  4, /**< CPU misa CSR  (4): E: Embedded CPU extension available (r/-) */
+  CSR_MISA_F_EXT      =  5, /**< CPU misa CSR  (5): F: Single-precision floating-point extension available (r/-)*/
   CSR_MISA_I_EXT      =  8, /**< CPU misa CSR  (8): I: Base integer ISA CPU extension available (r/-) */
   CSR_MISA_M_EXT      = 12, /**< CPU misa CSR (12): M: Multiplier/divider CPU extension available (r/-)*/
   CSR_MISA_U_EXT      = 20, /**< CPU misa CSR (20): U: User mode CPU extension available (r/-)*/
@@ -438,10 +444,12 @@ enum NEORV32_CSR_MISA_enum {
  * CPU <b>mzext</b> custom CSR (r/-): Implemented Z* CPU extensions
  **************************************************************************/
 enum NEORV32_CSR_MZEXT_enum {
-  CSR_MZEXT_ZICSR    = 0, /**< CPU mzext CSR (0): Zicsr extension available when set (r/-) */
-  CSR_MZEXT_ZIFENCEI = 1, /**< CPU mzext CSR (1): Zifencei extension available when set (r/-) */
-  CSR_MZEXT_ZBB      = 2, /**< CPU mzext CSR (2): Zbb extension available when set (r/-) */
-  CSR_MZEXT_ZBS      = 3  /**< CPU mzext CSR (3): Zbs extension available when set (r/-) */
+  CSR_MZEXT_ZICSR    = 0, /**< CPU mzext CSR (0): Zicsr extension (I sub-extension) available when set (r/-) */
+  CSR_MZEXT_ZIFENCEI = 1, /**< CPU mzext CSR (1): Zifencei extension (I sub-extension) available when set (r/-) */
+  CSR_MZEXT_ZBB      = 2, /**< CPU mzext CSR (2): Zbb extension (B sub-extension) available when set (r/-) */
+  CSR_MZEXT_ZBS      = 3, /**< CPU mzext CSR (3): Zbs extension (B sub-extension) available when set (r/-) */
+  CSR_MZEXT_ZBA      = 4, /**< CPU mzext CSR (4): Zba extension (B sub-extension) available when set (r/-) */
+  CSR_MZEXT_ZFINX    = 5  /**< CPU mzext CSR (5): Zfinx extension (F sub-/alternative-extension) available when set (r/-) */
 };
 
 
@@ -507,7 +515,7 @@ enum NEORV32_EXCEPTION_CODES_enum {
 
 
 /**********************************************************************//**
- * Processor clock prescalers 
+ * Processor clock prescalers select
  **************************************************************************/
 enum NEORV32_CLOCK_PRSC_enum {
   CLK_PRSC_2    = 0, /**< CPU_CLK (from clk_i top signal) / 2 */
@@ -931,6 +939,53 @@ enum NEORV32_NCO_CT_enum {
 
 
 /**********************************************************************//**
+ * @name IO Device: Smart LED Hardware Interface (NEOLED)
+ **************************************************************************/
+/**@{*/
+/** NEOLED control register (r/w) */
+#define NEOLED_CT   (*(IO_REG32 0xFFFFFFD8UL)) // r/w: control register
+/** NEOLED TX data register (-/w) */
+#define NEOLED_DATA (*(IO_REG32 0xFFFFFFDCUL)) // -/w: TX data register
+
+/** NEOLED control register bits */
+enum NEORV32_NEOLED_CT_enum {
+  NEOLED_CT_EN         =  0, /**< NEOLED control register(0) (r/w): NEOLED global enable */
+  NEOLED_CT_MODE       =  1, /**< NEOLED control register(1) (r/w): TX mode (0=24-bit, 1=32-bit) */
+  NEOLED_CT_BSCON      =  2, /**< NEOLED control register(2) (r/w): buffer status configuration -> busy_flag/IRQ config (0=at least one free entry, 1=whole buffer empty) */
+  NEOLED_CT_PRSC0      =  3, /**< NEOLED control register(3) (r/w): Clock prescaler select bit 0 (pulse-clock speed select) */
+  NEOLED_CT_PRSC1      =  4, /**< NEOLED control register(4) (r/w): Clock prescaler select bit 1 (pulse-clock speed select) */
+  NEOLED_CT_PRSC2      =  5, /**< NEOLED control register(5) (r/w): Clock prescaler select bit 2 (pulse-clock speed select) */
+  //
+  NEOLED_CT_BUFS_0     =  6, /**< NEOLED control register(6) (r/-): log2(tx buffer size) bit 0 */
+  NEOLED_CT_BUFS_1     =  7, /**< NEOLED control register(7) (r/-): log2(tx buffer size) bit 1 */
+  NEOLED_CT_BUFS_2     =  8, /**< NEOLED control register(8) (r/-): log2(tx buffer size) bit 2 */
+  NEOLED_CT_BUFS_3     =  9, /**< NEOLED control register(9) (r/-): log2(tx buffer size) bit 3 */
+  //
+  NEOLED_CT_T_TOT_0    = 10, /**< NEOLED control register(10) (r/w): pulse-clock ticks per total period bit 0 */
+  NEOLED_CT_T_TOT_1    = 11, /**< NEOLED control register(11) (r/w): pulse-clock ticks per total period bit 1 */
+  NEOLED_CT_T_TOT_2    = 12, /**< NEOLED control register(12) (r/w): pulse-clock ticks per total period bit 2 */
+  NEOLED_CT_T_TOT_3    = 13, /**< NEOLED control register(13) (r/w): pulse-clock ticks per total period bit 3 */
+  NEOLED_CT_T_TOT_4    = 14, /**< NEOLED control register(14) (r/w): pulse-clock ticks per total period bit 4 */
+  //
+  NEOLED_CT_T_ZERO_H_0 = 15, /**< NEOLED control register(15) (r/w): pulse-clock ticks per ZERO high-time bit 0 */
+  NEOLED_CT_T_ZERO_H_1 = 16, /**< NEOLED control register(16) (r/w): pulse-clock ticks per ZERO high-time bit 1 */
+  NEOLED_CT_T_ZERO_H_2 = 17, /**< NEOLED control register(17) (r/w): pulse-clock ticks per ZERO high-time bit 2 */
+  NEOLED_CT_T_ZERO_H_3 = 18, /**< NEOLED control register(18) (r/w): pulse-clock ticks per ZERO high-time bit 3 */
+  NEOLED_CT_T_ZERO_H_4 = 19, /**< NEOLED control register(19) (r/w): pulse-clock ticks per ZERO high-time bit 4 */
+  //
+  NEOLED_CT_T_ONE_H_0  = 20, /**< NEOLED control register(20) (r/w): pulse-clock ticks per ONE high-time bit 0 */
+  NEOLED_CT_T_ONE_H_1  = 21, /**< NEOLED control register(21) (r/w): pulse-clock ticks per ONE high-time bit 1 */
+  NEOLED_CT_T_ONE_H_2  = 22, /**< NEOLED control register(22) (r/w): pulse-clock ticks per ONE high-time bit 2 */
+  NEOLED_CT_T_ONE_H_3  = 23, /**< NEOLED control register(23) (r/w): pulse-clock ticks per ONE high-time bit 3 */
+  NEOLED_CT_T_ONE_H_4  = 24, /**< NEOLED control register(24) (r/w): pulse-clock ticks per ONE high-time bit 4 */
+  //
+  NEOLED_CT_TX_STATUS  = 30, /**< NEOLED control register(30) (r/-): serial transmit engine still busy when set */
+  NEOLED_CT_BUSY       = 31  /**< NEOLED control register(31) (r/-): busy / buffer status flag (configured via #NEOLED_CT_BSCON) */
+};
+/**@}*/
+
+
+/**********************************************************************//**
  * @name IO Device: System Configuration Info Memory (SYSINFO)
  **************************************************************************/
 /**@{*/
@@ -974,7 +1029,8 @@ enum NEORV32_NCO_CT_enum {
   SYSINFO_FEATURES_IO_CFS           = 23, /**< SYSINFO_FEATURES (23) (r/-): Custom functions subsystem implemented when 1 (via IO_CFS_EN generic) */
   SYSINFO_FEATURES_IO_TRNG          = 24, /**< SYSINFO_FEATURES (24) (r/-): True random number generator implemented when 1 (via IO_TRNG_EN generic) */
   SYSINFO_FEATURES_IO_NCO           = 25, /**< SYSINFO_FEATURES (25) (r/-): Numerically-controlled oscillator implemented when 1 (via IO_NCO_EN generic) */
-  SYSINFO_FEATURES_IO_UART1         = 26  /**< SYSINFO_FEATURES (26) (r/-): Secondary universal asynchronous receiver/transmitter 1 implemented when 1 (via IO_UART1_EN generic) */
+  SYSINFO_FEATURES_IO_UART1         = 26, /**< SYSINFO_FEATURES (26) (r/-): Secondary universal asynchronous receiver/transmitter 1 implemented when 1 (via IO_UART1_EN generic) */
+  SYSINFO_FEATURES_IO_NEOLED        = 27  /**< SYSINFO_FEATURES (27) (r/-): NeoPixel-compatible smart LED interface implemented when 1 (via IO_NEOLED_EN generic) */
 };
 
 /**********************************************************************//**
@@ -1009,6 +1065,9 @@ enum NEORV32_NCO_CT_enum {
 // cpu core
 #include "neorv32_cpu.h"
 
+// intrinsics
+#include "neorv32_intrinsics.h"
+
 // neorv32 runtime environment
 #include "neorv32_rte.h"
 
@@ -1017,6 +1076,7 @@ enum NEORV32_NCO_CT_enum {
 #include "neorv32_gpio.h"
 #include "neorv32_mtime.h"
 #include "neorv32_nco.h"
+#include "neorv32_neoled.h"
 #include "neorv32_pwm.h"
 #include "neorv32_spi.h"
 #include "neorv32_trng.h"

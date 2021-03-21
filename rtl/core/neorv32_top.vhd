@@ -103,8 +103,11 @@ entity neorv32_top is
     IO_WDT_EN                    : boolean := true;   -- implement watch dog timer (WDT)?
     IO_TRNG_EN                   : boolean := false;  -- implement true random number generator (TRNG)?
     IO_CFS_EN                    : boolean := false;  -- implement custom functions subsystem (CFS)?
-    IO_CFS_CONFIG                : std_ulogic_vector(31 downto 0) := x"00000000"; -- custom CFS configuration generic
-    IO_NCO_EN                    : boolean := true    -- implement numerically-controlled oscillator (NCO)?
+    IO_CFS_CONFIG                : std_ulogic_vector(31 downto 0); -- custom CFS configuration generic
+    IO_CFS_IN_SIZE               : positive := 32;    -- size of CFS input conduit in bits
+    IO_CFS_OUT_SIZE              : positive := 32;    -- size of CFS output conduit in bits
+    IO_NCO_EN                    : boolean := true;   -- implement numerically-controlled oscillator (NCO)?
+    IO_NEOLED_EN                 : boolean := true    -- implement NeoPixel-compatible smart LED interface (NEOLED)?
   );
   port (
     -- Global control --
@@ -112,7 +115,7 @@ entity neorv32_top is
     rstn_i      : in  std_ulogic := '0'; -- global reset, low-active, async
 
     -- Wishbone bus interface (available if MEM_EXT_EN = true) --
-    wb_tag_o    : out std_ulogic_vector(02 downto 0); -- tag
+    wb_tag_o    : out std_ulogic_vector(03 downto 0); -- request tag
     wb_adr_o    : out std_ulogic_vector(31 downto 0); -- address
     wb_dat_i    : in  std_ulogic_vector(31 downto 0) := (others => '0'); -- read data
     wb_dat_o    : out std_ulogic_vector(31 downto 0); -- write data
@@ -120,7 +123,7 @@ entity neorv32_top is
     wb_sel_o    : out std_ulogic_vector(03 downto 0); -- byte enable
     wb_stb_o    : out std_ulogic; -- strobe
     wb_cyc_o    : out std_ulogic; -- valid cycle
-    wb_lock_o   : out std_ulogic; -- locked/exclusive bus access
+    wb_tag_i    : in  std_ulogic := '0'; -- response tag
     wb_ack_i    : in  std_ulogic := '0'; -- transfer acknowledge
     wb_err_i    : in  std_ulogic := '0'; -- transfer error
 
@@ -158,11 +161,14 @@ entity neorv32_top is
     pwm_o       : out std_ulogic_vector(03 downto 0); -- pwm channels
 
     -- Custom Functions Subsystem IO (available if IO_CFS_EN = true) --
-    cfs_in_i    : in  std_ulogic_vector(31 downto 0) := (others => '0'); -- custom CFS inputs conduit
-    cfs_out_o   : out std_ulogic_vector(31 downto 0); -- custom CFS outputs conduit
+    cfs_in_i    : in  std_ulogic_vector(IO_CFS_IN_SIZE-1  downto 0); -- custom CFS inputs conduit
+    cfs_out_o   : out std_ulogic_vector(IO_CFS_OUT_SIZE-1 downto 0); -- custom CFS outputs conduit
 
     -- NCO output (available if IO_NCO_EN = true) --
     nco_o       : out std_ulogic_vector(02 downto 0); -- numerically-controlled oscillator channels
+
+    -- NeoPixel-compatible smart LED interface (available if IO_NEOLED_EN = true) --
+    neoled_o    : out std_ulogic; -- async serial data line
 
     -- system time input from external MTIME (available if IO_MTIME_EN = false) --
     mtime_i     : in  std_ulogic_vector(63 downto 0) := (others => '0'); -- current system time
@@ -201,16 +207,17 @@ architecture neorv32_top_rtl of neorv32_top is
   signal clk_div    : std_ulogic_vector(11 downto 0);
   signal clk_div_ff : std_ulogic_vector(11 downto 0);
   signal clk_gen    : std_ulogic_vector(07 downto 0);
-  signal clk_gen_en : std_ulogic_vector(07 downto 0);
+  signal clk_gen_en : std_ulogic_vector(08 downto 0);
   --
-  signal wdt_cg_en   : std_ulogic;
-  signal uart0_cg_en : std_ulogic;
-  signal uart1_cg_en : std_ulogic;
-  signal spi_cg_en   : std_ulogic;
-  signal twi_cg_en   : std_ulogic;
-  signal pwm_cg_en   : std_ulogic;
-  signal cfs_cg_en   : std_ulogic;
-  signal nco_cg_en   : std_ulogic;
+  signal wdt_cg_en    : std_ulogic;
+  signal uart0_cg_en  : std_ulogic;
+  signal uart1_cg_en  : std_ulogic;
+  signal spi_cg_en    : std_ulogic;
+  signal twi_cg_en    : std_ulogic;
+  signal pwm_cg_en    : std_ulogic;
+  signal cfs_cg_en    : std_ulogic;
+  signal nco_cg_en    : std_ulogic;
+  signal neoled_cg_en : std_ulogic;
 
   -- bus interface --
   type bus_interface_t is record
@@ -226,9 +233,10 @@ architecture neorv32_top_rtl of neorv32_top is
     fence  : std_ulogic; -- fence(i) instruction executed
     priv   : std_ulogic_vector(1 downto 0); -- current privilege level
     src    : std_ulogic; -- access source (1=instruction fetch, 0=data access)
-    lock   : std_ulogic; -- locked/exclusive (=atomic) access
+    excl   : std_ulogic; -- exclusive access
   end record;
   signal cpu_i, i_cache, cpu_d, p_bus : bus_interface_t;
+  signal cpu_d_exclr : std_ulogic; -- CPU D-bus, exclusive access response
 
   -- io space access --
   signal io_acc  : std_ulogic;
@@ -245,6 +253,7 @@ architecture neorv32_top_rtl of neorv32_top is
   signal wishbone_rdata : std_ulogic_vector(data_width_c-1 downto 0);
   signal wishbone_ack   : std_ulogic;
   signal wishbone_err   : std_ulogic;
+  signal wishbone_exclr : std_ulogic;
   signal gpio_rdata     : std_ulogic_vector(data_width_c-1 downto 0);
   signal gpio_ack       : std_ulogic;
   signal mtime_rdata    : std_ulogic_vector(data_width_c-1 downto 0);
@@ -267,6 +276,8 @@ architecture neorv32_top_rtl of neorv32_top is
   signal cfs_ack        : std_ulogic;
   signal nco_rdata      : std_ulogic_vector(data_width_c-1 downto 0);
   signal nco_ack        : std_ulogic;
+  signal neoled_rdata   : std_ulogic_vector(data_width_c-1 downto 0);
+  signal neoled_ack     : std_ulogic;
   signal sysinfo_rdata  : std_ulogic_vector(data_width_c-1 downto 0);
   signal sysinfo_ack    : std_ulogic;
 
@@ -286,6 +297,7 @@ architecture neorv32_top_rtl of neorv32_top is
   signal twi_irq       : std_ulogic;
   signal cfs_irq       : std_ulogic;
   signal cfs_irq_ack   : std_ulogic;
+  signal neoled_irq    : std_ulogic;
 
   -- misc --
   signal mtime_time : std_ulogic_vector(63 downto 0); -- current system time from MTIME
@@ -364,6 +376,7 @@ begin
       clk_gen_en(5) <= pwm_cg_en;
       clk_gen_en(6) <= cfs_cg_en;
       clk_gen_en(7) <= nco_cg_en;
+      clk_gen_en(8) <= neoled_cg_en;
       if (or_all_f(clk_gen_en) = '1') then
         clk_div <= std_ulogic_vector(unsigned(clk_div) + 1);
       end if;
@@ -402,6 +415,7 @@ begin
     CPU_EXTENSION_RISCV_E        => CPU_EXTENSION_RISCV_E,        -- implement embedded RF extension?
     CPU_EXTENSION_RISCV_M        => CPU_EXTENSION_RISCV_M,        -- implement muld/div extension?
     CPU_EXTENSION_RISCV_U        => CPU_EXTENSION_RISCV_U,        -- implement user mode extension?
+    CPU_EXTENSION_RISCV_Zfinx    => false,                        -- implement 32-bit floating-point extension (using INT reg!)
     CPU_EXTENSION_RISCV_Zicsr    => CPU_EXTENSION_RISCV_Zicsr,    -- implement CSR system?
     CPU_EXTENSION_RISCV_Zifencei => CPU_EXTENSION_RISCV_Zifencei, -- implement instruction stream sync.?
     -- Extension Options --
@@ -430,7 +444,6 @@ begin
     i_bus_err_i    => cpu_i.err,    -- bus transfer error
     i_bus_fence_o  => cpu_i.fence,  -- executed FENCEI operation
     i_bus_priv_o   => cpu_i.priv,   -- privilege level
-    i_bus_lock_o   => cpu_i.lock,   -- locked/exclusive access
     -- data bus interface --
     d_bus_addr_o   => cpu_d.addr,   -- bus access address
     d_bus_rdata_i  => cpu_d.rdata,  -- bus read data
@@ -443,7 +456,8 @@ begin
     d_bus_err_i    => cpu_d.err,    -- bus transfer error
     d_bus_fence_o  => cpu_d.fence,  -- executed FENCE operation
     d_bus_priv_o   => cpu_d.priv,   -- privilege level
-    d_bus_lock_o   => cpu_d.lock,   -- locked/exclusive access
+    d_bus_excl_o   => cpu_d.excl,   -- exclusive access
+    d_bus_excl_i   => cpu_d_exclr,  -- state of exclusiv access (set if success)
     -- system time input from MTIME --
     time_i         => mtime_time,   -- current system time
     -- interrupts (risc-v compliant) --
@@ -456,8 +470,9 @@ begin
   );
 
   -- misc --
-  cpu_i.src <= '1'; -- initialized but unused
-  cpu_d.src <= '0'; -- initialized but unused
+  cpu_i.excl <= '0'; -- i-fetch cannot do exclusive accesses
+  cpu_i.src  <= '1'; -- initialized but unused
+  cpu_d.src  <= '0'; -- initialized but unused
 
   -- advanced memory control --
   fence_o  <= cpu_d.fence; -- indicates an executed FENCE operation
@@ -473,7 +488,7 @@ begin
   fast_irq(06) <= spi_irq;       -- SPI transmission done
   fast_irq(07) <= twi_irq;       -- TWI transmission done
   fast_irq(08) <= gpio_irq;      -- GPIO pin-change
-  fast_irq(09) <= '0';           -- reserved
+  fast_irq(09) <= neoled_irq;    -- NEOLED buffer free
 
   -- fast interrupts - platform level (for custom use) --
   fast_irq(10) <= soc_firq_i(0);
@@ -510,7 +525,6 @@ begin
       host_we_i     => cpu_i.we,       -- write enable
       host_re_i     => cpu_i.re,       -- read enable
       host_cancel_i => cpu_i.cancel,   -- cancel current bus transaction
-      host_lock_i   => cpu_i.lock,     -- locked/exclusive access
       host_ack_o    => cpu_i.ack,      -- bus transfer acknowledge
       host_err_o    => cpu_i.err,      -- bus transfer error
       -- peripheral bus interface --
@@ -521,7 +535,6 @@ begin
       bus_we_o      => i_cache.we,     -- write enable
       bus_re_o      => i_cache.re,     -- read enable
       bus_cancel_o  => i_cache.cancel, -- cancel current bus transaction
-      bus_lock_o    => i_cache.lock,   -- locked/exclusive access
       bus_ack_i     => i_cache.ack,    -- bus transfer acknowledge
       bus_err_i     => i_cache.err     -- bus transfer error
     );
@@ -536,10 +549,12 @@ begin
     i_cache.we     <= cpu_i.we;
     i_cache.re     <= cpu_i.re;
     i_cache.cancel <= cpu_i.cancel;
-    i_cache.lock   <= cpu_i.lock;
     cpu_i.ack      <= i_cache.ack;
     cpu_i.err      <= i_cache.err;
   end generate;
+
+  -- no exclusive accesses for i-fetch --
+  i_cache.excl <= '0';
 
 
   -- CPU Bus Switch -------------------------------------------------------------------------
@@ -561,7 +576,7 @@ begin
     ca_bus_we_i     => cpu_d.we,       -- write enable
     ca_bus_re_i     => cpu_d.re,       -- read enable
     ca_bus_cancel_i => cpu_d.cancel,   -- cancel current bus transaction
-    ca_bus_lock_i   => cpu_d.lock,     -- locked/exclusive access
+    ca_bus_excl_i   => cpu_d.excl,     -- exclusive access
     ca_bus_ack_o    => cpu_d.ack,      -- bus transfer acknowledge
     ca_bus_err_o    => cpu_d.err,      -- bus transfer error
     -- controller interface b --
@@ -572,7 +587,7 @@ begin
     cb_bus_we_i     => i_cache.we,     -- write enable
     cb_bus_re_i     => i_cache.re,     -- read enable
     cb_bus_cancel_i => i_cache.cancel, -- cancel current bus transaction
-    cb_bus_lock_i   => i_cache.lock,   -- locked/exclusive access
+    cb_bus_excl_i   => i_cache.excl,   -- exclusive access
     cb_bus_ack_o    => i_cache.ack,    -- bus transfer acknowledge
     cb_bus_err_o    => i_cache.err,    -- bus transfer error
     -- peripheral bus --
@@ -584,24 +599,28 @@ begin
     p_bus_we_o      => p_bus.we,       -- write enable
     p_bus_re_o      => p_bus.re,       -- read enable
     p_bus_cancel_o  => p_bus.cancel,   -- cancel current bus transaction
-    p_bus_lock_o    => p_bus.lock,     -- locked/exclusive access
+    p_bus_excl_o    => p_bus.excl,     -- exclusive access
     p_bus_ack_i     => p_bus.ack,      -- bus transfer acknowledge
     p_bus_err_i     => p_bus.err       -- bus transfer error
   );
 
+  -- static signals --
+  p_bus.priv <= cpu_i.priv; -- current CPU privilege level: cpu_i.priv == cpu_d.priv
+
   -- processor bus: CPU transfer data input --
   p_bus.rdata <= (imem_rdata or dmem_rdata or bootrom_rdata) or wishbone_rdata or (gpio_rdata or mtime_rdata or uart0_rdata or uart1_rdata or
-                 spi_rdata or twi_rdata or pwm_rdata or wdt_rdata or trng_rdata or cfs_rdata or nco_rdata or sysinfo_rdata);
+                 spi_rdata or twi_rdata or pwm_rdata or wdt_rdata or trng_rdata or cfs_rdata or nco_rdata or neoled_rdata or  sysinfo_rdata);
 
   -- processor bus: CPU transfer ACK input --
   p_bus.ack <= (imem_ack or dmem_ack or bootrom_ack) or wishbone_ack or (gpio_ack or mtime_ack or uart0_ack or uart1_ack or
-               spi_ack or twi_ack or pwm_ack or wdt_ack or trng_ack or cfs_ack or nco_ack or sysinfo_ack);
+               spi_ack or twi_ack or pwm_ack or wdt_ack or trng_ack or cfs_ack or nco_ack or neoled_ack or sysinfo_ack);
 
   -- processor bus: CPU transfer data bus error input --
   p_bus.err <= wishbone_err;
 
-  -- current CPU privilege level --
-  p_bus.priv <= cpu_i.priv; -- cpu_i.priv == cpu_d.priv
+  -- exclusive access status --
+  -- since all internal modules/memories are only accessible to this CPU internal atomic access cannot fail
+  cpu_d_exclr <= wishbone_exclr; -- only external atomic memory accesses can fail
 
 
   -- Processor-Internal Instruction Memory (IMEM) -------------------------------------------
@@ -714,12 +733,13 @@ begin
       data_i    => p_bus.wdata,    -- data in
       data_o    => wishbone_rdata, -- data out
       cancel_i  => p_bus.cancel,   -- cancel current transaction
-      lock_i    => p_bus.lock,     -- locked/exclusive bus access
+      excl_i    => p_bus.excl,     -- exclusive access request
+      excl_o    => wishbone_exclr, -- state of exclusiv access (set if success)
       ack_o     => wishbone_ack,   -- transfer acknowledge
       err_o     => wishbone_err,   -- transfer error
       priv_i    => p_bus.priv,     -- current CPU privilege level
       -- wishbone interface --
-      wb_tag_o  => wb_tag_o,       -- tag
+      wb_tag_o  => wb_tag_o,       -- request tag
       wb_adr_o  => wb_adr_o,       -- address
       wb_dat_i  => wb_dat_i,       -- read data
       wb_dat_o  => wb_dat_o,       -- write data
@@ -727,7 +747,7 @@ begin
       wb_sel_o  => wb_sel_o,       -- byte enable
       wb_stb_o  => wb_stb_o,       -- strobe
       wb_cyc_o  => wb_cyc_o,       -- valid cycle
-      wb_lock_o => wb_lock_o,      -- locked/exclusive bus access
+      wb_tag_i  => wb_tag_i,       -- response tag
       wb_ack_i  => wb_ack_i,       -- transfer acknowledge
       wb_err_i  => wb_err_i        -- transfer error
     );
@@ -738,15 +758,15 @@ begin
     wishbone_rdata <= (others => '0');
     wishbone_ack   <= '0';
     wishbone_err   <= '0';
+    wishbone_exclr <= '0';
     --
-    wb_adr_o  <= (others => '0');
-    wb_dat_o  <= (others => '0');
-    wb_we_o   <= '0';
-    wb_sel_o  <= (others => '0');
-    wb_stb_o  <= '0';
-    wb_cyc_o  <= '0';
-    wb_lock_o <= '0';
-    wb_tag_o  <= (others => '0');
+    wb_adr_o <= (others => '0');
+    wb_dat_o <= (others => '0');
+    wb_we_o  <= '0';
+    wb_sel_o <= (others => '0');
+    wb_stb_o <= '0';
+    wb_cyc_o <= '0';
+    wb_tag_o <= (others => '0');
   end generate;
 
 
@@ -764,7 +784,9 @@ begin
   if (IO_CFS_EN = true) generate
     neorv32_cfs_inst: neorv32_cfs
     generic map (
-      CFS_CONFIG => IO_CFS_CONFIG     -- custom CFS configuration generic
+      CFS_CONFIG   => IO_CFS_CONFIG,  -- custom CFS configuration generic 
+      CFS_IN_SIZE  => IO_CFS_IN_SIZE, -- size of CFS input conduit in bits
+      CFS_OUT_SIZE => IO_CFS_OUT_SIZE -- size of CFS output conduit in bits
     )
     port map (
       -- host access --
@@ -1145,6 +1167,40 @@ begin
   end generate;
 
 
+  -- Smart LED (WS2811/WS2812) Interface (NEOLED) -------------------------------------------
+  -- -------------------------------------------------------------------------------------------
+  neorv32_neoled_inst_true:
+  if (IO_NEOLED_EN = true) generate
+    neorv32_neoled_inst: neorv32_neoled
+    port map (
+      -- host access --
+      clk_i       => clk_i,        -- global clock line
+      addr_i      => p_bus.addr,   -- address
+      rden_i      => io_rden,      -- read enable
+      wren_i      => io_wren,      -- write enable
+      data_i      => p_bus.wdata,  -- data in
+      data_o      => neoled_rdata, -- data out
+      ack_o       => neoled_ack,   -- transfer acknowledge
+      -- clock generator --
+      clkgen_en_o => neoled_cg_en, -- enable clock generator
+      clkgen_i    => clk_gen,
+      -- interrupt --
+      irq_o       => neoled_irq,   -- interrupt request
+      -- NEOLED output --
+      neoled_o    => neoled_o      -- serial async data line
+    );
+  end generate;
+
+  neorv32_neoled_inst_false:
+  if (IO_NEOLED_EN = false) generate
+    neoled_rdata <= (others => '0');
+    neoled_ack   <= '0';
+    neoled_cg_en <= '0';
+    neoled_irq   <= '0';
+    neoled_o     <= '0';
+  end generate;
+
+
   -- System Configuration Information Memory (SYSINFO) --------------------------------------
   -- -------------------------------------------------------------------------------------------
   neorv32_sysinfo_inst: neorv32_sysinfo
@@ -1178,7 +1234,8 @@ begin
     IO_WDT_EN            => IO_WDT_EN,            -- implement watch dog timer (WDT)?
     IO_TRNG_EN           => IO_TRNG_EN,           -- implement true random number generator (TRNG)?
     IO_CFS_EN            => IO_CFS_EN,            -- implement custom functions subsystem (CFS)?
-    IO_NCO_EN            => IO_NCO_EN             -- implement numerically-controlled oscillator (NCO)?
+    IO_NCO_EN            => IO_NCO_EN,            -- implement numerically-controlled oscillator (NCO)?
+    IO_NEOLED_EN         => IO_NEOLED_EN          -- implement NeoPixel-compatible smart LED interface (NEOLED)?
   )
   port map (
     -- host access --
