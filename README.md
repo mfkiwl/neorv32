@@ -55,6 +55,7 @@ if you have questions, comments, ideas or bug-fixes. Check out how to [contribut
   * [`M`](#M---Integer-multiplication-and-division-hardware-extension) - integer multiplication and division hardware (optional)
   * [`U`](#U---Privileged-architecture---User-mode-extension) - less-privileged *user mode* (optional)
   * [`X`](#X---NEORV32-specific-CPU-extensions) - NEORV32-specific extensions (always enabled)
+  * [`Zfinx`](#Zfinx---Single-precision-floating-point-extension) - Single-precision floating-point extensions (optional) :construction:
   * [`Zicsr`](#Zicsr---Privileged-architecture---CSR-access-extension) - control and status register access instructions (+ exception/irq system) (optional)
   * [`Zifencei`](#Zifencei---Privileged-architecture---Instruction-stream-synchronization-extension) - instruction stream synchronization (optional)
   * [`PMP`](#PMP---Privileged-architecture---Physical-memory-protection) - physical memory protection (optional)
@@ -224,13 +225,18 @@ the [:page_facing_up: NEORV32 data sheet](https://raw.githubusercontent.com/stno
 * All undefined/umimplemented/malformed/illegal instructions do raise an illegal instruction exception
 
 
-#### `Zfinx` - Single-precision floating-point extension (using integer `x` registers)
+#### `Zfinx` - Single-precision floating-point extension
 
   * :construction: **work-in-progress** :construction:
   * :warning: this extension has not been officially ratified yet! 
   * :books: more information can be found here: [RISC-V `Zfinx` spec.](https://github.com/riscv/riscv-zfinx)
   * :information_source: check out the [floating-point extension project board](https://github.com/stnolting/neorv32/projects/4) for the current implementation state
-
+  * Fused multiply-add instructions are not supported!
+  * Computational instructions: `FADD.S` `FSUB.S` `FMUL.S` `FSGNJ[N/X].S` `FCLASS.S` ~~`FDIV.S`~~ ~~`FSQRT.S`~~
+  * Comparison instructions: `FMIN.S` `FMAX.S` `FEQ.S` `FLT.S` `FLE.S` 
+  * Conversion instructions: `FCVT.W.S` `FCVT.WU.S` `FCVT.S.W` `FCVT.S.WU`
+  * Additional CSRs: `fcsr` `frm` `fflags`
+  
 
 #### `Zicsr` - Privileged architecture - CSR access extension
 
@@ -251,11 +257,11 @@ the [:page_facing_up: NEORV32 data sheet](https://raw.githubusercontent.com/stno
     * Store access fault (via unacknowledged bus access after timeout)
     * Environment call from U-mode (via `ecall` instruction in user mode)
     * Environment call from M-mode (via `ecall` instruction in machine mode)
-  * Supported (async.) exceptions / interrupts:
-    * Machine timer interrupt `mti` (via processor's MTIME unit / external signal)
-    * Machine software interrupt `msi` (via external signal)
-    * Machine external interrupt `mei` (via external signal)
-    * 16 fast interrupt requests (custom extension), 6+1 available for custom usage
+  * Supported interrupts:
+    * RISC-V machine timer interrupt `mti` (via processor-internal MTIME unit *or* external signal)
+    * RISC-V machine software interrupt `msi` (via external signal)
+    * RISC-V machine external interrupt `mei` (via external signal)
+    * 16 fast interrupt requests, 6+1 available for custom usage
 
 
 #### `Zifencei` - Privileged architecture - Instruction stream synchronization extension
@@ -284,7 +290,6 @@ the [:page_facing_up: NEORV32 data sheet](https://raw.githubusercontent.com/stno
 * The physical memory protection (**PMP**) only supports `NAPOT` mode yet and a minimal granularity of 8 bytes
 * The `A` extension only implements `lr.w` and `sc.w` instructions yet. However, these instructions are sufficient to emulate all further AMO operations
 * The `mcause` trap code `0x80000000` (originally reserved in the RISC-V specs) is used to indicate a hardware reset (as "non-maskable interrupt")
-* The bit manipulation extension is not yet officially ratified, but is expected to stay unchanged. There is no software support in the upstream GCC RISC-V port yet. However, an intrinsic library is provided to utilize the provided bit manipulation extension from C-language code (see [`sw/example/bit_manipulation`](https://github.com/stnolting/neorv32/tree/master/sw/example/bit_manipulation)). NEORV32's `B` extension is compatible to spec. version "0.94-draft".
 
 
 
@@ -575,14 +580,15 @@ Use the bootloader console to upload the `neorv32_exe.bin` executable gerated du
 ```
 << NEORV32 Bootloader >>
 
-BLDV: Nov  7 2020
-HWV:  0x01040606
-CLK:  0x0134FD90 Hz
-USER: 0x0001CE40
-MISA: 0x42801104
-PROC: 0x03FF0035
-IMEM: 0x00010000 bytes @ 0x00000000
-DMEM: 0x00010000 bytes @ 0x80000000
+BLDV: Mar 23 2021
+HWV:  0x01050208
+CLK:  0x05F5E100
+USER: 0x10000DE0
+MISA: 0x40901105
+ZEXT: 0x00000023
+PROC: 0x0EFF0037
+IMEM: 0x00004000 bytes @ 0x00000000
+DMEM: 0x00002000 bytes @ 0x80000000
 
 Autoboot in 8s. Press key to abort.
 Aborted.
