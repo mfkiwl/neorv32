@@ -11,7 +11,7 @@
 -- #   * neorv32_cpu_ctrl.vhd            - CPU control and CSR system                              #
 -- #     * neorv32_cpu_decompressor.vhd  - Compressed instructions decoder                         #
 -- #   * neorv32_cpu_regfile.vhd         - Data register file                                      #
--- # * neorv32_package.vhd               - Main CPU/processor package file                         #
+-- # * neorv32_package.vhd               - Main CPU & Processor package file                       #
 -- #                                                                                               #
 -- # Check out the processor's data sheet for more information: docs/NEORV32.pdf                   #
 -- # ********************************************************************************************* #
@@ -76,7 +76,8 @@ entity neorv32_cpu is
     PMP_NUM_REGIONS              : natural := 0;     -- number of regions (0..64)
     PMP_MIN_GRANULARITY          : natural := 64*1024; -- minimal region granularity in bytes, has to be a power of 2, min 8 bytes
     -- Hardware Performance Monitors (HPM) --
-    HPM_NUM_CNTS                 : natural := 0      -- number of implemented HPM counters (0..29)
+    HPM_NUM_CNTS                 : natural := 0;     -- number of implemented HPM counters (0..29)
+    HPM_CNT_WIDTH                : natural := 40     -- total size of HPM counters (1..64)
   );
   port (
     -- global control --
@@ -169,10 +170,9 @@ begin
   -- -------------------------------------------------------------------------------------------
   -- CSR system --
   assert not (CPU_EXTENSION_RISCV_Zicsr = false) report "NEORV32 CPU CONFIG WARNING! No exception/interrupt/trap/privileged features available when CPU_EXTENSION_RISCV_Zicsr = false." severity warning;
+
   -- U-extension requires Zicsr extension --
   assert not ((CPU_EXTENSION_RISCV_Zicsr = false) and (CPU_EXTENSION_RISCV_U = true)) report "NEORV32 CPU CONFIG ERROR! User mode requires CPU_EXTENSION_RISCV_Zicsr extension." severity error;
-  -- PMP requires Zicsr extension --
-  assert not ((CPU_EXTENSION_RISCV_Zicsr = false) and (PMP_NUM_REGIONS > 0)) report "NEORV32 CPU CONFIG ERROR! Physical memory protection (PMP) requires CPU_EXTENSION_RISCV_Zicsr extension." severity error;
 
   -- Bus timeout --
   assert not (BUS_TIMEOUT < 2) report "NEORV32 CPU CONFIG ERROR! Invalid bus access timeout value <BUS_TIMEOUT>. Has to be >= 2." severity error;
@@ -185,8 +185,8 @@ begin
   -- FIXME: Bit manipulation warning --
   assert not (CPU_EXTENSION_RISCV_B = true) report "NEORV32 CPU CONFIG WARNING! Bit manipulation extension (B) is still HIGHLY EXPERIMENTAL (and spec. is not ratified yet)." severity warning;
 
-  -- FIXME: Floating-point extension (Zfinx) warning --
-  assert not (CPU_EXTENSION_RISCV_Zfinx = true) report "NEORV32 CPU CONFIG WARNING! 32-bit floating-point extension <Zfinx> is WORK-IN-PROGRESS and NOT OPERATIONAL yet." severity warning;
+  -- Co-processor timeout counter (for debugging only) --
+  assert not (cp_timeout_en_c = true) report "NEORV32 CPU CONFIG WARNING! Co-processor timeout counter enabled. This should be used for debugging/simulation only." severity warning;
 
   -- PMP regions check --
   assert not (PMP_NUM_REGIONS > 64) report "NEORV32 CPU CONFIG ERROR! Number of PMP regions <PMP_NUM_REGIONS> out xf valid range (0..64)." severity error;
@@ -195,13 +195,17 @@ begin
   assert not ((PMP_MIN_GRANULARITY < 8) and (PMP_NUM_REGIONS > 0)) report "NEORV32 CPU CONFIG ERROR! PMP granulartiy has to be >= 8 bytes." severity error;
   -- PMP notifier --
   assert not (PMP_NUM_REGIONS > 0) report "NEORV32 CPU CONFIG NOTE: Implementing physical memory protection (PMP) with " & integer'image(PMP_NUM_REGIONS) & " regions and a minimal granularity of " & integer'image(PMP_MIN_GRANULARITY) & " bytes." severity note;
+  -- PMP requires Zicsr extension --
+  assert not ((CPU_EXTENSION_RISCV_Zicsr = false) and (PMP_NUM_REGIONS > 0)) report "NEORV32 CPU CONFIG ERROR! Physical memory protection (PMP) requires CPU_EXTENSION_RISCV_Zicsr extension." severity error;
+
 
   -- HPM counters check --
   assert not (HPM_NUM_CNTS > 29) report "NEORV32 CPU CONFIG ERROR! Number of HPM counters <HPM_NUM_CNTS> out of valid range (0..29)." severity error;
+  assert not ((HPM_CNT_WIDTH < 1) or (HPM_CNT_WIDTH > 64)) report "NEORV32 CPU CONFIG ERROR! HPM counter width <HPM_CNT_WIDTH> has to be 1..64 bit." severity error; 
   -- HPM counters notifier --
-  assert not (HPM_NUM_CNTS > 0) report "NEORV32 CPU CONFIG NOTE: Implementing " & integer'image(HPM_NUM_CNTS) & " HPM counters." severity note;
+  assert not (HPM_NUM_CNTS > 0) report "NEORV32 CPU CONFIG NOTE: Implementing " & integer'image(HPM_NUM_CNTS) & " HPM counters (each " & integer'image(HPM_CNT_WIDTH) & "-bit wide)." severity note;
   -- HPM CNT requires Zicsr extension --
-  assert not ((CPU_EXTENSION_RISCV_Zicsr = false) and (HPM_NUM_CNTS > 0)) report "NEORV32 CPU CONFIG ERROR! Performance monitors (HMP) require CPU_EXTENSION_RISCV_Zicsr extension." severity error;
+  assert not ((CPU_EXTENSION_RISCV_Zicsr = false) and (HPM_NUM_CNTS > 0)) report "NEORV32 CPU CONFIG ERROR! Hardware performance monitors (HPM) require CPU_EXTENSION_RISCV_Zicsr extension." severity error;
 
 
   -- Control Unit ---------------------------------------------------------------------------
@@ -224,7 +228,8 @@ begin
     PMP_NUM_REGIONS              => PMP_NUM_REGIONS,              -- number of regions (0..64)
     PMP_MIN_GRANULARITY          => PMP_MIN_GRANULARITY,          -- minimal region granularity in bytes, has to be a power of 2, min 8 bytes
     -- Hardware Performance Monitors (HPM) --
-    HPM_NUM_CNTS                 => HPM_NUM_CNTS                  -- number of implemented HPM counters (0..29)
+    HPM_NUM_CNTS                 => HPM_NUM_CNTS,                 -- number of implemented HPM counters (0..29)
+    HPM_CNT_WIDTH                => HPM_CNT_WIDTH                 -- total size of HPM counters
   )
   port map (
     -- global control --
@@ -407,7 +412,7 @@ begin
   -- Co-Processor 3: CSR (Read) Access ('Zicsr' Extension) ----------------------------------
   -- -------------------------------------------------------------------------------------------
   -- "pseudo" co-processor for CSR *read* access operations
-  -- required to get the CSR read data into the data path
+  -- required to get CSR read data into the data path
   cp_result(3) <= csr_rdata when (CPU_EXTENSION_RISCV_Zicsr = true) else (others => '0');
   cp_valid(3)  <= cp_start(3); -- always assigned even if Zicsr extension is disabled to make sure CPU does not get stalled if there is an accidental access
 
@@ -425,6 +430,7 @@ begin
       start_i  => cp_start(4),  -- trigger operation
       -- data input --
       frm_i    => fpu_rm,       -- rounding mode
+      cmp_i    => comparator,   -- comparator status
       rs1_i    => rs1,          -- rf source 1
       rs2_i    => rs2,          -- rf source 2
       -- result and status --
@@ -442,7 +448,7 @@ begin
   end generate;
 
 
-  -- Co-Processor 5..7: Not Implemented Yet -------------------------------------------------
+  -- Co-Processor 5,6,7: Not Implemented Yet ------------------------------------------------
   -- -------------------------------------------------------------------------------------------
   cp_result(5) <= (others => '0');
   cp_valid(5)  <= '0';

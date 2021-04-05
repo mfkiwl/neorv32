@@ -64,7 +64,8 @@ entity neorv32_cpu_control is
     PMP_NUM_REGIONS              : natural := 0;       -- number of regions (0..64)
     PMP_MIN_GRANULARITY          : natural := 64*1024; -- minimal region granularity in bytes, has to be a power of 2, min 8 bytes
     -- Hardware Performance Monitors (HPM) --
-    HPM_NUM_CNTS                 : natural := 0      -- number of implemented HPM counters (0..29)
+    HPM_NUM_CNTS                 : natural := 0;     -- number of implemented HPM counters (0..29)
+    HPM_CNT_WIDTH                : natural := 40     -- total size of HPM counters (1..64)
   );
   port (
     -- global control --
@@ -112,6 +113,10 @@ entity neorv32_cpu_control is
 end neorv32_cpu_control;
 
 architecture neorv32_cpu_control_rtl of neorv32_cpu_control is
+
+  -- HPM counter width - high/low parts --
+  constant hpm_cnt_lo_width_c : natural := cond_sel_natural_f(boolean(HPM_CNT_WIDTH < 32), HPM_CNT_WIDTH, 32);
+  constant hpm_cnt_hi_width_c : natural := cond_sel_natural_f(boolean(HPM_CNT_WIDTH > 32), HPM_CNT_WIDTH-32, 0);
 
   -- instruction fetch enginge --
   type fetch_engine_state_t is (IFETCH_RESET, IFETCH_REQUEST, IFETCH_ISSUE);
@@ -254,8 +259,8 @@ architecture neorv32_cpu_control_rtl of neorv32_cpu_control is
   type pmp_ctrl_rd_t  is array (0 to 63) of std_ulogic_vector(7 downto 0);
   type pmp_addr_rd_t  is array (0 to 63) of std_ulogic_vector(data_width_c-1 downto 0);
   type mhpmevent_t    is array (0 to HPM_NUM_CNTS-1) of std_ulogic_vector(hpmcnt_event_size_c-1 downto 0);
-  type mhpmcnt_t      is array (0 to HPM_NUM_CNTS-1) of std_ulogic_vector(32 downto 0);
-  type mhpmcnth_t     is array (0 to HPM_NUM_CNTS-1) of std_ulogic_vector(31 downto 0);
+  type mhpmcnt_t      is array (0 to HPM_NUM_CNTS-1) of std_ulogic_vector(hpm_cnt_lo_width_c downto 0); -- max 32-bit, plus 1-bit overflow
+  type mhpmcnth_t     is array (0 to HPM_NUM_CNTS-1) of std_ulogic_vector(hpm_cnt_hi_width_c-1 downto 0); -- max 32-bit
   type mhpmevent_rd_t is array (0 to 29) of std_ulogic_vector(hpmcnt_event_size_c-1 downto 0);
   type mhpmcnt_rd_t   is array (0 to 29) of std_ulogic_vector(32 downto 0);
   type mhpmcnth_rd_t  is array (0 to 29) of std_ulogic_vector(31 downto 0);
@@ -344,7 +349,7 @@ architecture neorv32_cpu_control_rtl of neorv32_cpu_control is
 begin
 
 -- ****************************************************************************************************************************
--- Instruction Fetch (always fetches aligned 32-bit chunks of data)
+-- Instruction Fetch (always fetch 32-bit-aligned 32-bit chunks of data)
 -- ****************************************************************************************************************************
 
   -- Fetch Engine FSM Sync ------------------------------------------------------------------
@@ -1090,7 +1095,7 @@ begin
 
           when opcode_fop_c => -- floating-point operations
           -- ------------------------------------------------------------
-            if (CPU_EXTENSION_RISCV_Zfinx = true) then
+            if (CPU_EXTENSION_RISCV_Zfinx = true) and (decode_aux.is_float_op = '1') then
               ctrl_nxt(ctrl_cp_id_msb_c downto ctrl_cp_id_lsb_c) <= cp_sel_fpu_c; -- use FPU CP
               execute_engine.is_cp_op_nxt                        <= '1'; -- this is a CP operation
               ctrl_nxt(ctrl_alu_func1_c downto ctrl_alu_func0_c) <= alu_func_cmd_copro_c;
@@ -1266,7 +1271,7 @@ begin
   csr_access_check: process(execute_engine.i_reg, csr)
     variable csr_wacc_v           : std_ulogic; -- to check access to read-only CSRs
 --  variable csr_racc_v           : std_ulogic; -- to check access to write-only CSRs
-    variable csr_mcounteren_hpm_v : std_ulogic_vector(28 downto 0); -- max 29 HPM counters
+    variable csr_mcounteren_hpm_v : std_ulogic_vector(31 downto 0); -- max 29 HPM counters, plus 3 LSB-aligned dummy bits
   begin
     -- is this CSR instruction really going to write/read to/from a CSR? --
     if (execute_engine.i_reg(instr_funct3_msb_c downto instr_funct3_lsb_c) = funct3_csrrw_c) or
@@ -1280,33 +1285,33 @@ begin
 
     -- low privilege level access to hpm counters? --
     csr_mcounteren_hpm_v := (others => '0');
-    if (CPU_EXTENSION_RISCV_U = true) then
-      csr_mcounteren_hpm_v(HPM_NUM_CNTS-1 downto 0) := csr.mcounteren_hpm(HPM_NUM_CNTS-1 downto 0);
+    if (CPU_EXTENSION_RISCV_U = true) and (HPM_NUM_CNTS /= 0) then
+      csr_mcounteren_hpm_v(3+(HPM_NUM_CNTS-1) downto 3+0) := csr.mcounteren_hpm(HPM_NUM_CNTS-1 downto 0);
     else -- 'mcounteren' CSR is hardwired to zero if user mode is not implemented
       csr_mcounteren_hpm_v := (others => '0');
     end if;
 
     -- check CSR access --
     case csr.addr is
-      -- standard read/write CSRs --
-      when csr_fflags_c | csr_frm_c | csr_fcsr_c => csr_acc_valid <= bool_to_ulogic_f(CPU_EXTENSION_RISCV_Zfinx); -- full access for everyone if Zfinx extension is enabled
-      --
-      when csr_mstatus_c       => csr_acc_valid <= csr.priv_m_mode; -- M-mode only
-      when csr_mstatush_c      => csr_acc_valid <= csr.priv_m_mode; -- M-mode only
-      when csr_misa_c          => csr_acc_valid <= csr.priv_m_mode;-- and (not csr_wacc_v); -- M-mode only, MISA is read-only in the NEORV32 but we do not cause an exception here for compatibility
-      when csr_mie_c           => csr_acc_valid <= csr.priv_m_mode; -- M-mode only
-      when csr_mtvec_c         => csr_acc_valid <= csr.priv_m_mode; -- M-mode only
-      when csr_mscratch_c      => csr_acc_valid <= csr.priv_m_mode; -- M-mode only
-      when csr_mepc_c          => csr_acc_valid <= csr.priv_m_mode; -- M-mode only
-      when csr_mcause_c        => csr_acc_valid <= csr.priv_m_mode; -- M-mode only
-      when csr_mcounteren_c    => csr_acc_valid <= csr.priv_m_mode; -- M-mode only
-      when csr_mtval_c         => csr_acc_valid <= csr.priv_m_mode; -- M-mode only
-      when csr_mip_c           => csr_acc_valid <= csr.priv_m_mode; -- M-mode only
-      --
+
+      -- user floating-point CSRs --
+      when csr_fflags_c | csr_frm_c | csr_fcsr_c =>
+        csr_acc_valid <= bool_to_ulogic_f(CPU_EXTENSION_RISCV_Zfinx); -- full access for everyone if Zfinx extension is implemented
+
+      -- machine trap setup --
+      when csr_mstatus_c | csr_misa_c | csr_mie_c | csr_mtvec_c | csr_mcounteren_c | csr_mstatush_c =>
+        csr_acc_valid <= csr.priv_m_mode; -- M-mode only, NOTE: MISA is read-only in the NEORV32 but we do not cause an exception here for compatibility
+
+      -- machine trap handling --
+      when csr_mscratch_c | csr_mepc_c | csr_mcause_c | csr_mtval_c | csr_mip_c =>
+        csr_acc_valid <= csr.priv_m_mode; -- M-mode only
+
+      -- physical memory protection - configuration --
       when csr_pmpcfg0_c | csr_pmpcfg1_c | csr_pmpcfg2_c  | csr_pmpcfg3_c  | csr_pmpcfg4_c  | csr_pmpcfg5_c  | csr_pmpcfg6_c  | csr_pmpcfg7_c |
            csr_pmpcfg8_c | csr_pmpcfg9_c | csr_pmpcfg10_c | csr_pmpcfg11_c | csr_pmpcfg12_c | csr_pmpcfg13_c | csr_pmpcfg14_c | csr_pmpcfg15_c =>
         csr_acc_valid <= csr.priv_m_mode; -- M-mode only
-      --
+
+      -- physical memory protection - address --
       when csr_pmpaddr0_c  | csr_pmpaddr1_c  | csr_pmpaddr2_c  | csr_pmpaddr3_c  | csr_pmpaddr4_c  | csr_pmpaddr5_c  | csr_pmpaddr6_c  | csr_pmpaddr7_c  |
            csr_pmpaddr8_c  | csr_pmpaddr9_c  | csr_pmpaddr10_c | csr_pmpaddr11_c | csr_pmpaddr12_c | csr_pmpaddr13_c | csr_pmpaddr14_c | csr_pmpaddr15_c |
            csr_pmpaddr16_c | csr_pmpaddr17_c | csr_pmpaddr18_c | csr_pmpaddr19_c | csr_pmpaddr20_c | csr_pmpaddr21_c | csr_pmpaddr22_c | csr_pmpaddr23_c |
@@ -1316,113 +1321,62 @@ begin
            csr_pmpaddr48_c | csr_pmpaddr49_c | csr_pmpaddr50_c | csr_pmpaddr51_c | csr_pmpaddr52_c | csr_pmpaddr53_c | csr_pmpaddr54_c | csr_pmpaddr55_c |
            csr_pmpaddr56_c | csr_pmpaddr57_c | csr_pmpaddr58_c | csr_pmpaddr59_c | csr_pmpaddr60_c | csr_pmpaddr61_c | csr_pmpaddr62_c | csr_pmpaddr63_c =>
         csr_acc_valid <= csr.priv_m_mode; -- M-mode only
-      --
-      when csr_mcountinhibit_c => csr_acc_valid <= csr.priv_m_mode; -- M-mode only
-      --
-      when csr_mhpmevent3_c  | csr_mhpmevent4_c  | csr_mhpmevent5_c  | csr_mhpmevent6_c  | csr_mhpmevent7_c  | csr_mhpmevent8_c  |
-           csr_mhpmevent9_c  | csr_mhpmevent10_c | csr_mhpmevent11_c | csr_mhpmevent12_c | csr_mhpmevent13_c | csr_mhpmevent14_c |
-           csr_mhpmevent15_c | csr_mhpmevent16_c | csr_mhpmevent17_c | csr_mhpmevent18_c | csr_mhpmevent19_c | csr_mhpmevent20_c |
-           csr_mhpmevent21_c | csr_mhpmevent22_c | csr_mhpmevent23_c | csr_mhpmevent24_c | csr_mhpmevent25_c | csr_mhpmevent26_c |
-           csr_mhpmevent27_c | csr_mhpmevent28_c | csr_mhpmevent29_c | csr_mhpmevent30_c | csr_mhpmevent31_c =>
+
+      -- machine counters/timers --
+      when csr_mcycle_c | csr_mcycleh_c =>
         csr_acc_valid <= csr.priv_m_mode; -- M-mode only
-      --
-      when csr_mcycle_c        => csr_acc_valid <= csr.priv_m_mode; -- M-mode only
-      when csr_minstret_c      => csr_acc_valid <= csr.priv_m_mode; -- M-mode only
-      --
-      when csr_mhpmcounter3_c  | csr_mhpmcounter4_c  | csr_mhpmcounter5_c  | csr_mhpmcounter6_c  | csr_mhpmcounter7_c  | csr_mhpmcounter8_c  |
-           csr_mhpmcounter9_c  | csr_mhpmcounter10_c | csr_mhpmcounter11_c | csr_mhpmcounter12_c | csr_mhpmcounter13_c | csr_mhpmcounter14_c |
-           csr_mhpmcounter15_c | csr_mhpmcounter16_c | csr_mhpmcounter17_c | csr_mhpmcounter18_c | csr_mhpmcounter19_c | csr_mhpmcounter20_c |
-           csr_mhpmcounter21_c | csr_mhpmcounter22_c | csr_mhpmcounter23_c | csr_mhpmcounter24_c | csr_mhpmcounter25_c | csr_mhpmcounter26_c |
-           csr_mhpmcounter27_c | csr_mhpmcounter28_c | csr_mhpmcounter29_c | csr_mhpmcounter30_c | csr_mhpmcounter31_c =>
+      when csr_minstret_c | csr_minstreth_c =>
         csr_acc_valid <= csr.priv_m_mode; -- M-mode only
-      --
-      when csr_mcycleh_c       => csr_acc_valid <= csr.priv_m_mode; -- M-mode only
-      when csr_minstreth_c     => csr_acc_valid <= csr.priv_m_mode; -- M-mode only
-      --
-      when csr_mhpmcounter3h_c  | csr_mhpmcounter4h_c  | csr_mhpmcounter5h_c  | csr_mhpmcounter6h_c  | csr_mhpmcounter7h_c  | csr_mhpmcounter8h_c  |
+      when csr_mhpmcounter3_c   | csr_mhpmcounter4_c   | csr_mhpmcounter5_c   | csr_mhpmcounter6_c   | csr_mhpmcounter7_c   | csr_mhpmcounter8_c   | -- LOW
+           csr_mhpmcounter9_c   | csr_mhpmcounter10_c  | csr_mhpmcounter11_c  | csr_mhpmcounter12_c  | csr_mhpmcounter13_c  | csr_mhpmcounter14_c  |
+           csr_mhpmcounter15_c  | csr_mhpmcounter16_c  | csr_mhpmcounter17_c  | csr_mhpmcounter18_c  | csr_mhpmcounter19_c  | csr_mhpmcounter20_c  |
+           csr_mhpmcounter21_c  | csr_mhpmcounter22_c  | csr_mhpmcounter23_c  | csr_mhpmcounter24_c  | csr_mhpmcounter25_c  | csr_mhpmcounter26_c  |
+           csr_mhpmcounter27_c  | csr_mhpmcounter28_c  | csr_mhpmcounter29_c  | csr_mhpmcounter30_c  | csr_mhpmcounter31_c  |
+           csr_mhpmcounter3h_c  | csr_mhpmcounter4h_c  | csr_mhpmcounter5h_c  | csr_mhpmcounter6h_c  | csr_mhpmcounter7h_c  | csr_mhpmcounter8h_c  | -- HIGH
            csr_mhpmcounter9h_c  | csr_mhpmcounter10h_c | csr_mhpmcounter11h_c | csr_mhpmcounter12h_c | csr_mhpmcounter13h_c | csr_mhpmcounter14h_c |
            csr_mhpmcounter15h_c | csr_mhpmcounter16h_c | csr_mhpmcounter17h_c | csr_mhpmcounter18h_c | csr_mhpmcounter19h_c | csr_mhpmcounter20h_c |
            csr_mhpmcounter21h_c | csr_mhpmcounter22h_c | csr_mhpmcounter23h_c | csr_mhpmcounter24h_c | csr_mhpmcounter25h_c | csr_mhpmcounter26h_c |
            csr_mhpmcounter27h_c | csr_mhpmcounter28h_c | csr_mhpmcounter29h_c | csr_mhpmcounter30h_c | csr_mhpmcounter31h_c =>
         csr_acc_valid <= csr.priv_m_mode; -- M-mode only
 
-      -- standard read-only CSRs --
-      when csr_cycle_c         => csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr.mcounteren_cy); -- M-mode, U-mode if authorized, read-only
-      when csr_time_c          => csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr.mcounteren_tm); -- M-mode, U-mode if authorized, read-only
-      when csr_instret_c       => csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr.mcounteren_ir); -- M-mode, U-mode if authorized, read-only
-      --
-      when csr_hpmcounter3_c   => csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr_mcounteren_hpm_v(00)); -- M-mode, U-mode if authorized, read-only
-      when csr_hpmcounter4_c   => csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr_mcounteren_hpm_v(01)); -- M-mode, U-mode if authorized, read-only
-      when csr_hpmcounter5_c   => csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr_mcounteren_hpm_v(02)); -- M-mode, U-mode if authorized, read-only
-      when csr_hpmcounter6_c   => csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr_mcounteren_hpm_v(03)); -- M-mode, U-mode if authorized, read-only
-      when csr_hpmcounter7_c   => csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr_mcounteren_hpm_v(04)); -- M-mode, U-mode if authorized, read-only
-      when csr_hpmcounter8_c   => csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr_mcounteren_hpm_v(05)); -- M-mode, U-mode if authorized, read-only
-      when csr_hpmcounter9_c   => csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr_mcounteren_hpm_v(06)); -- M-mode, U-mode if authorized, read-only
-      when csr_hpmcounter10_c  => csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr_mcounteren_hpm_v(07)); -- M-mode, U-mode if authorized, read-only
-      when csr_hpmcounter11_c  => csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr_mcounteren_hpm_v(08)); -- M-mode, U-mode if authorized, read-only
-      when csr_hpmcounter12_c  => csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr_mcounteren_hpm_v(09)); -- M-mode, U-mode if authorized, read-only
-      when csr_hpmcounter13_c  => csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr_mcounteren_hpm_v(10)); -- M-mode, U-mode if authorized, read-only
-      when csr_hpmcounter14_c  => csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr_mcounteren_hpm_v(11)); -- M-mode, U-mode if authorized, read-only
-      when csr_hpmcounter15_c  => csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr_mcounteren_hpm_v(12)); -- M-mode, U-mode if authorized, read-only
-      when csr_hpmcounter16_c  => csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr_mcounteren_hpm_v(13)); -- M-mode, U-mode if authorized, read-only
-      when csr_hpmcounter17_c  => csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr_mcounteren_hpm_v(14)); -- M-mode, U-mode if authorized, read-only
-      when csr_hpmcounter18_c  => csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr_mcounteren_hpm_v(15)); -- M-mode, U-mode if authorized, read-only
-      when csr_hpmcounter19_c  => csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr_mcounteren_hpm_v(16)); -- M-mode, U-mode if authorized, read-only
-      when csr_hpmcounter20_c  => csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr_mcounteren_hpm_v(17)); -- M-mode, U-mode if authorized, read-only
-      when csr_hpmcounter21_c  => csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr_mcounteren_hpm_v(18)); -- M-mode, U-mode if authorized, read-only
-      when csr_hpmcounter22_c  => csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr_mcounteren_hpm_v(19)); -- M-mode, U-mode if authorized, read-only
-      when csr_hpmcounter23_c  => csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr_mcounteren_hpm_v(20)); -- M-mode, U-mode if authorized, read-only
-      when csr_hpmcounter24_c  => csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr_mcounteren_hpm_v(21)); -- M-mode, U-mode if authorized, read-only
-      when csr_hpmcounter25_c  => csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr_mcounteren_hpm_v(22)); -- M-mode, U-mode if authorized, read-only
-      when csr_hpmcounter26_c  => csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr_mcounteren_hpm_v(23)); -- M-mode, U-mode if authorized, read-only
-      when csr_hpmcounter27_c  => csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr_mcounteren_hpm_v(24)); -- M-mode, U-mode if authorized, read-only
-      when csr_hpmcounter28_c  => csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr_mcounteren_hpm_v(25)); -- M-mode, U-mode if authorized, read-only
-      when csr_hpmcounter29_c  => csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr_mcounteren_hpm_v(26)); -- M-mode, U-mode if authorized, read-only
-      when csr_hpmcounter30_c  => csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr_mcounteren_hpm_v(27)); -- M-mode, U-mode if authorized, read-only
-      when csr_hpmcounter31_c  => csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr_mcounteren_hpm_v(28)); -- M-mode, U-mode if authorized, read-only
-      --
-      when csr_cycleh_c        => csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr.mcounteren_cy); -- M-mode, U-mode if authorized, read-only
-      when csr_timeh_c         => csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr.mcounteren_tm); -- M-mode, U-mode if authorized, read-only
-      when csr_instreth_c      => csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr.mcounteren_ir); -- M-mode, U-mode if authorized, read-only
-      --
-      when csr_hpmcounter3h_c  => csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr_mcounteren_hpm_v(00)); -- M-mode, U-mode if authorized, read-only
-      when csr_hpmcounter4h_c  => csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr_mcounteren_hpm_v(01)); -- M-mode, U-mode if authorized, read-only
-      when csr_hpmcounter5h_c  => csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr_mcounteren_hpm_v(02)); -- M-mode, U-mode if authorized, read-only
-      when csr_hpmcounter6h_c  => csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr_mcounteren_hpm_v(03)); -- M-mode, U-mode if authorized, read-only
-      when csr_hpmcounter7h_c  => csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr_mcounteren_hpm_v(04)); -- M-mode, U-mode if authorized, read-only
-      when csr_hpmcounter8h_c  => csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr_mcounteren_hpm_v(05)); -- M-mode, U-mode if authorized, read-only
-      when csr_hpmcounter9h_c  => csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr_mcounteren_hpm_v(06)); -- M-mode, U-mode if authorized, read-only
-      when csr_hpmcounter10h_c => csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr_mcounteren_hpm_v(07)); -- M-mode, U-mode if authorized, read-only
-      when csr_hpmcounter11h_c => csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr_mcounteren_hpm_v(08)); -- M-mode, U-mode if authorized, read-only
-      when csr_hpmcounter12h_c => csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr_mcounteren_hpm_v(09)); -- M-mode, U-mode if authorized, read-only
-      when csr_hpmcounter13h_c => csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr_mcounteren_hpm_v(10)); -- M-mode, U-mode if authorized, read-only
-      when csr_hpmcounter14h_c => csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr_mcounteren_hpm_v(11)); -- M-mode, U-mode if authorized, read-only
-      when csr_hpmcounter15h_c => csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr_mcounteren_hpm_v(12)); -- M-mode, U-mode if authorized, read-only
-      when csr_hpmcounter16h_c => csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr_mcounteren_hpm_v(13)); -- M-mode, U-mode if authorized, read-only
-      when csr_hpmcounter17h_c => csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr_mcounteren_hpm_v(14)); -- M-mode, U-mode if authorized, read-only
-      when csr_hpmcounter18h_c => csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr_mcounteren_hpm_v(15)); -- M-mode, U-mode if authorized, read-only
-      when csr_hpmcounter19h_c => csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr_mcounteren_hpm_v(16)); -- M-mode, U-mode if authorized, read-only
-      when csr_hpmcounter20h_c => csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr_mcounteren_hpm_v(17)); -- M-mode, U-mode if authorized, read-only
-      when csr_hpmcounter21h_c => csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr_mcounteren_hpm_v(18)); -- M-mode, U-mode if authorized, read-only
-      when csr_hpmcounter22h_c => csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr_mcounteren_hpm_v(19)); -- M-mode, U-mode if authorized, read-only
-      when csr_hpmcounter23h_c => csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr_mcounteren_hpm_v(20)); -- M-mode, U-mode if authorized, read-only
-      when csr_hpmcounter24h_c => csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr_mcounteren_hpm_v(21)); -- M-mode, U-mode if authorized, read-only
-      when csr_hpmcounter25h_c => csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr_mcounteren_hpm_v(22)); -- M-mode, U-mode if authorized, read-only
-      when csr_hpmcounter26h_c => csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr_mcounteren_hpm_v(23)); -- M-mode, U-mode if authorized, read-only
-      when csr_hpmcounter27h_c => csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr_mcounteren_hpm_v(24)); -- M-mode, U-mode if authorized, read-only
-      when csr_hpmcounter28h_c => csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr_mcounteren_hpm_v(25)); -- M-mode, U-mode if authorized, read-only
-      when csr_hpmcounter29h_c => csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr_mcounteren_hpm_v(26)); -- M-mode, U-mode if authorized, read-only
-      when csr_hpmcounter30h_c => csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr_mcounteren_hpm_v(27)); -- M-mode, U-mode if authorized, read-only
-      when csr_hpmcounter31h_c => csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr_mcounteren_hpm_v(28)); -- M-mode, U-mode if authorized, read-only
-      --
-      when csr_mvendorid_c     => csr_acc_valid <= (not csr_wacc_v) and csr.priv_m_mode; -- M-mode only, read-only
-      when csr_marchid_c       => csr_acc_valid <= (not csr_wacc_v) and csr.priv_m_mode; -- M-mode only, read-only
-      when csr_mimpid_c        => csr_acc_valid <= (not csr_wacc_v) and csr.priv_m_mode; -- M-mode only, read-only
-      when csr_mhartid_c       => csr_acc_valid <= (not csr_wacc_v) and csr.priv_m_mode; -- M-mode only, read-only
-      -- custom read-only CSRs --
-      when csr_mzext_c         => csr_acc_valid <= (not csr_wacc_v) and csr.priv_m_mode; -- M-mode only, read-only
-      --
-      when others              => csr_acc_valid <= '0'; -- invalid access
+      -- user counters/timers --
+      when csr_cycle_c | csr_cycleh_c =>
+        csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr.mcounteren_cy); -- M-mode, U-mode if authorized, read-only
+      when csr_time_c | csr_timeh_c =>
+        csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr.mcounteren_tm); -- M-mode, U-mode if authorized, read-only
+      when csr_instret_c | csr_instreth_c =>
+        csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr.mcounteren_ir); -- M-mode, U-mode if authorized, read-only
+      when csr_hpmcounter3_c   | csr_hpmcounter4_c   | csr_hpmcounter5_c   | csr_hpmcounter6_c   | csr_hpmcounter7_c   | csr_hpmcounter8_c   | -- LOW
+           csr_hpmcounter9_c   | csr_hpmcounter10_c  | csr_hpmcounter11_c  | csr_hpmcounter12_c  | csr_hpmcounter13_c  | csr_hpmcounter14_c  |
+           csr_hpmcounter15_c  | csr_hpmcounter16_c  | csr_hpmcounter17_c  | csr_hpmcounter18_c  | csr_hpmcounter19_c  | csr_hpmcounter20_c  |
+           csr_hpmcounter21_c  | csr_hpmcounter22_c  | csr_hpmcounter23_c  | csr_hpmcounter24_c  | csr_hpmcounter25_c  | csr_hpmcounter26_c  |
+           csr_hpmcounter27_c  | csr_hpmcounter28_c  | csr_hpmcounter29_c  | csr_hpmcounter30_c  | csr_hpmcounter31_c  |
+           csr_hpmcounter3h_c  | csr_hpmcounter4h_c  | csr_hpmcounter5h_c  | csr_hpmcounter6h_c  | csr_hpmcounter7h_c  | csr_hpmcounter8h_c  | -- HIGH
+           csr_hpmcounter9h_c  | csr_hpmcounter10h_c | csr_hpmcounter11h_c | csr_hpmcounter12h_c | csr_hpmcounter13h_c | csr_hpmcounter14h_c |
+           csr_hpmcounter15h_c | csr_hpmcounter16h_c | csr_hpmcounter17h_c | csr_hpmcounter18h_c | csr_hpmcounter19h_c | csr_hpmcounter20h_c |
+           csr_hpmcounter21h_c | csr_hpmcounter22h_c | csr_hpmcounter23h_c | csr_hpmcounter24h_c | csr_hpmcounter25h_c | csr_hpmcounter26h_c |
+           csr_hpmcounter27h_c | csr_hpmcounter28h_c | csr_hpmcounter29h_c | csr_hpmcounter30h_c | csr_hpmcounter31h_c =>
+        csr_acc_valid <= (not csr_wacc_v) and (csr.priv_m_mode or csr_mcounteren_hpm_v(to_integer(unsigned(csr.addr(4 downto 0))))); -- M-mode, U-mode if authorized, read-only
+
+      -- machine counter setup --
+      when csr_mcountinhibit_c =>
+        csr_acc_valid <= csr.priv_m_mode; -- M-mode only
+      when csr_mhpmevent3_c  | csr_mhpmevent4_c  | csr_mhpmevent5_c  | csr_mhpmevent6_c  | csr_mhpmevent7_c  | csr_mhpmevent8_c  |
+           csr_mhpmevent9_c  | csr_mhpmevent10_c | csr_mhpmevent11_c | csr_mhpmevent12_c | csr_mhpmevent13_c | csr_mhpmevent14_c |
+           csr_mhpmevent15_c | csr_mhpmevent16_c | csr_mhpmevent17_c | csr_mhpmevent18_c | csr_mhpmevent19_c | csr_mhpmevent20_c |
+           csr_mhpmevent21_c | csr_mhpmevent22_c | csr_mhpmevent23_c | csr_mhpmevent24_c | csr_mhpmevent25_c | csr_mhpmevent26_c |
+           csr_mhpmevent27_c | csr_mhpmevent28_c | csr_mhpmevent29_c | csr_mhpmevent30_c | csr_mhpmevent31_c =>
+        csr_acc_valid <= csr.priv_m_mode; -- M-mode only
+
+      -- machine information registers --
+      when csr_mvendorid_c | csr_marchid_c | csr_mimpid_c | csr_mhartid_c =>
+        csr_acc_valid <= (not csr_wacc_v) and csr.priv_m_mode; -- M-mode only, read-only
+      -- custom (NEORV32-specific) read-only CSRs --
+      when csr_mzext_c =>
+        csr_acc_valid <= (not csr_wacc_v) and csr.priv_m_mode; -- M-mode only, read-only
+      -- undefined / not implemented --
+      when others =>
+        csr_acc_valid <= '0'; -- invalid access
     end case;
   end process csr_access_check;
 
@@ -1960,25 +1914,23 @@ begin
 
           -- user floating-point CSRs --
           -- --------------------------------------------------------------------
-          if (csr.addr(11 downto 4) = csr_class_float_c) then -- floating point CSR class
-            -- R/W: fflags - floating-point (FPU) exception flags --
-            if (csr.addr(3 downto 0) = csr_fflags_c(3 downto 0)) and (CPU_EXTENSION_RISCV_Zfinx = true) then
-              csr.fflags <= csr.wdata(4 downto 0);
-            end if;
-            -- R/W: frm - floating-point (FPU) rounding mode --
-            if (csr.addr(3 downto 0) = csr_frm_c(3 downto 0)) and (CPU_EXTENSION_RISCV_Zfinx = true) then
-              csr.frm <= csr.wdata(2 downto 0);
-            end if;
-            -- R/W: fflags - floating-point (FPU) control/status (frm + fflags) --
-            if (csr.addr(3 downto 0) = csr_fcsr_c(3 downto 0)) and (CPU_EXTENSION_RISCV_Zfinx = true) then
-              csr.frm    <= csr.wdata(7 downto 5);
-              csr.fflags <= csr.wdata(4 downto 0);
-            end if;
+          if (csr.addr(11 downto 4) = csr_class_float_c) and (csr.addr(3 downto 2) = csr_fcsr_c(3 downto 2)) and
+             (CPU_EXTENSION_RISCV_Zfinx = true) then -- floating point CSR class
+            case csr.addr(1 downto 0) is
+              when "01" => -- R/W: fflags - floating-point (FPU) exception flags
+                csr.fflags <= csr.wdata(4 downto 0);
+              when "10" => -- R/W: frm - floating-point (FPU) rounding mode
+                csr.frm    <= csr.wdata(2 downto 0);
+              when "11" => -- R/W: fcsr - floating-point (FPU) control/status (frm + fflags)
+                csr.frm    <= csr.wdata(7 downto 5);
+                csr.fflags <= csr.wdata(4 downto 0);
+              when others => NULL;
+            end case;
           end if;
 
           -- machine trap setup --
           -- --------------------------------------------------------------------
-          if (csr.addr(11 downto 4) = csr_setup_c) then -- ftrap setup CSR class
+          if (csr.addr(11 downto 4) = csr_class_setup_c) then -- ftrap setup CSR class
             -- R/W: mstatus - machine status register --
             if (csr.addr(3 downto 0) = csr_mstatus_c(3 downto 0)) then
               csr.mstatus_mie  <= csr.wdata(03);
@@ -2082,16 +2034,14 @@ begin
 
           -- machine counter setup --
           -- --------------------------------------------------------------------
-          -- R/W: mcountinhibit - machine counter-inhibit register --
-          if (csr.addr = csr_mcountinhibit_c) then
-            csr.mcountinhibit_cy  <= csr.wdata(0); -- enable auto-increment of [m]cycle[h] counter
-            csr.mcountinhibit_ir  <= csr.wdata(2); -- enable auto-increment of [m]instret[h] counter
-            csr.mcountinhibit_hpm <= csr.wdata(csr.mcountinhibit_hpm'left+3 downto 3); -- enable auto-increment of [m]hpmcounter*[h] counter
-          end if;
-
-          -- machine performance-monitoring event selector --
-          -- --------------------------------------------------------------------
-          if (unsigned(csr.addr) >= unsigned(csr_mhpmevent3_c)) and (unsigned(csr.addr) <= unsigned(csr_mhpmevent31_c)) then
+          if (csr.addr(11 downto 6) = csr_cnt_setup_c) then -- counter configuration CSR class
+            -- R/W: mcountinhibit - machine counter-inhibit register --
+            if (csr.addr(5 downto 0) = csr_mcountinhibit_c(5 downto 0)) then
+              csr.mcountinhibit_cy  <= csr.wdata(0); -- enable auto-increment of [m]cycle[h] counter
+              csr.mcountinhibit_ir  <= csr.wdata(2); -- enable auto-increment of [m]instret[h] counter
+              csr.mcountinhibit_hpm <= csr.wdata(csr.mcountinhibit_hpm'left+3 downto 3); -- enable auto-increment of [m]hpmcounter*[h] counter
+            end if;
+            -- machine performance-monitoring event selector --
             if (HPM_NUM_CNTS > 0) then
               for i in 0 to HPM_NUM_CNTS-1 loop
                 if (csr.addr(4 downto 0) = std_ulogic_vector(to_unsigned(i+3, 5))) then
@@ -2110,7 +2060,7 @@ begin
 
           -- floating-point (FPU) exception flags --
           -- --------------------------------------------------------------------
-          if (CPU_EXTENSION_RISCV_Zfinx = true) and (execute_engine.state = ALU_WAIT) then
+          if (CPU_EXTENSION_RISCV_Zfinx = true) then
             csr.fflags <= csr.fflags or fpu_flags_i; -- accumulate flags ("accrued exception flags")
           end if;
 
@@ -2203,7 +2153,7 @@ begin
     end if;
   end process csr_write_access;
 
-  -- decode privilege mode --
+  -- decode current privilege mode --
   csr.priv_m_mode <= '1' when (csr.privilege = priv_mode_m_c) else '0';
   csr.priv_u_mode <= '1' when (csr.privilege = priv_mode_u_c) else '0';
 
@@ -2212,11 +2162,13 @@ begin
   begin
     pmp_addr_o <= (others => (others => '0'));
     pmp_ctrl_o <= (others => (others => '0'));
-    for i in 0 to PMP_NUM_REGIONS-1 loop
-      pmp_addr_o(i) <= csr.pmpaddr(i) & "11";
-      pmp_addr_o(i)(index_size_f(PMP_MIN_GRANULARITY)-4 downto 0) <= (others => '1');
-      pmp_ctrl_o(i) <= csr.pmpcfg(i);
-    end loop; -- i
+    if (PMP_NUM_REGIONS /= 0) then
+      for i in 0 to PMP_NUM_REGIONS-1 loop
+        pmp_addr_o(i) <= csr.pmpaddr(i) & "11";
+        pmp_addr_o(i)(index_size_f(PMP_MIN_GRANULARITY)-4 downto 0) <= (others => '1');
+        pmp_ctrl_o(i) <= csr.pmpcfg(i);
+      end loop; -- i
+    end if;
   end process pmp_output;
 
   -- PMP read dummy --
@@ -2224,13 +2176,15 @@ begin
   begin
     csr.pmpcfg_rd  <= (others => (others => '0'));
     csr.pmpaddr_rd <= (others => (others => '0'));
-    for i in 0 to PMP_NUM_REGIONS-1 loop
-      csr.pmpcfg_rd(i)  <= csr.pmpcfg(i);
-      csr.pmpaddr_rd(i) <= csr.pmpaddr(i);
-      if (csr.pmpcfg(i)(4 downto 3) = "00") then -- mode = off
-        csr.pmpaddr_rd(i)(index_size_f(PMP_MIN_GRANULARITY)-3 downto 0) <= (others => '0'); -- required for granularity check by SW
-      end if;
-    end loop; -- i
+    if (PMP_NUM_REGIONS /= 0) then
+      for i in 0 to PMP_NUM_REGIONS-1 loop
+        csr.pmpcfg_rd(i)  <= csr.pmpcfg(i);
+        csr.pmpaddr_rd(i) <= csr.pmpaddr(i);
+        if (csr.pmpcfg(i)(4 downto 3) = "00") then -- mode = off
+          csr.pmpaddr_rd(i)(index_size_f(PMP_MIN_GRANULARITY)-3 downto 0) <= (others => '0'); -- required for granularity check by SW
+        end if;
+      end loop; -- i
+    end if;
   end process pmp_rd_dummy;
 
   -- FPU rounding mode --
@@ -2278,20 +2232,29 @@ begin
 
       -- [machine] hardware performance monitors (counters) --
       for i in 0 to HPM_NUM_CNTS-1 loop
-        -- [m]hpmcounter* --
-        if (csr.we = '1') and (csr.addr = std_ulogic_vector(unsigned(csr_mhpmcounter3_c) + i)) then -- write access
-          csr.mhpmcounter(i) <= '0' & csr.wdata;
+        if (hpm_cnt_lo_width_c <= 0) then
+          csr.mhpmcounter(i) <= (others => '0');
           mhpmcounter_msb(i) <= '0';
-        elsif (csr.mcountinhibit_hpm(i) = '0') and (hpmcnt_trigger(i) = '1') then -- non-inhibited automatic update
-          csr.mhpmcounter(i) <= std_ulogic_vector(unsigned(csr.mhpmcounter(i)) + 1);
-          mhpmcounter_msb(i) <= csr.mhpmcounter(i)(csr.mhpmcounter(i)'left);
+        else
+          -- [m]hpmcounter* --
+          if (csr.we = '1') and (csr.addr = std_ulogic_vector(unsigned(csr_mhpmcounter3_c) + i)) then -- write access
+            csr.mhpmcounter(i) <= '0' & csr.wdata(hpm_cnt_lo_width_c-1 downto 0);
+            mhpmcounter_msb(i) <= '0';
+          elsif (csr.mcountinhibit_hpm(i) = '0') and (hpmcnt_trigger(i) = '1') then -- non-inhibited automatic update
+            csr.mhpmcounter(i) <= std_ulogic_vector(unsigned(csr.mhpmcounter(i)) + 1);
+            mhpmcounter_msb(i) <= csr.mhpmcounter(i)(csr.mhpmcounter(i)'left);
+          end if;
         end if;
 
         -- [m]hpmcounter*h --
-        if (csr.we = '1') and (csr.addr = std_ulogic_vector(unsigned(csr_mhpmcounter3h_c) + i)) then -- write access
-          csr.mhpmcounterh(i) <= csr.wdata;
-        elsif ((mhpmcounter_msb(i) xor csr.mhpmcounter(i)(csr.mhpmcounter(i)'left)) = '1') then -- automatic update (continued)
-          csr.mhpmcounterh(i) <= std_ulogic_vector(unsigned(csr.mhpmcounterh(i)) + 1);
+        if (hpm_cnt_hi_width_c <= 0) then
+          csr.mhpmcounterh(i) <= (others => '0');
+        else
+          if (csr.we = '1') and (csr.addr = std_ulogic_vector(unsigned(csr_mhpmcounter3h_c) + i)) then -- write access
+            csr.mhpmcounterh(i) <= csr.wdata(hpm_cnt_hi_width_c-1 downto 0);
+          elsif ((mhpmcounter_msb(i) xor csr.mhpmcounter(i)(csr.mhpmcounter(i)'left)) = '1') then -- automatic update (continued)
+            csr.mhpmcounterh(i) <= std_ulogic_vector(unsigned(csr.mhpmcounterh(i)) + 1);
+          end if;
         end if;
       end loop; -- i
 
@@ -2304,11 +2267,17 @@ begin
     csr.mhpmevent_rd    <= (others => (others => '0'));
     csr.mhpmcounter_rd  <= (others => (others => '0'));
     csr.mhpmcounterh_rd <= (others => (others => '0'));
-    for i in 0 to HPM_NUM_CNTS-1 loop
-      csr.mhpmevent_rd(i)    <= csr.mhpmevent(i);
-      csr.mhpmcounter_rd(i)  <= csr.mhpmcounter(i);
-      csr.mhpmcounterh_rd(i) <= csr.mhpmcounterh(i);
-    end loop; -- i
+    if (HPM_NUM_CNTS /= 0) then
+      for i in 0 to HPM_NUM_CNTS-1 loop
+        csr.mhpmevent_rd(i) <= csr.mhpmevent(i);
+        if (hpm_cnt_lo_width_c > 0) then
+          csr.mhpmcounter_rd(i)(hpm_cnt_lo_width_c-1 downto 0)  <= csr.mhpmcounter(i)(hpm_cnt_lo_width_c-1 downto 0);
+        end if;
+        if (hpm_cnt_hi_width_c > 0) then
+          csr.mhpmcounterh_rd(i)(hpm_cnt_hi_width_c-1 downto 0) <= csr.mhpmcounterh(i)(hpm_cnt_hi_width_c-1 downto 0);
+        end if;
+      end loop; -- i
+    end if;
   end process hpm_rd_dummy;
 
 
@@ -2322,9 +2291,11 @@ begin
       -- enable selected triggers by ANDing actual events and according CSR configuration bits --
       -- OR everything to see if counter should increment --
       hpmcnt_trigger <= (others => '0'); -- default
-      for i in 0 to HPM_NUM_CNTS-1 loop
-        hpmcnt_trigger(i) <= or_all_f(cnt_event and csr.mhpmevent(i)(cnt_event'left downto 0));
-      end loop; -- i
+      if (HPM_NUM_CNTS /= 0) then
+        for i in 0 to HPM_NUM_CNTS-1 loop
+          hpmcnt_trigger(i) <= or_all_f(cnt_event and csr.mhpmevent(i)(cnt_event'left downto 0));
+        end loop; -- i
+      end if;
     end if;
   end process hpmcnt_ctrl;
 
@@ -2373,7 +2344,7 @@ begin
             if (CPU_EXTENSION_RISCV_Zfinx = true) then -- FPU implemented
               csr.rdata(2 downto 0) <= csr.frm;
             end if;
-          when csr_fcsr_c => -- R/W: fflags - floating-point (FPU) control/status (frm + fflags)
+          when csr_fcsr_c => -- R/W: fcsr - floating-point (FPU) control/status (frm + fflags)
             csr.rdata <= (others => '0');
             if (CPU_EXTENSION_RISCV_Zfinx = true) then -- FPU implemented
               csr.rdata(7 downto 5) <= csr.frm;
@@ -2394,7 +2365,6 @@ begin
             csr.rdata(01) <= bool_to_ulogic_f(CPU_EXTENSION_RISCV_B);     -- B CPU extension
             csr.rdata(02) <= bool_to_ulogic_f(CPU_EXTENSION_RISCV_C);     -- C CPU extension
             csr.rdata(04) <= bool_to_ulogic_f(CPU_EXTENSION_RISCV_E);     -- E CPU extension
-            csr.rdata(05) <= '0';                                         -- F CPU extension
             csr.rdata(08) <= not bool_to_ulogic_f(CPU_EXTENSION_RISCV_E); -- I CPU extension (if not E)
             csr.rdata(12) <= bool_to_ulogic_f(CPU_EXTENSION_RISCV_M);     -- M CPU extension
             csr.rdata(20) <= bool_to_ulogic_f(CPU_EXTENSION_RISCV_U);     -- U CPU extension
@@ -2411,13 +2381,12 @@ begin
           when csr_mtvec_c => -- R/W: mtvec - machine trap-handler base address (for ALL exceptions)
             csr.rdata <= csr.mtvec(data_width_c-1 downto 2) & "00"; -- mtvec.MODE=0
           when csr_mcounteren_c => -- R/W: machine counter enable register
+            csr.rdata <= (others => '0');
             if (CPU_EXTENSION_RISCV_U = true) then -- this CSR is hardwired to zero if user mode is not implemented
               csr.rdata(0) <= csr.mcounteren_cy; -- enable user-level access to cycle[h]
               csr.rdata(1) <= csr.mcounteren_tm; -- enable user-level access to time[h]
               csr.rdata(2) <= csr.mcounteren_ir; -- enable user-level access to instret[h]
               csr.rdata(csr.mcounteren_hpm'left+3 downto 3) <= csr.mcounteren_hpm; -- enable user-level access to hpmcounterx[h]
-            else
-              csr.rdata <= (others => '0');
             end if;
 
           -- machine trap handling --

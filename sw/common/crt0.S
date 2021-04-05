@@ -187,10 +187,11 @@ __crt0_main_entry:
   csrw mcycleh,   zero
   csrw minstret,  zero
   csrw minstreth, zero
-  // enable read-access from user-mode for cycle[h], time[h] and instret[h]
-  csrwi 0x306, 7 // mcounteren
-  // enable auto-increment of all counters
-  csrw 0x320, x0 // mcountinhibit
+  // no access from less-privileged modes to counter CSRs
+  csrw mcounteren, zero
+  // disable all counters (except for [m]cycle[h] and [m]instret[h])
+  li   x12, ~5
+  csrw mcountinhibit, x12
 
   // restore mcause reset value (so that 'main' knows we are coming from reset)
   li x12, 0x80000000

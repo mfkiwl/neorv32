@@ -50,7 +50,8 @@ package neorv32_package is
   constant xbus_big_endian_c : boolean := true; -- external memory access byte order: true=big endian (default); false=little endian
 
   -- CPU core --
-  constant ipb_entries_c : natural := 2; -- entries in CPU instruction prefetch buffer, has to be a power of 2, default=2
+  constant ipb_entries_c   : natural := 2; -- entries in CPU instruction prefetch buffer, has to be a power of 2, default=2
+  constant cp_timeout_en_c : boolean := false; -- auto-terminate pending co-processor operations after 256 cycles (for debugging only), default = false
 
   -- "critical" number of implemented PMP regions --
   -- if more PMP regions (> pmp_num_regions_critical_c) are defined, another register stage is automatically inserted into the memory interfaces
@@ -60,10 +61,9 @@ package neorv32_package is
   -- Architecture Constants (do not modify!) ------------------------------------------------
   -- -------------------------------------------------------------------------------------------
   constant data_width_c   : natural := 32; -- native data path width - do not change!
-  constant hw_version_c   : std_ulogic_vector(31 downto 0) := x"01050209"; -- no touchy!
-  constant pmp_max_r_c    : natural := 8; -- max PMP regions - FIXED!
+  constant hw_version_c   : std_ulogic_vector(31 downto 0) := x"01050306"; -- no touchy!
   constant archid_c       : natural := 19; -- official NEORV32 architecture ID - hands off!
-  constant rf_r0_is_reg_c : boolean := true; -- reg_file.r0 is a *physical register* that has to be initialized to zero by the CPU HW
+  constant rf_r0_is_reg_c : boolean := true; -- x0 is a *physical register* that has to be initialized to zero by the CPU
 
   -- Helper Functions -----------------------------------------------------------------------
   -- -------------------------------------------------------------------------------------------
@@ -96,121 +96,121 @@ package neorv32_package is
   --> internal data/instruction memory sizes are configured via top's generics
 
   -- Internal Bootloader ROM --
-  constant boot_rom_base_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFF0000"; -- bootloader base address, fixed!
+  constant boot_rom_base_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"ffff0000"; -- bootloader base address, fixed!
   constant boot_rom_size_c      : natural := 4*1024; -- module's address space in bytes
   constant boot_rom_max_size_c  : natural := 32*1024; -- max module's address space in bytes, fixed!
 
   -- IO: Peripheral Devices ("IO") Area --
   -- Control register(s) (including the device-enable) should be located at the base address of each device
-  constant io_base_c            : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFF00";
+  constant io_base_c            : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff00";
   constant io_size_c            : natural := 64*4; -- module's address space in bytes, fixed!
 
   -- Custom Functions Subsystem (CFS) --
-  constant cfs_base_c           : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFF00"; -- base address
+  constant cfs_base_c           : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff00"; -- base address
   constant cfs_size_c           : natural := 32*4; -- module's address space in bytes
-  constant cfs_reg0_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFF00";
-  constant cfs_reg1_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFF04";
-  constant cfs_reg2_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFF08";
-  constant cfs_reg3_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFF0C";
-  constant cfs_reg4_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFF10";
-  constant cfs_reg5_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFF14";
-  constant cfs_reg6_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFF18";
-  constant cfs_reg7_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFF1C";
-  constant cfs_reg8_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFF20";
-  constant cfs_reg9_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFF24";
-  constant cfs_reg10_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFF28";
-  constant cfs_reg11_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFF2C";
-  constant cfs_reg12_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFF30";
-  constant cfs_reg13_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFF34";
-  constant cfs_reg14_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFF38";
-  constant cfs_reg15_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFF3C";
-  constant cfs_reg16_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFF40";
-  constant cfs_reg17_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFF44";
-  constant cfs_reg18_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFF48";
-  constant cfs_reg19_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFF4C";
-  constant cfs_reg20_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFF50";
-  constant cfs_reg21_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFF54";
-  constant cfs_reg22_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFF58";
-  constant cfs_reg23_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFF5C";
-  constant cfs_reg24_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFF60";
-  constant cfs_reg25_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFF64";
-  constant cfs_reg26_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFF68";
-  constant cfs_reg27_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFF6C";
-  constant cfs_reg28_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFF70";
-  constant cfs_reg29_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFF74";
-  constant cfs_reg30_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFF78";
-  constant cfs_reg31_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFF7C";
+  constant cfs_reg0_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff00";
+  constant cfs_reg1_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff04";
+  constant cfs_reg2_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff08";
+  constant cfs_reg3_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff0c";
+  constant cfs_reg4_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff10";
+  constant cfs_reg5_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff14";
+  constant cfs_reg6_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff18";
+  constant cfs_reg7_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff1c";
+  constant cfs_reg8_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff20";
+  constant cfs_reg9_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff24";
+  constant cfs_reg10_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff28";
+  constant cfs_reg11_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff2c";
+  constant cfs_reg12_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff30";
+  constant cfs_reg13_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff34";
+  constant cfs_reg14_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff38";
+  constant cfs_reg15_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff3c";
+  constant cfs_reg16_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff40";
+  constant cfs_reg17_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff44";
+  constant cfs_reg18_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff48";
+  constant cfs_reg19_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff4c";
+  constant cfs_reg20_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff50";
+  constant cfs_reg21_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff54";
+  constant cfs_reg22_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff58";
+  constant cfs_reg23_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff5c";
+  constant cfs_reg24_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff60";
+  constant cfs_reg25_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff64";
+  constant cfs_reg26_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff68";
+  constant cfs_reg27_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff6c";
+  constant cfs_reg28_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff70";
+  constant cfs_reg29_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff74";
+  constant cfs_reg30_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff78";
+  constant cfs_reg31_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff7c";
 
   -- General Purpose Input/Output Unit (GPIO) --
-  constant gpio_base_c          : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFF80"; -- base address
+  constant gpio_base_c          : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff80"; -- base address
   constant gpio_size_c          : natural := 2*4; -- module's address space in bytes
-  constant gpio_in_addr_c       : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFF80";
-  constant gpio_out_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFF84";
+  constant gpio_in_addr_c       : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff80";
+  constant gpio_out_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff84";
 
   -- True Random Number Generator (TRNG) --
-  constant trng_base_c          : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFF88"; -- base address
+  constant trng_base_c          : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff88"; -- base address
   constant trng_size_c          : natural := 1*4; -- module's address space in bytes
-  constant trng_ctrl_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFF88";
+  constant trng_ctrl_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff88";
 
   -- Watch Dog Timer (WDT) --
-  constant wdt_base_c           : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFF8C"; -- base address
+  constant wdt_base_c           : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff8c"; -- base address
   constant wdt_size_c           : natural := 1*4; -- module's address space in bytes
-  constant wdt_ctrl_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFF8C";
+  constant wdt_ctrl_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff8c";
 
   -- Machine System Timer (MTIME) --
-  constant mtime_base_c         : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFF90"; -- base address
+  constant mtime_base_c         : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff90"; -- base address
   constant mtime_size_c         : natural := 4*4; -- module's address space in bytes
-  constant mtime_time_lo_addr_c : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFF90";
-  constant mtime_time_hi_addr_c : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFF94";
-  constant mtime_cmp_lo_addr_c  : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFF98";
-  constant mtime_cmp_hi_addr_c  : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFF9C";
+  constant mtime_time_lo_addr_c : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff90";
+  constant mtime_time_hi_addr_c : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff94";
+  constant mtime_cmp_lo_addr_c  : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff98";
+  constant mtime_cmp_hi_addr_c  : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff9c";
 
   -- Universal Asynchronous Receiver/Transmitter 0 (UART0), primary UART --
-  constant uart0_base_c         : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFFA0"; -- base address
+  constant uart0_base_c         : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffffa0"; -- base address
   constant uart0_size_c         : natural := 2*4; -- module's address space in bytes
-  constant uart0_ctrl_addr_c    : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFFA0";
-  constant uart0_rtx_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFFA4";
+  constant uart0_ctrl_addr_c    : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffffa0";
+  constant uart0_rtx_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffffa4";
 
   -- Serial Peripheral Interface (SPI) --
-  constant spi_base_c           : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFFA8"; -- base address
+  constant spi_base_c           : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffffa8"; -- base address
   constant spi_size_c           : natural := 2*4; -- module's address space in bytes
-  constant spi_ctrl_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFFA8";
-  constant spi_rtx_addr_c       : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFFAC";
+  constant spi_ctrl_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffffa8";
+  constant spi_rtx_addr_c       : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffffac";
 
   -- Two Wire Interface (TWI) --
-  constant twi_base_c           : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFFB0"; -- base address
+  constant twi_base_c           : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffffb0"; -- base address
   constant twi_size_c           : natural := 2*4; -- module's address space in bytes
-  constant twi_ctrl_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFFB0";
-  constant twi_rtx_addr_c       : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFFB4";
+  constant twi_ctrl_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffffb0";
+  constant twi_rtx_addr_c       : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffffb4";
 
   -- Pulse-Width Modulation Controller (PWM) --
-  constant pwm_base_c           : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFFB8"; -- base address
+  constant pwm_base_c           : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffffb8"; -- base address
   constant pwm_size_c           : natural := 2*4; -- module's address space in bytes
-  constant pwm_ctrl_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFFB8";
-  constant pwm_duty_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFFBC";
+  constant pwm_ctrl_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffffb8";
+  constant pwm_duty_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffffbc";
 
   -- Numerically-Controlled Oscillator (NCO) --
-  constant nco_base_c           : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFFC0"; -- base address
+  constant nco_base_c           : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffffc0"; -- base address
   constant nco_size_c           : natural := 4*4; -- module's address space in bytes
-  constant nco_ctrl_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFFC0";
-  constant nco_ch0_addr_c       : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFFC4";
-  constant nco_ch1_addr_c       : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFFC8";
-  constant nco_ch2_addr_c       : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFFCC";
+  constant nco_ctrl_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffffc0";
+  constant nco_ch0_addr_c       : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffffc4";
+  constant nco_ch1_addr_c       : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffffc8";
+  constant nco_ch2_addr_c       : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffffcc";
 
   -- Universal Asynchronous Receiver/Transmitter 1 (UART1), secondary UART --
-  constant uart1_base_c         : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFFD0"; -- base address
+  constant uart1_base_c         : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffffd0"; -- base address
   constant uart1_size_c         : natural := 2*4; -- module's address space in bytes
-  constant uart1_ctrl_addr_c    : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFFD0";
-  constant uart1_rtx_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFFD4";
+  constant uart1_ctrl_addr_c    : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffffd0";
+  constant uart1_rtx_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffffd4";
 
   -- Smart LED (WS2811/WS2812) Interface (NEOLED) --
-  constant neoled_base_c        : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFFD8"; -- base address
+  constant neoled_base_c        : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffffd8"; -- base address
   constant neoled_size_c        : natural := 2*4; -- module's address space in bytes
-  constant neoled_ctrl_addr_c   : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFFD8";
-  constant neoled_data_addr_c   : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFFDC";
+  constant neoled_ctrl_addr_c   : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffffd8";
+  constant neoled_data_addr_c   : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffffdc";
 
   -- System Information Memory (SYSINFO) --
-  constant sysinfo_base_c       : std_ulogic_vector(data_width_c-1 downto 0) := x"FFFFFFE0"; -- base address
+  constant sysinfo_base_c       : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffffe0"; -- base address
   constant sysinfo_size_c       : natural := 8*4; -- module's address space in bytes
 
   -- Main Control Bus -----------------------------------------------------------------------
@@ -437,23 +437,23 @@ package neorv32_package is
 
   -- RISC-V CSR Addresses -------------------------------------------------------------------
   -- -------------------------------------------------------------------------------------------
-  -- read/write CSRs --
+  -- <<< standard read/write CSRs >>> --
+  -- user floating-point CSRs --
   constant csr_class_float_c    : std_ulogic_vector(07 downto 0) := x"00"; -- floating point
   constant csr_fflags_c         : std_ulogic_vector(11 downto 0) := x"001";
   constant csr_frm_c            : std_ulogic_vector(11 downto 0) := x"002";
   constant csr_fcsr_c           : std_ulogic_vector(11 downto 0) := x"003";
-  --
-  constant csr_setup_c          : std_ulogic_vector(07 downto 0) := x"30"; -- trap setup
+  -- machine trap setup --
+  constant csr_class_setup_c    : std_ulogic_vector(07 downto 0) := x"30"; -- trap setup
   constant csr_mstatus_c        : std_ulogic_vector(11 downto 0) := x"300";
   constant csr_misa_c           : std_ulogic_vector(11 downto 0) := x"301";
   constant csr_mie_c            : std_ulogic_vector(11 downto 0) := x"304";
   constant csr_mtvec_c          : std_ulogic_vector(11 downto 0) := x"305";
   constant csr_mcounteren_c     : std_ulogic_vector(11 downto 0) := x"306";
-  --
   constant csr_mstatush_c       : std_ulogic_vector(11 downto 0) := x"310";
-  --
+  -- machine counter setup --
+  constant csr_cnt_setup_c      : std_ulogic_vector(05 downto 0) := x"3" & "00"; -- counter setup
   constant csr_mcountinhibit_c  : std_ulogic_vector(11 downto 0) := x"320";
-  --
   constant csr_mhpmevent3_c     : std_ulogic_vector(11 downto 0) := x"323";
   constant csr_mhpmevent4_c     : std_ulogic_vector(11 downto 0) := x"324";
   constant csr_mhpmevent5_c     : std_ulogic_vector(11 downto 0) := x"325";
@@ -483,14 +483,14 @@ package neorv32_package is
   constant csr_mhpmevent29_c    : std_ulogic_vector(11 downto 0) := x"33d";
   constant csr_mhpmevent30_c    : std_ulogic_vector(11 downto 0) := x"33e";
   constant csr_mhpmevent31_c    : std_ulogic_vector(11 downto 0) := x"33f";
-  --
+  -- machine trap handling --
   constant csr_class_trap_c     : std_ulogic_vector(07 downto 0) := x"34"; -- machine trap handling
   constant csr_mscratch_c       : std_ulogic_vector(11 downto 0) := x"340";
   constant csr_mepc_c           : std_ulogic_vector(11 downto 0) := x"341";
   constant csr_mcause_c         : std_ulogic_vector(11 downto 0) := x"342";
   constant csr_mtval_c          : std_ulogic_vector(11 downto 0) := x"343";
   constant csr_mip_c            : std_ulogic_vector(11 downto 0) := x"344";
-  --
+  -- physical memory protection - configuration --
   constant csr_class_pmpcfg_c   : std_ulogic_vector(07 downto 0) := x"3a"; -- pmp configuration
   constant csr_pmpcfg0_c        : std_ulogic_vector(11 downto 0) := x"3a0";
   constant csr_pmpcfg1_c        : std_ulogic_vector(11 downto 0) := x"3a1";
@@ -508,7 +508,7 @@ package neorv32_package is
   constant csr_pmpcfg13_c       : std_ulogic_vector(11 downto 0) := x"3ad";
   constant csr_pmpcfg14_c       : std_ulogic_vector(11 downto 0) := x"3ae";
   constant csr_pmpcfg15_c       : std_ulogic_vector(11 downto 0) := x"3af";
-  --
+  -- physical memory protection - address --
   constant csr_pmpaddr0_c       : std_ulogic_vector(11 downto 0) := x"3b0";
   constant csr_pmpaddr1_c       : std_ulogic_vector(11 downto 0) := x"3b1";
   constant csr_pmpaddr2_c       : std_ulogic_vector(11 downto 0) := x"3b2";
@@ -573,7 +573,7 @@ package neorv32_package is
   constant csr_pmpaddr61_c      : std_ulogic_vector(11 downto 0) := x"3ed";
   constant csr_pmpaddr62_c      : std_ulogic_vector(11 downto 0) := x"3ee";
   constant csr_pmpaddr63_c      : std_ulogic_vector(11 downto 0) := x"3ef";
-  --
+  -- machine counters/timers --
   constant csr_mcycle_c         : std_ulogic_vector(11 downto 0) := x"b00";
   constant csr_minstret_c       : std_ulogic_vector(11 downto 0) := x"b02";
   --
@@ -640,7 +640,8 @@ package neorv32_package is
   constant csr_mhpmcounter30h_c : std_ulogic_vector(11 downto 0) := x"b9e";
   constant csr_mhpmcounter31h_c : std_ulogic_vector(11 downto 0) := x"b9f";
 
-  -- read-only CSRs --
+  -- <<< standard read-only CSRs >>> --
+  -- user counters/timers --
   constant csr_cycle_c          : std_ulogic_vector(11 downto 0) := x"c00";
   constant csr_time_c           : std_ulogic_vector(11 downto 0) := x"c01";
   constant csr_instret_c        : std_ulogic_vector(11 downto 0) := x"c02";
@@ -708,13 +709,12 @@ package neorv32_package is
   constant csr_hpmcounter29h_c  : std_ulogic_vector(11 downto 0) := x"c9d";
   constant csr_hpmcounter30h_c  : std_ulogic_vector(11 downto 0) := x"c9e";
   constant csr_hpmcounter31h_c  : std_ulogic_vector(11 downto 0) := x"c9f";
-  --
+  -- machine information registers --
   constant csr_mvendorid_c      : std_ulogic_vector(11 downto 0) := x"f11";
   constant csr_marchid_c        : std_ulogic_vector(11 downto 0) := x"f12";
   constant csr_mimpid_c         : std_ulogic_vector(11 downto 0) := x"f13";
   constant csr_mhartid_c        : std_ulogic_vector(11 downto 0) := x"f14";
-
-  -- custom read-only CSRs --
+  -- <<< custom (NEORV32-specific) read-only CSRs >>> --
   constant csr_mzext_c          : std_ulogic_vector(11 downto 0) := x"fc0";
 
   -- Co-Processor IDs -----------------------------------------------------------------------
@@ -881,6 +881,7 @@ package neorv32_package is
       PMP_MIN_GRANULARITY          : natural := 64*1024; -- minimal region granularity in bytes, has to be a power of 2, min 8 bytes
       -- Hardware Performance Monitors (HPM) --
       HPM_NUM_CNTS                 : natural := 0;      -- number of implemented HPM counters (0..29)
+      HPM_CNT_WIDTH                : natural := 40;     -- total size of HPM counters (1..64)
       -- Internal Instruction memory --
       MEM_INT_IMEM_EN              : boolean := true;   -- implement processor-internal instruction memory
       MEM_INT_IMEM_SIZE            : natural := 16*1024; -- size of processor-internal instruction memory in bytes
@@ -996,7 +997,8 @@ package neorv32_package is
       PMP_NUM_REGIONS              : natural := 0;     -- number of regions (0..64)
       PMP_MIN_GRANULARITY          : natural := 64*1024; -- minimal region granularity in bytes, has to be a power of 2, min 8 bytes
       -- Hardware Performance Monitors (HPM) --
-      HPM_NUM_CNTS                 : natural := 0      -- number of implemented HPM counters (0..29)
+      HPM_NUM_CNTS                 : natural := 0;     -- number of implemented HPM counters (0..29)
+      HPM_CNT_WIDTH                : natural := 40     -- total size of HPM counters (1..64)
     );
     port (
       -- global control --
@@ -1062,7 +1064,8 @@ package neorv32_package is
       PMP_NUM_REGIONS              : natural := 0;     -- number of regions (0..64)
       PMP_MIN_GRANULARITY          : natural := 64*1024; -- minimal region granularity in bytes, has to be a power of 2, min 8 bytes
       -- Hardware Performance Monitors (HPM) --
-      HPM_NUM_CNTS                 : natural := 0      -- number of implemented HPM counters (0..29)
+      HPM_NUM_CNTS                 : natural := 0;     -- number of implemented HPM counters (0..29)
+      HPM_CNT_WIDTH                : natural := 40     -- total size of HPM counters (1..64)
     );
     port (
       -- global control --
@@ -1209,6 +1212,7 @@ package neorv32_package is
       start_i  : in  std_ulogic; -- trigger operation
       -- data input --
       frm_i    : in  std_ulogic_vector(2 downto 0); -- rounding mode
+      cmp_i    : in  std_ulogic_vector(1 downto 0); -- comparator status
       rs1_i    : in  std_ulogic_vector(data_width_c-1 downto 0); -- rf source 1
       rs2_i    : in  std_ulogic_vector(data_width_c-1 downto 0); -- rf source 2
       -- result and status --
