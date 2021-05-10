@@ -50,15 +50,167 @@ void neorv32_cpu_set_mcycle(uint64_t value);
 uint64_t neorv32_cpu_get_instret(void);
 void neorv32_cpu_set_minstret(uint64_t value);
 uint64_t neorv32_cpu_get_systime(void);
-void neorv32_cpu_delay_ms(uint32_t time_ms);
+void neorv32_cpu_delay_ms(int16_t time_ms);
 void __attribute__((naked)) neorv32_cpu_goto_user_mode(void);
-int neorv32_cpu_atomic_cas(uint32_t addr, uint32_t expected, uint32_t desired);
 uint32_t neorv32_cpu_pmp_get_num_regions(void);
 uint32_t neorv32_cpu_pmp_get_granularity(void);
 int neorv32_cpu_pmp_configure_region(uint32_t index, uint32_t base, uint32_t size, uint8_t config);
 uint32_t neorv32_cpu_hpm_get_counters(void);
 uint32_t neorv32_cpu_hpm_get_size(void);
 int neorv32_check_zextension(uint32_t);
+
+
+/**********************************************************************//**
+ * Store unsigned word to address space.
+ *
+ * @note An unaligned access address will raise an alignment exception.
+ *
+ * @param[in] addr Address (32-bit).
+ * @param[in] wdata Data word (32-bit) to store.
+ * @return Operation status (32-bit).
+ **************************************************************************/
+inline uint32_t __attribute__ ((always_inline)) neorv32_cpu_store_conditional(uint32_t addr, uint32_t wdata) {
+
+#if defined __riscv_atomic || defined __riscv_a
+  register uint32_t reg_addr = addr;
+  register uint32_t reg_data = wdata;
+  register uint32_t reg_status;
+
+  asm volatile ("sc.w %[status], %[da], (%[ad])" : [status] "=r" (reg_status) : [da] "r" (reg_data), [ad] "r" (reg_addr));
+
+  return reg_status;
+#else
+  return 1; // always failing
+#endif
+}
+
+
+/**********************************************************************//**
+ * Conditional store unsigned word to address space if atomic access reservation is valid.
+ *
+ * @note An unaligned access address will raise an alignment exception.
+ *
+ * @param[in] addr Address (32-bit).
+ * @param[in] wdata Data word (32-bit) to store.
+ **************************************************************************/
+inline void __attribute__ ((always_inline)) neorv32_cpu_store_unsigned_word(uint32_t addr, uint32_t wdata) {
+
+  register uint32_t reg_addr = addr;
+  register uint32_t reg_data = wdata;
+
+  asm volatile ("sw %[da], 0(%[ad])" : : [da] "r" (reg_data), [ad] "r" (reg_addr));
+}
+
+
+/**********************************************************************//**
+ * Store unsigned half-word to address space.
+ *
+ * @note An unaligned access address will raise an alignment exception.
+ *
+ * @param[in] addr Address (32-bit).
+ * @param[in] wdata Data half-word (16-bit) to store.
+ **************************************************************************/
+inline void __attribute__ ((always_inline)) neorv32_cpu_store_unsigned_half(uint32_t addr, uint16_t wdata) {
+
+  register uint32_t reg_addr = addr;
+  register uint32_t reg_data = (uint32_t)wdata;
+
+  asm volatile ("sh %[da], 0(%[ad])" : : [da] "r" (reg_data), [ad] "r" (reg_addr));
+}
+
+
+/**********************************************************************//**
+ * Store unsigned byte to address space.
+ *
+ * @param[in] addr Address (32-bit).
+ * @param[in] wdata Data byte (8-bit) to store.
+ **************************************************************************/
+inline void __attribute__ ((always_inline)) neorv32_cpu_store_unsigned_byte(uint32_t addr, uint8_t wdata) {
+
+  register uint32_t reg_addr = addr;
+  register uint32_t reg_data = (uint32_t)wdata;
+
+  asm volatile ("sb %[da], 0(%[ad])" : : [da] "r" (reg_data), [ad] "r" (reg_addr));
+}
+
+
+/**********************************************************************//**
+ * Load unsigned word from address space and make reservation for atomic access.
+ *
+ * @note An unaligned access address will raise an alignment exception.
+ *
+ * @param[in] addr Address (32-bit).
+ * @return Read data word (32-bit).
+ **************************************************************************/
+inline uint32_t __attribute__ ((always_inline)) neorv32_cpu_load_reservate_word(uint32_t addr) {
+
+  register uint32_t reg_addr = addr;
+  register uint32_t reg_data;
+
+#if defined __riscv_atomic || defined __riscv_a
+  asm volatile ("lr.w %[da], 0(%[ad])" : [da] "=r" (reg_data) : [ad] "r" (reg_addr));
+#else
+  asm volatile ("lw %[da], 0(%[ad])" : [da] "=r" (reg_data) : [ad] "r" (reg_addr));
+#endif
+
+  return (uint32_t)reg_data;
+}
+
+
+
+/**********************************************************************//**
+ * Load unsigned word from address space.
+ *
+ * @note An unaligned access address will raise an alignment exception.
+ *
+ * @param[in] addr Address (32-bit).
+ * @return Read data word (32-bit).
+ **************************************************************************/
+inline uint32_t __attribute__ ((always_inline)) neorv32_cpu_load_unsigned_word(uint32_t addr) {
+
+  register uint32_t reg_addr = addr;
+  register uint32_t reg_data;
+
+  asm volatile ("lw %[da], 0(%[ad])" : [da] "=r" (reg_data) : [ad] "r" (reg_addr));
+
+  return (uint32_t)reg_data;
+}
+
+
+/**********************************************************************//**
+ * Load unsigned half-word from address space.
+ *
+ * @note An unaligned access address will raise an alignment exception.
+ *
+ * @param[in] addr Address (32-bit).
+ * @return Read data half-word (16-bit).
+ **************************************************************************/
+inline uint16_t __attribute__ ((always_inline)) neorv32_cpu_load_unsigned_half(uint32_t addr) {
+
+  register uint32_t reg_addr = addr;
+  register uint32_t reg_data;
+
+  asm volatile ("lhu %[da], 0(%[ad])" : [da] "=r" (reg_data) : [ad] "r" (reg_addr));
+
+  return (uint16_t)reg_data;
+}
+
+
+/**********************************************************************//**
+ * Load unsigned byte from address space.
+ *
+ * @param[in] addr Address (32-bit).
+ * @return Read data byte (8-bit).
+ **************************************************************************/
+inline uint8_t __attribute__ ((always_inline)) neorv32_cpu_load_unsigned_byte(uint32_t addr) {
+
+  register uint32_t reg_addr = addr;
+  register uint32_t reg_data;
+
+  asm volatile ("lbu %[da], 0(%[ad])" : [da] "=r" (reg_data) : [ad] "r" (reg_addr));
+
+  return (uint8_t)reg_data;
+}
 
 
 /**********************************************************************//**
@@ -97,8 +249,8 @@ inline void __attribute__ ((always_inline)) neorv32_cpu_csr_write(const int csr_
  * @note This function executes the WFI insstruction.
  * The WFI (wait for interrupt) instruction will make the CPU stall until
  * an interupt request is detected. Interrupts have to be globally enabled
- * and at least one external source must be enabled (e.g., the CLIC or the machine
- * timer) to allow the CPU to wake up again. If 'Zicsr' CPU extension is disabled,
+ * and at least one external source must be enabled (like the MTI machine
+ * timer interrupt) to allow the CPU to wake up again. If 'Zicsr' CPU extension is disabled,
  * this will permanently stall the CPU.
  **************************************************************************/
 inline void __attribute__ ((always_inline)) neorv32_cpu_sleep(void) {

@@ -43,8 +43,9 @@ use neorv32.neorv32_package.all;
 
 entity neorv32_cpu_alu is
   generic (
-    CPU_EXTENSION_RISCV_M : boolean := true; -- implement muld/div extension?
-    FAST_SHIFT_EN         : boolean := false -- use barrel shifter for shift operations
+    CPU_EXTENSION_RISCV_M : boolean := true;  -- implement muld/div extension?
+    FAST_SHIFT_EN         : boolean := false; -- use barrel shifter for shift operations
+    TINY_SHIFT_EN         : boolean := false  -- use tiny (single-bit) shifter for shift operations
   );
   port (
     -- global control --
@@ -176,7 +177,8 @@ begin
           shifter.cnt  <= opb(index_size_f(data_width_c)-1 downto 0); -- shift amount
         elsif (shifter.run = '1') then -- running shift
           -- coarse shift: multiples of 4 --
-          if (or_all_f(shifter.cnt(shifter.cnt'left downto 2)) = '1') then -- shift amount >= 4
+          if (TINY_SHIFT_EN = false) and -- use coarse shifts first if TINY SHIFT option is NOT enabled
+             (or_all_f(shifter.cnt(shifter.cnt'left downto 2)) = '1') then -- shift amount >= 4
             shifter.cnt <= std_ulogic_vector(unsigned(shifter.cnt) - 4);
             if (ctrl_i(ctrl_alu_shift_dir_c) = '0') then -- SLL: shift left logical
               shifter.sreg <= shifter.sreg(shifter.sreg'left-4 downto 0) & "0000";
@@ -186,7 +188,7 @@ begin
                               (shifter.sreg(shifter.sreg'left) and ctrl_i(ctrl_alu_shift_ar_c)) &
                               (shifter.sreg(shifter.sreg'left) and ctrl_i(ctrl_alu_shift_ar_c)) & shifter.sreg(shifter.sreg'left downto 4);
             end if;
-          -- fine shift: single shifts, 0..3 times --
+          -- fine shift: single shifts, 0..3 times; use ONLY single-bit shifts if TINY_SHIFT_EN is enabled (even smaller than the default approach) --
           else
             shifter.cnt <= std_ulogic_vector(unsigned(shifter.cnt) - 1);
             if (ctrl_i(ctrl_alu_shift_dir_c) = '0') then -- SLL: shift left logical

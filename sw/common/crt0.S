@@ -38,10 +38,6 @@
 .global _start
 
 
-// IO region
-.equ IO_BEGIN, 0xFFFFFF00 // start of processor-internal IO region
-
-
 _start:
 .cfi_startproc
 .cfi_undefined ra
@@ -58,8 +54,8 @@ __crt0_reg_file_clear:
   addi  x5, x0, 0
   addi  x6, x0, 0
   addi  x7, x0, 0
-  addi  x8, x0, 0
-  addi  x9, x0, 0
+//addi  x8, x0, 0
+//addi  x9, x0, 0
 //addi x10, x0, 0
 //addi x11, x0, 0
 //addi x12, x0, 0
@@ -69,11 +65,55 @@ __crt0_reg_file_clear:
 
 
 // *********************************************************
-// Initialize dummy trap handler base address
+// Setup pointers using linker script symbols
 // *********************************************************
-__crt0_neorv32_trap_init:
-  la    x11, __crt0_dummy_trap_handler
-  csrw  mtvec, x11 // set address of first-level exception handler
+__crt0_pointer_init:
+.option push
+.option norelax
+  la    sp, __crt0_stack_begin
+  andi  sp, sp, 0xfffffffc // make sure this is aligned
+  addi  fp, sp, 0          // frame pointer = stack pointer
+  la gp, __global_pointer$ // global pointer
+.option pop
+
+
+// *********************************************************
+// Setup CPU core CSRs (some of them DO NOT have a dedicated reset and need to be explicitly initialized)
+// *********************************************************
+__crt0_cpu_csr_init:
+
+  // set address of first-level exception handler
+  la   x10, __crt0_dummy_trap_handler
+  csrw mtvec,  x10
+  csrw mepc,   x10
+  csrw mtval,  zero
+  csrw mcause, zero
+
+  // no global IRQ enable (is also done by hardware)
+  csrw mstatus, zero
+
+  // absolutely no interrupts, thanks
+  csrw mie, zero
+
+  // no access from less-privileged modes to counter CSRs
+  csrw mcounteren, zero
+
+  // stop all counters except for [m]cycle[h] and [m]instret[h]
+  li   x11, ~5
+  csrw 0x320, x11 // mcountinhibit (literal address for lagacy toolchain compatibility)
+
+  // clear cycle counters
+  csrw mcycle,  zero
+  csrw mcycleh, zero
+
+  // clear instruction counters
+  csrw minstret,  zero
+  csrw minstreth, zero
+
+#if defined(__riscv_flen) && (__riscv_flen != 0)
+  // clear floating-point CSR (rounding mode & exception flags)
+  csrw fcsr, zero
+#endif
 
 
 // *********************************************************
@@ -103,39 +143,18 @@ __crt0_neorv32_trap_init:
 
 
 // *********************************************************
-// No interrupts, thanks
-// *********************************************************
-__crt0_status_init:
-  li x10, 0x00001800    // clear mstatus and set mpp(1:0)
-  csrrw zero, mstatus, x10
-  csrrw zero, mie, zero // clear mie
-
-
-// *********************************************************
-// Setup pointers using linker script symbols
-// *********************************************************
-__crt0_pointer_init:
-.option push
-.option norelax
-  la    sp, __crt0_stack_begin
-  andi  sp, sp, 0xfffffffc // make sure this is aligned
-  addi  fp, sp, 0          // frame pointer = stack pointer
-  la gp, __global_pointer$ // global pointer
-.option pop
-
-
-// *********************************************************
 // Reset/deactivate IO/peripheral devices
 // Devices, that are not implemented, will cause a store access fault
 // which is captured but actually ignored due to the dummy handler.
 // *********************************************************
 __crt0_reset_io:
-  li x11, IO_BEGIN // start of processor-internal IO region
+  la x8, __ctr0_io_space_begin // start of processor-internal IO region
+  la x9, __ctr0_io_space_end   // end of processor-internal IO region
 
 __crt0_reset_io_loop:
-  sw   zero, 0(x11)
-  addi x11, x11, 4
-  bne  zero, x11, __crt0_reset_io_loop
+  sw   zero, 0(x8)
+  addi x8,   x8, 4
+  bne  x8,   x9, __crt0_reset_io_loop
 
 
 // *********************************************************
@@ -181,21 +200,6 @@ __crt0_main_entry:
   // setup arguments for calling main
   addi x10, zero, 0 // argc = 0
   addi x11, zero, 0 // argv = 0
-
-  // clear cycle and instruction counters
-  csrw mcycle,    zero
-  csrw mcycleh,   zero
-  csrw minstret,  zero
-  csrw minstreth, zero
-  // no access from less-privileged modes to counter CSRs
-  csrw mcounteren, zero
-  // disable all counters (except for [m]cycle[h] and [m]instret[h])
-  li   x12, ~5
-  csrw mcountinhibit, x12
-
-  // restore mcause reset value (so that 'main' knows we are coming from reset)
-  li x12, 0x80000000
-  csrw mcause, x12
 
   // call actual app's main function
   jal ra, main

@@ -86,6 +86,8 @@ begin
     -- Extension Options --
     FAST_MUL_EN                  => false,       -- use DSPs for M extension's multiplier
     FAST_SHIFT_EN                => false,       -- use barrel shifter for shift operations
+    TINY_SHIFT_EN                => false,       -- use tiny (single-bit) shifter for shift operations
+    CPU_CNT_WIDTH                => 64,          -- total width of CPU cycle and instret counters (0..64)
     -- Physical Memory Protection (PMP) --
     PMP_NUM_REGIONS              => 0,           -- number of regions (0..64)
     PMP_MIN_GRANULARITY          => 64*1024,     -- minimal region granularity in bytes, has to be a power of 2, min 8 bytes
@@ -106,6 +108,7 @@ begin
     ICACHE_ASSOCIATIVITY         => 1,           -- i-cache: associativity / number of sets (1=direct_mapped), has to be a power of 2
     -- External memory interface --
     MEM_EXT_EN                   => false,       -- implement external memory bus interface?
+    MEM_EXT_TIMEOUT              => 0,           -- cycles after a pending bus access auto-terminates (0 = disabled)
     -- Processor peripherals --
     IO_GPIO_EN                   => true,        -- implement general purpose input/output port unit (GPIO)?
     IO_MTIME_EN                  => true,        -- implement machine system timer (MTIME)?
@@ -136,7 +139,7 @@ begin
     wb_sel_o    => open,            -- byte enable
     wb_stb_o    => open,            -- strobe
     wb_cyc_o    => open,            -- valid cycle
-    wb_tag_i    => '0',             -- response tag
+    wb_lock_o   => open,            -- exclusive access request
     wb_ack_i    => '0',             -- transfer acknowledge
     wb_err_i    => '0',             -- transfer error
     -- Advanced memory control signals (available if MEM_EXT_EN = true) --
@@ -175,6 +178,7 @@ begin
     -- system time input from external MTIME (available if IO_MTIME_EN = false) --
     mtime_i     => (others => '0'), -- current system time
     -- Interrupts --
+    nm_irq_i    => '0',             -- non-maskable interrupt
     soc_firq_i  => (others => '0'), -- fast interrupt channels
     mtime_irq_i => '0',             -- machine timer interrupt, available if IO_MTIME_EN = false
     msw_irq_i   => '0',             -- machine software interrupt
