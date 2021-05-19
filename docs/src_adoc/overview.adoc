@@ -33,6 +33,10 @@ Chapter <<_neorv32_processor_soc>>
 * top entity signals and configuration generics, address space layout, internal peripheral devices and interrupts, internal
 memories and caches, internal bus architecture, external bus interface
 
+Chapter <<_on_chip_debugger_ocd>>
+
+* on-chip debugging compatible to the RISC-V debug spec.
+
 Chapter <<_software_framework>>
 
 * core libraries, bootloader, makefiles, runtime environment
@@ -70,7 +74,7 @@ Links in this document are <<_structure,highlighted>>.
 ** internal bootloader with serial user interface
 ** core libraries for high-level usage of the provided functions and peripherals
 ** runtime environment and several example programs
-** doxygen-based documentation of the software framework; a deployed version is available at https://stnolting.github.io/neorv32/files.html
+** doxygen-based documentation of the software framework; a deployed version is available at https://stnolting.github.io/neorv32/sw/files.html
 ** FreeRTOS port + demos available
 * **NEORV32 Processor**: highly-configurable full-scale microcontroller-like processor system / SoC based on the NEORV32 CPU with optional standard peripherals:
 ** serial interfaces (UARTs, TWI, SPI)
