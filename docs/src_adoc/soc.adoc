@@ -6,7 +6,7 @@
 The NEORV32 Processor is based on the NEORV32 CPU. Together with common peripheral
 interfaces and embedded memories it provides a RISC-V-based full-scale microcontroller-like SoC platform.
 
-image::../figures/neorv32_processor.png[align=center]
+image::neorv32_processor.png[align=center]
 
 **Key Features**
 
@@ -24,6 +24,7 @@ image::../figures/neorv32_processor.png[align=center]
 * _optional_ custom functions subsystem for custom co-processor extensions (<<_custom_functions_subsystem_cfs,**CFS**>>)
 * _optional_ numerically-controlled oscillator (<<_numerically_controlled_oscillator_nco,**NCO**>>) with 3 independent channels
 * _optional_ NeoPixel(TM)/WS2812-compatible smart LED interface (<<_smart_led_interface_neoled,**NEOLED**>>)
+* _optional_ on-chip debugger with JTAG TAP (<<_on_chip_debugger_ocd,**OCD**>>)
 * system configuration information memory to check HW configuration via software (<<_system_configuration_information_memory_sysinfo,**SYSINFO**>>)
 
 
@@ -46,7 +47,13 @@ A wrapper for the NEORV32 Processor setup providing resolved port signals can be
 4+^| **Global Control**
 | `clk_i` | 1 | in | global clock line, all registers triggering on rising edge
 | `rstn_i` | 1 | in | global reset, asynchronous, **low-active**
-4+^| **External bus interface (<<_processor_external_memory_interface_wishbone_axi4_lite,WISHBONE>>)**
+4+^| **JTAG Access Port for <<_on_chip_debugger_ocd>>**
+| `jtag_trst_i` | 1 | in  | TAP reset, low-active (optionalfootnote:[Pull high if not used.])
+| `jtag_tck_i ` | 1 | in  | serial clock
+| `jtag_tdi_i ` | 1 | in  | serial data input
+| `jtag_tdo_o ` | 1 | out | serial data outputfootnote:[If the on-chip debugger is not implemented (_ON_CHIP_DEBUGGER_EN_ = false) `jtag_tdi_i` is directly forwarded to `jtag_tdo_o` to maintain the JTAG chain.]
+| `jtag_tms_i ` | 1 | in  | mode select
+4+^| **External Bus Interface (<<_processor_external_memory_interface_wishbone_axi4_lite,WISHBONE>>)**
 | `wb_tag_o` | 3  | out | tag (access type identifier)
 | `wb_adr_o` | 32 | out | destination address
 | `wb_dat_i` | 32 | in | write data
@@ -58,7 +65,7 @@ A wrapper for the NEORV32 Processor setup providing resolved port signals can be
 | `wb_lock_o`| 1  | out | exclusive access request
 | `wb_ack_i` | 1  | in | transfer acknowledge
 | `wb_err_i` | 1  | in | transfer error
-4+^| **Advanced memory control signals**
+4+^| **Advanced Memory Control Signals**
 | `fence_o`  | 1 | out | indicates an executed _fence_ instruction
 | `fencei_o` | 1 | out | indicates an executed _fencei_ instruction
 4+^| **General Purpose Inputs & Outputs (<<_general_purpose_input_and_output_port_gpio,GPIO>>)**
@@ -91,9 +98,10 @@ A wrapper for the NEORV32 Processor setup providing resolved port signals can be
 | `nco_o` | 3 | out | NCO output channels
 4+^| **Smart LED Interface - NeoPixel(TM) compatible (<<_smart_led_interface_neoled,NEOLED>>)**
 | `neoled_o` | 1 | out | asynchronous serial data output
-4+^| **System time input from external MTIME unit**
-| `mtime_i` | 32 | in | machine timer time (to `time[h]` CSRs) from external _MTIME_ unit if the processor-internal <<_machine_system_timer_mtime,**MTIME**>> unit is NOT used
-4+^| **Interrupts**
+4+^| **System time (<<_machine_system_timer_mtime,MTIME>>)**
+| `mtime_i` | 64 | in  | machine timer time (to `time[h]` CSRs) from _external MTIME_ unit if the processor-internal _MTIME_ unit is NOT implemented
+| `mtime_o` | 64 | out | machine timer time from _internal MTIME_ unit if processor-internal _MTIME_ unit IS implemented
+4+^| **<<_processor_interrupts>>**
 | `nm_irq_i`    | 1 | in | non-maskable interrupt
 | `soc_firq_i`  | 6 | in | platform fast interrupt channels (custom)
 | `mtime_irq_i` | 1 | in | machine timer interrupt13 (RISC-V)
@@ -176,6 +184,14 @@ processor's boot address from the beginning of the instruction memory address sp
 |======
 | **HW_THREAD_ID** | _natural_ | 0
 3+| The hart ID of the CPU. Can be read via the `mhartid` CSR. Hart IDs must be unique within a system.
+|======
+
+
+[cols="4,4,2"]
+[frame="all",grid="none"]
+|======
+| **ON_CHIP_DEBUGGER_EN** | _boolean_ | false
+3+| Implement on-chip debugger (OCD). See chapter <<_on_chip_debugger_ocd>>.
 |======
 
 
@@ -680,7 +696,7 @@ By default, the total 32-bit (4GB) address space of the NEORV32 Processor is div
 4. IO/peripheral address space – for the processor-internal IO/peripheral devices (e.g., UART).
 
 .NEORV32 processor - address space (default configuration)
-image::../figures/address_space.png[900]
+image::address_space.png[900]
 
 [TIP]
 These four memory regions are handled by the linker when compiling a NEORV32 executable.
@@ -727,7 +743,7 @@ interfaces (instruction fetch & data access) have access to the same (**identica
 setup a modified von-Neumann architecture.
 
 .Processor-internal bus architecture
-image::../figures/neorv32_bus.png[1300]
+image::neorv32_bus.png[1300]
 
 [NOTE]
 The internal processor bus might appear as bottleneck. In order to reduce traffic jam on this bus

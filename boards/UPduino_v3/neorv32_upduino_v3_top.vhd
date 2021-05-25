@@ -147,6 +147,9 @@ begin
     USER_CODE                    => x"0001ce40", -- custom user code
     HW_THREAD_ID                 => 0,           -- hardware thread id (32-bit)
 
+    -- On-Chip Debugger (OCD) --
+    ON_CHIP_DEBUGGER_EN          => false,       -- implement on-chip debugger
+
     -- RISC-V CPU Extensions --
     CPU_EXTENSION_RISCV_A        => true,        -- implement atomic extension?
     CPU_EXTENSION_RISCV_B        => false,       -- implement bit manipulation extensions?
@@ -213,6 +216,13 @@ begin
     clk_i       => cpu_clk,                      -- global clock, rising edge
     rstn_i      => cpu_rstn,                     -- global reset, low-active, async
 
+    -- JTAG on-chip debugger interface (available if ON_CHIP_DEBUGGER_EN = true) --
+    jtag_trst_i => '0',                          -- low-active TAP reset (optional)
+    jtag_tck_i  => '0',                          -- serial clock
+    jtag_tdi_i  => '0',                          -- serial data input
+    jtag_tdo_o  => open,                         -- serial data output
+    jtag_tms_i  => '0',                          -- mode select
+
     -- Wishbone bus interface (available if MEM_EXT_EN = true) --
     wb_tag_o    => open,                         -- request tag
     wb_adr_o    => open,                         -- address
@@ -269,8 +279,9 @@ begin
     -- NeoPixel-compatible smart LED interface (available if IO_NEOLED_EN = true) --
     neoled_o    => open,                         -- async serial data line
 
-    -- system time input from external MTIME (available if IO_MTIME_EN = false) --
-    mtime_i     => (others => '0'),              -- current system time
+    -- System time --
+    mtime_i     => (others => '0'), -- current system time from ext. MTIME (if IO_MTIME_EN = false)
+    mtime_o     => open, -- current system time from int. MTIME (if IO_MTIME_EN = true)
 
     -- Interrupts --
     nm_irq_i    => '0',                          -- non-maskable interrupt

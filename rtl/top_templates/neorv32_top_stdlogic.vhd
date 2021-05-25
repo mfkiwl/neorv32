@@ -46,6 +46,8 @@ entity neorv32_top_stdlogic is
     BOOTLOADER_EN                : boolean := true;   -- implement processor-internal bootloader?
     USER_CODE                    : std_logic_vector(31 downto 0) := x"00000000"; -- custom user code
     HW_THREAD_ID                 : natural := 0;      -- hardware thread id (32-bit)
+    -- On-Chip Debugger (OCD) --
+    ON_CHIP_DEBUGGER_EN          : boolean := false;  -- implement on-chip debugger
     -- RISC-V CPU Extensions --
     CPU_EXTENSION_RISCV_A        : boolean := false;  -- implement atomic extension?
     CPU_EXTENSION_RISCV_B        : boolean := false;  -- implement bit manipulation extensions?
@@ -103,6 +105,12 @@ entity neorv32_top_stdlogic is
     -- Global control --
     clk_i       : in  std_logic := '0'; -- global clock, rising edge
     rstn_i      : in  std_logic := '0'; -- global reset, low-active, async
+    -- JTAG on-chip debugger interface (available if ON_CHIP_DEBUGGER_EN = true) --
+    jtag_trst_i : in  std_logic := '0'; -- low-active TAP reset (optional)
+    jtag_tck_i  : in  std_logic := '0'; -- serial clock
+    jtag_tdi_i  : in  std_logic := '0'; -- serial data input
+    jtag_tdo_o  : out std_logic;        -- serial data output
+    jtag_tms_i  : in  std_logic := '0'; -- mode select
     -- Wishbone bus interface (available if MEM_EXT_EN = true) --
     wb_tag_o    : out std_logic_vector(02 downto 0); -- tag
     wb_adr_o    : out std_logic_vector(31 downto 0); -- address
@@ -148,8 +156,9 @@ entity neorv32_top_stdlogic is
     nco_o       : out std_logic_vector(02 downto 0); -- numerically-controlled oscillator channels
     -- NeoPixel-compatible smart LED interface (available if IO_NEOLED_EN = true) --
     neoled_o    : out std_logic; -- async serial data line
-    -- system time input from external MTIME (available if IO_MTIME_EN = false) --
-    mtime_i     : in  std_logic_vector(63 downto 0) := (others => '0'); -- current system time
+    -- System time --
+    mtime_i     : in  std_logic_vector(63 downto 0) := (others => '0'); -- current system time from ext. MTIME (if IO_MTIME_EN = false)
+    mtime_o     : out std_logic_vector(63 downto 0); -- current system time from int. MTIME (if IO_MTIME_EN = true)
     -- Interrupts --
     nm_irq_i    : in  std_logic := '0'; -- non-maskable interrupt
     soc_firq_i  : in  std_logic_vector(5 downto 0) := (others => '0'); -- fast interrupt channels
@@ -167,6 +176,12 @@ architecture neorv32_top_stdlogic_rtl of neorv32_top_stdlogic is
   --
   signal clk_i_int       : std_ulogic;
   signal rstn_i_int      : std_ulogic;
+  --
+  signal jtag_trst_i_int :std_ulogic;
+  signal jtag_tck_i_int  :std_ulogic;
+  signal jtag_tdi_i_int  :std_ulogic;
+  signal jtag_tdo_o_int  :std_ulogic;
+  signal jtag_tms_i_int  :std_ulogic;
   --
   signal wb_tag_o_int    : std_ulogic_vector(02 downto 0);
   signal wb_adr_o_int    : std_ulogic_vector(31 downto 0);
@@ -211,6 +226,7 @@ architecture neorv32_top_stdlogic_rtl of neorv32_top_stdlogic is
   signal neoled_o_int    : std_ulogic;
   --
   signal mtime_i_int     : std_ulogic_vector(63 downto 0);
+  signal mtime_o_int     : std_ulogic_vector(63 downto 0);
   --
   signal nm_irq_i_int    : std_ulogic;
   signal soc_firq_i_int  : std_ulogic_vector(05 downto 0);
@@ -229,6 +245,8 @@ begin
     BOOTLOADER_EN                => BOOTLOADER_EN,      -- implement processor-internal bootloader?
     USER_CODE                    => USER_CODE_INT,      -- custom user code
     HW_THREAD_ID                 => HW_THREAD_ID,       -- hardware thread id (hartid) (32-bit)
+    -- On-Chip Debugger (OCD) --
+    ON_CHIP_DEBUGGER_EN          => ON_CHIP_DEBUGGER_EN,          -- implement on-chip debugger
     -- RISC-V CPU Extensions --
     CPU_EXTENSION_RISCV_A        => CPU_EXTENSION_RISCV_A,        -- implement atomic extension?
     CPU_EXTENSION_RISCV_B        => CPU_EXTENSION_RISCV_B,        -- implement bit manipulation extensions?
@@ -286,6 +304,12 @@ begin
     -- Global control --
     clk_i       => clk_i_int,       -- global clock, rising edge
     rstn_i      => rstn_i_int,      -- global reset, low-active, async
+    -- JTAG on-chip debugger interface (available if ON_CHIP_DEBUGGER_EN = true) --
+    jtag_trst_i => jtag_trst_i_int, -- low-active TAP reset (optional)
+    jtag_tck_i  => jtag_tck_i_int,  -- serial clock
+    jtag_tdi_i  => jtag_tdi_i_int,  -- serial data input
+    jtag_tdo_o  => jtag_tdo_o_int,  -- serial data output
+    jtag_tms_i  => jtag_tms_i_int,  -- mode select
     -- Wishbone bus interface (available if MEM_EXT_EN = true) --
     wb_tag_o    => wb_tag_o_int,    -- tag
     wb_adr_o    => wb_adr_o_int,    -- address
@@ -331,8 +355,9 @@ begin
     nco_o       => nco_o_int,       -- numerically-controlled oscillator channels
     -- NeoPixel-compatible smart LED interface (available if IO_NEOLED_EN = true) --
     neoled_o    => neoled_o_int,    -- async serial data line
-    -- system time input from external MTIME (available if IO_MTIME_EN = false) --
-    mtime_i     => mtime_i_int,     -- current system time
+    -- System time --
+    mtime_i     => mtime_i_int,     -- current system time from ext. MTIME (if IO_MTIME_EN = false)
+    mtime_o     => mtime_o_int,     -- current system time from int. MTIME (if IO_MTIME_EN = true)
     -- Interrupts --
     nm_irq_i    => nm_irq_i_int,    -- non-maskable interrupt
     soc_firq_i  => soc_firq_i_int,  -- fast interrupt channels
@@ -344,6 +369,12 @@ begin
   -- type conversion --
   clk_i_int       <= std_ulogic(clk_i);
   rstn_i_int      <= std_ulogic(rstn_i);
+
+  jtag_trst_i_int <= std_ulogic(jtag_trst_i);
+  jtag_tck_i_int  <= std_ulogic(jtag_tck_i);
+  jtag_tdi_i_int  <= std_ulogic(jtag_tdi_i);
+  jtag_tdo_o      <= std_logic(jtag_tdo_o_int);
+  jtag_tms_i_int  <= std_ulogic(jtag_tms_i);
 
   wb_tag_o        <= std_logic_vector(wb_tag_o_int);
   wb_adr_o        <= std_logic_vector(wb_adr_o_int);
@@ -383,6 +414,7 @@ begin
   neoled_o        <= std_logic(neoled_o_int);
 
   mtime_i_int     <= std_ulogic_vector(mtime_i);
+  mtime_o         <= std_logic_vector(mtime_o_int);
 
   soc_firq_i_int  <= std_ulogic_vector(soc_firq_i);
   mtime_irq_i_int <= std_ulogic(mtime_irq_i);
