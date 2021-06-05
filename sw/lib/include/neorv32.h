@@ -62,7 +62,6 @@ enum NEORV32_CSR_enum {
   CSR_MIE            = 0x304, /**< 0x304 - mie        (r/w): Machine interrupt-enable register */
   CSR_MTVEC          = 0x305, /**< 0x305 - mtvec      (r/w): Machine trap-handler base address (for ALL traps) */
   CSR_MCOUNTEREN     = 0x306, /**< 0x305 - mcounteren (r/w): Machine counter enable register (controls access rights from U-mode) */
-  CSR_MSTATUSH       = 0x310, /**< 0x310 - mstatush   (r/-): Machine status register - high word */
 
   CSR_MCOUNTINHIBIT  = 0x320, /**< 0x320 - mcountinhibit (r/w): Machine counter-inhibit register */
 
@@ -99,7 +98,7 @@ enum NEORV32_CSR_enum {
   CSR_MSCRATCH       = 0x340, /**< 0x340 - mscratch (r/w): Machine scratch register */
   CSR_MEPC           = 0x341, /**< 0x341 - mepc     (r/w): Machine exception program counter */
   CSR_MCAUSE         = 0x342, /**< 0x342 - mcause   (r/w): Machine trap cause */
-  CSR_MTVAL          = 0x343, /**< 0x343 - mtval    (r/w): Machine bad address or instruction */
+  CSR_MTVAL          = 0x343, /**< 0x343 - mtval    (r/-): Machine bad address or instruction */
   CSR_MIP            = 0x344, /**< 0x344 - mip      (r/-): Machine interrupt pending register */
 
   CSR_PMPCFG0        = 0x3a0, /**< 0x3a0 - pmpcfg0  (r/w): Physical memory protection configuration register 0  */
@@ -332,18 +331,9 @@ enum NEORV32_CSR_enum {
  **************************************************************************/
 enum NEORV32_CSR_MSTATUS_enum {
   CSR_MSTATUS_MIE   =  3, /**< CPU mstatus CSR  (3): MIE - Machine interrupt enable bit (r/w) */
-  CSR_MSTATUS_UBE   =  6, /**< CPU mstatus CSR  (6): UBE - User-mode endianness (little-endian=0, big-endian=1) (r/-) */
   CSR_MSTATUS_MPIE  =  7, /**< CPU mstatus CSR  (7): MPIE - Machine previous interrupt enable bit (r/w) */
   CSR_MSTATUS_MPP_L = 11, /**< CPU mstatus CSR (11): MPP_L - Machine previous privilege mode bit low (r/w) */
   CSR_MSTATUS_MPP_H = 12  /**< CPU mstatus CSR (12): MPP_H - Machine previous privilege mode bit high (r/w) */
-};
-
-
-/**********************************************************************//**
- * CPU <b>mstatush</b> CSR (r/-): Machine status - high word (RISC-V spec.)
- **************************************************************************/
-enum NEORV32_CSR_MSTATUSH_enum {
-  CSR_MSTATUSH_MBE = 5 /**< CPU mstatush CSR (5): MBE - Machine-mode endianness (little-endian=0, big-endian=1) (r/-) */
 };
 
 
@@ -506,9 +496,9 @@ enum NEORV32_CSR_MISA_enum {
 enum NEORV32_CSR_MZEXT_enum {
   CSR_MZEXT_ZICSR     =  0, /**< CPU mzext CSR (0): Zicsr extension (I sub-extension) available when set (r/-) */
   CSR_MZEXT_ZIFENCEI  =  1, /**< CPU mzext CSR (1): Zifencei extension (I sub-extension) available when set (r/-) */
-  CSR_MZEXT_ZBB       =  2, /**< CPU mzext CSR (2): Zbb extension (B sub-extension) available when set (r/-) */
-  CSR_MZEXT_ZBS       =  3, /**< CPU mzext CSR (3): Zbs extension (B sub-extension) available when set (r/-) */
-  CSR_MZEXT_ZBA       =  4, /**< CPU mzext CSR (4): Zba extension (B sub-extension) available when set (r/-) */
+//CSR_MZEXT_ZBB       =  2, /**< CPU mzext CSR (2): Zbb extension (B sub-extension) available when set (r/-) */
+//CSR_MZEXT_ZBS       =  3, /**< CPU mzext CSR (3): Zbs extension (B sub-extension) available when set (r/-) */
+//CSR_MZEXT_ZBA       =  4, /**< CPU mzext CSR (4): Zba extension (B sub-extension) available when set (r/-) */
   CSR_MZEXT_ZFINX     =  5, /**< CPU mzext CSR (5): Zfinx extension (F sub-/alternative-extension) available when set (r/-) */
   CSR_MZEXT_ZXSCNT    =  6, /**< CPU mzext CSR (6): Custom extension - Small CPU counters: "cycle" & "instret" CSRs have less than 64-bit when set (r/-) */
   CSR_MZEXT_ZXNOCNT   =  7, /**< CPU mzext CSR (7): Custom extension - NO CPU counters: "cycle" & "instret" CSRs are NOT available at all when set (r/-) */
@@ -635,78 +625,140 @@ enum NEORV32_CLOCK_PRSC_enum {
 /** bootloader memory base address (r/-/x) */
 #define BOOTLOADER_BASE_ADDRESS (0xFFFF0000UL)
 /** peripheral/IO devices memory base address (r/w/x) */
-#define IO_BASE_ADDRESS         (0xFFFFFF00UL)
+#define IO_BASE_ADDRESS         (0xFFFFFE00UL)
 /**@}*/
+
+
+// ############################################################################################################################
+// Peripheral/IO Devices - IO Address Space
+// ############################################################################################################################
 
 
 /**********************************************************************//**
  * @name IO Device: Custom Functions Subsystem (CFS)
  **************************************************************************/
 /**@{*/
+/** CFS base address */
+#define CFS_BASE (0xFFFFFE00UL) // /**< CFS base address */
+/** CFS address space size in bytes */
+#define CFS_SIZE (64*4) // /**< CFS address space size in bytes */
+
 /** custom CFS register 0 */
-#define CFS_REG_0  (*(IO_REG32 0xFFFFFF00UL)) // /**< (r)/(w): CFS register 0, user-defined */
+#define CFS_REG_0  (*(IO_REG32 (CFS_BASE + 0))) // /**< (r)/(w): CFS register 0, user-defined */
 /** custom CFS register 1 */
-#define CFS_REG_1  (*(IO_REG32 0xFFFFFF04UL)) // /**< (r)/(w): CFS register 1, user-defined */
+#define CFS_REG_1  (*(IO_REG32 (CFS_BASE + 4))) // /**< (r)/(w): CFS register 1, user-defined */
 /** custom CFS register 2 */
-#define CFS_REG_2  (*(IO_REG32 0xFFFFFF08UL)) // /**< (r)/(w): CFS register 2, user-defined */
+#define CFS_REG_2  (*(IO_REG32 (CFS_BASE + 8))) // /**< (r)/(w): CFS register 2, user-defined */
 /** custom CFS register 3 */
-#define CFS_REG_3  (*(IO_REG32 0xFFFFFF0CUL)) // /**< (r)/(w): CFS register 3, user-defined */
+#define CFS_REG_3  (*(IO_REG32 (CFS_BASE + 12))) // /**< (r)/(w): CFS register 3, user-defined */
 /** custom CFS register 4 */
-#define CFS_REG_4  (*(IO_REG32 0xFFFFFF10UL)) // /**< (r)/(w): CFS register 4, user-defined */
+#define CFS_REG_4  (*(IO_REG32 (CFS_BASE + 16))) // /**< (r)/(w): CFS register 4, user-defined */
 /** custom CFS register 5 */
-#define CFS_REG_5  (*(IO_REG32 0xFFFFFF14UL)) // /**< (r)/(w): CFS register 5, user-defined */
+#define CFS_REG_5  (*(IO_REG32 (CFS_BASE + 20))) // /**< (r)/(w): CFS register 5, user-defined */
 /** custom CFS register 6 */
-#define CFS_REG_6  (*(IO_REG32 0xFFFFFF18UL)) // /**< (r)/(w): CFS register 6, user-defined */
+#define CFS_REG_6  (*(IO_REG32 (CFS_BASE + 24))) // /**< (r)/(w): CFS register 6, user-defined */
 /** custom CFS register 7 */
-#define CFS_REG_7  (*(IO_REG32 0xFFFFFF1CUL)) // /**< (r)/(w): CFS register 7, user-defined */
+#define CFS_REG_7  (*(IO_REG32 (CFS_BASE + 28))) // /**< (r)/(w): CFS register 7, user-defined */
 /** custom CFS register 8 */
-#define CFS_REG_8  (*(IO_REG32 0xFFFFFF20UL)) // /**< (r)/(w): CFS register 8, user-defined */
+#define CFS_REG_8  (*(IO_REG32 (CFS_BASE + 32))) // /**< (r)/(w): CFS register 8, user-defined */
 /** custom CFS register 9 */
-#define CFS_REG_9  (*(IO_REG32 0xFFFFFF24UL)) // /**< (r)/(w): CFS register 9, user-defined */
+#define CFS_REG_9  (*(IO_REG32 (CFS_BASE + 36))) // /**< (r)/(w): CFS register 9, user-defined */
 /** custom CFS register 10 */
-#define CFS_REG_10 (*(IO_REG32 0xFFFFFF28UL)) // /**< (r)/(w): CFS register 10, user-defined */
+#define CFS_REG_10 (*(IO_REG32 (CFS_BASE + 40))) // /**< (r)/(w): CFS register 10, user-defined */
 /** custom CFS register 11 */
-#define CFS_REG_11 (*(IO_REG32 0xFFFFFF2CUL)) // /**< (r)/(w): CFS register 11, user-defined */
+#define CFS_REG_11 (*(IO_REG32 (CFS_BASE + 44))) // /**< (r)/(w): CFS register 11, user-defined */
 /** custom CFS register 12 */
-#define CFS_REG_12 (*(IO_REG32 0xFFFFFF30UL)) // /**< (r)/(w): CFS register 12, user-defined */
+#define CFS_REG_12 (*(IO_REG32 (CFS_BASE + 48))) // /**< (r)/(w): CFS register 12, user-defined */
 /** custom CFS register 13 */
-#define CFS_REG_13 (*(IO_REG32 0xFFFFFF34UL)) // /**< (r)/(w): CFS register 13, user-defined */
+#define CFS_REG_13 (*(IO_REG32 (CFS_BASE + 52))) // /**< (r)/(w): CFS register 13, user-defined */
 /** custom CFS register 14 */
-#define CFS_REG_14 (*(IO_REG32 0xFFFFFF38UL)) // /**< (r)/(w): CFS register 14, user-defined */
+#define CFS_REG_14 (*(IO_REG32 (CFS_BASE + 56))) // /**< (r)/(w): CFS register 14, user-defined */
 /** custom CFS register 15 */
-#define CFS_REG_15 (*(IO_REG32 0xFFFFFF3CUL)) // /**< (r)/(w): CFS register 15, user-defined */
+#define CFS_REG_15 (*(IO_REG32 (CFS_BASE + 60))) // /**< (r)/(w): CFS register 15, user-defined */
 /** custom CFS register 16 */
-#define CFS_REG_16 (*(IO_REG32 0xFFFFFF40UL)) // /**< (r)/(w): CFS register 16, user-defined */
+#define CFS_REG_16 (*(IO_REG32 (CFS_BASE + 64))) // /**< (r)/(w): CFS register 16, user-defined */
 /** custom CFS register 17 */
-#define CFS_REG_17 (*(IO_REG32 0xFFFFFF44UL)) // /**< (r)/(w): CFS register 17, user-defined */
+#define CFS_REG_17 (*(IO_REG32 (CFS_BASE + 68))) // /**< (r)/(w): CFS register 17, user-defined */
 /** custom CFS register 18 */
-#define CFS_REG_18 (*(IO_REG32 0xFFFFFF48UL)) // /**< (r)/(w): CFS register 18, user-defined */
+#define CFS_REG_18 (*(IO_REG32 (CFS_BASE + 72))) // /**< (r)/(w): CFS register 18, user-defined */
 /** custom CFS register 19 */
-#define CFS_REG_19 (*(IO_REG32 0xFFFFFF4CUL)) // /**< (r)/(w): CFS register 19, user-defined */
+#define CFS_REG_19 (*(IO_REG32 (CFS_BASE + 76))) // /**< (r)/(w): CFS register 19, user-defined */
 /** custom CFS register 20 */
-#define CFS_REG_20 (*(IO_REG32 0xFFFFFF50UL)) // /**< (r)/(w): CFS register 20, user-defined */
+#define CFS_REG_20 (*(IO_REG32 (CFS_BASE + 80))) // /**< (r)/(w): CFS register 20, user-defined */
 /** custom CFS register 21 */
-#define CFS_REG_21 (*(IO_REG32 0xFFFFFF54UL)) // /**< (r)/(w): CFS register 21, user-defined */
+#define CFS_REG_21 (*(IO_REG32 (CFS_BASE + 84))) // /**< (r)/(w): CFS register 21, user-defined */
 /** custom CFS register 22 */
-#define CFS_REG_22 (*(IO_REG32 0xFFFFFF58UL)) // /**< (r)/(w): CFS register 22, user-defined */
+#define CFS_REG_22 (*(IO_REG32 (CFS_BASE + 88))) // /**< (r)/(w): CFS register 22, user-defined */
 /** custom CFS register 23 */
-#define CFS_REG_23 (*(IO_REG32 0xFFFFFF5CUL)) // /**< (r)/(w): CFS register 23, user-defined */
+#define CFS_REG_23 (*(IO_REG32 (CFS_BASE + 92))) // /**< (r)/(w): CFS register 23, user-defined */
 /** custom CFS register 24 */
-#define CFS_REG_24 (*(IO_REG32 0xFFFFFF60UL)) // /**< (r)/(w): CFS register 24, user-defined */
+#define CFS_REG_24 (*(IO_REG32 (CFS_BASE + 96))) // /**< (r)/(w): CFS register 24, user-defined */
 /** custom CFS register 25 */
-#define CFS_REG_25 (*(IO_REG32 0xFFFFFF64UL)) // /**< (r)/(w): CFS register 25, user-defined */
+#define CFS_REG_25 (*(IO_REG32 (CFS_BASE + 100))) // /**< (r)/(w): CFS register 25, user-defined */
 /** custom CFS register 26 */
-#define CFS_REG_26 (*(IO_REG32 0xFFFFFF68UL)) // /**< (r)/(w): CFS register 26, user-defined */
+#define CFS_REG_26 (*(IO_REG32 (CFS_BASE + 104))) // /**< (r)/(w): CFS register 26, user-defined */
 /** custom CFS register 27 */
-#define CFS_REG_27 (*(IO_REG32 0xFFFFFF6CUL)) // /**< (r)/(w): CFS register 27, user-defined */
+#define CFS_REG_27 (*(IO_REG32 (CFS_BASE + 108))) // /**< (r)/(w): CFS register 27, user-defined */
 /** custom CFS register 28 */
-#define CFS_REG_28 (*(IO_REG32 0xFFFFFF70UL)) // /**< (r)/(w): CFS register 28, user-defined */
+#define CFS_REG_28 (*(IO_REG32 (CFS_BASE + 112))) // /**< (r)/(w): CFS register 28, user-defined */
 /** custom CFS register 29 */
-#define CFS_REG_29 (*(IO_REG32 0xFFFFFF74UL)) // /**< (r)/(w): CFS register 29, user-defined */
+#define CFS_REG_29 (*(IO_REG32 (CFS_BASE + 116))) // /**< (r)/(w): CFS register 29, user-defined */
 /** custom CFS register 30 */
-#define CFS_REG_30 (*(IO_REG32 0xFFFFFF78UL)) // /**< (r)/(w): CFS register 30, user-defined */
+#define CFS_REG_30 (*(IO_REG32 (CFS_BASE + 120))) // /**< (r)/(w): CFS register 30, user-defined */
 /** custom CFS register 31 */
-#define CFS_REG_31 (*(IO_REG32 0xFFFFFF7CUL)) // /**< (r)/(w): CFS register 31, user-defined */
+#define CFS_REG_31 (*(IO_REG32 (CFS_BASE + 124))) // /**< (r)/(w): CFS register 31, user-defined */
+/**@}*/
+
+
+/**********************************************************************//**
+ * @name IO Device: Pulse Width Modulation Controller (PWM)
+ **************************************************************************/
+/**@{*/
+/** PWM base address */
+#define PWM_BASE (0XFFFFFF80UL) // /**< PWM base address */
+/** PWM address space size in bytes */
+#define PWM_SIZE (16*4) // /**< PWM address space size in bytes */
+
+/** PWM control register (r/w) */
+#define PWM_CT     (*(IO_REG32 (PWM_BASE + 0))) // r/w: control register
+/** PWM duty cycle register 0 (r/w) */
+#define PWM_DUTY0  (*(IO_REG32 (PWM_BASE + 4))) // r/w: duty cycle channel 3:0
+/** PWM duty cycle register 1 (r/w) */
+#define PWM_DUTY1  (*(IO_REG32 (PWM_BASE + 8))) // r/w: duty cycle channel 7:4
+/** PWM duty cycle register 2 (r/w) */
+#define PWM_DUTY2  (*(IO_REG32 (PWM_BASE + 12))) // r/w: duty cycle channel 11:8
+/** PWM duty cycle register 3 (r/w) */
+#define PWM_DUTY3  (*(IO_REG32 (PWM_BASE + 16))) // r/w: duty cycle channel 15:12
+/** PWM duty cycle register 4 (r/w) */
+#define PWM_DUTY4  (*(IO_REG32 (PWM_BASE + 20))) // r/w: duty cycle channel 19:16
+/** PWM duty cycle register 5 (r/w) */
+#define PWM_DUTY5  (*(IO_REG32 (PWM_BASE + 24))) // r/w: duty cycle channel 23:20
+/** PWM duty cycle register 6 (r/w) */
+#define PWM_DUTY6  (*(IO_REG32 (PWM_BASE + 28))) // r/w: duty cycle channel 27:24
+/** PWM duty cycle register 7 (r/w) */
+#define PWM_DUTY7  (*(IO_REG32 (PWM_BASE + 32))) // r/w: duty cycle channel 31:28
+/** PWM duty cycle register 8 (r/w) */
+#define PWM_DUTY8  (*(IO_REG32 (PWM_BASE + 36))) // r/w: duty cycle channel 35:32
+/** PWM duty cycle register 9 (r/w) */
+#define PWM_DUTY9  (*(IO_REG32 (PWM_BASE + 40))) // r/w: duty cycle channel 39:36
+/** PWM duty cycle register 10 (r/w) */
+#define PWM_DUTY10 (*(IO_REG32 (PWM_BASE + 44))) // r/w: duty cycle channel 43:40
+/** PWM duty cycle register 11 (r/w) */
+#define PWM_DUTY11 (*(IO_REG32 (PWM_BASE + 48))) // r/w: duty cycle channel 47:44
+/** PWM duty cycle register 12 (r/w) */
+#define PWM_DUTY12 (*(IO_REG32 (PWM_BASE + 52))) // r/w: duty cycle channel 51:48
+/** PWM duty cycle register 13 (r/w) */
+#define PWM_DUTY13 (*(IO_REG32 (PWM_BASE + 56))) // r/w: duty cycle channel 55:52
+/** PWM duty cycle register 14 (r/w) */
+#define PWM_DUTY14 (*(IO_REG32 (PWM_BASE + 60))) // r/w: duty cycle channel 59:56
+
+/** PWM control register bits */
+enum NEORV32_PWM_CT_enum {
+  PWM_CT_EN    =  0, /**< PWM control register(0) (r/w): PWM controller enable */
+  PWM_CT_PRSC0 =  1, /**< PWM control register(1) (r/w): Clock prescaler select bit 0 */
+  PWM_CT_PRSC1 =  2, /**< PWM control register(2) (r/w): Clock prescaler select bit 1 */
+  PWM_CT_PRSC2 =  3  /**< PWM control register(3) (r/w): Clock prescaler select bit 2 */
+};
 /**@}*/
 
 
@@ -714,10 +766,15 @@ enum NEORV32_CLOCK_PRSC_enum {
  * @name IO Device: General Purpose Input/Output Port Unit (GPIO)
  **************************************************************************/
 /**@{*/
+/** GPIO base address */
+#define GPIO_BASE (0xFFFFFF80UL) // /**< GPIO base address */
+/** GPIO address space size in bytes */
+#define GPIO_SIZE (2*4) // /**< GPIO address space size in bytes */
+
 /** read access: GPIO parallel input port 32-bit (r/-), write_access: pin-change IRQ for each input pin (-/w) */
-#define GPIO_INPUT  (*(IO_REG32 0xFFFFFF80UL))
+#define GPIO_INPUT  (*(IO_REG32 (GPIO_BASE + 0)))
 /** GPIO parallel output port 32-bit (r/w) */
-#define GPIO_OUTPUT (*(IO_REG32 0xFFFFFF84UL))
+#define GPIO_OUTPUT (*(IO_REG32 (GPIO_BASE + 4)))
 /**@}*/
 
 
@@ -725,8 +782,13 @@ enum NEORV32_CLOCK_PRSC_enum {
  * @name IO Device: True Random Number Generator (TRNG)
  **************************************************************************/
 /**@{*/
+/** TRNG base address */
+#define TRNG_BASE (0xFFFFFF88UL) // /**< TRNG base address */
+/** TRNG address space size in bytes */
+#define TRNG_SIZE (1*4) // /**< TRNG address space size in bytes */
+
 /** TRNG control/data register (r/w) */
-#define TRNG_CT (*(IO_REG32 0xFFFFFF88UL))
+#define TRNG_CT (*(IO_REG32 (TRNG_BASE + 0)))
 
 /** TRNG control/data register bits */
 enum NEORV32_TRNG_CT_enum {
@@ -743,8 +805,13 @@ enum NEORV32_TRNG_CT_enum {
  * @name IO Device: Watchdog Timer (WDT)
  **************************************************************************/
 /**@{*/
+/** WDT base address */
+#define WDT_BASE (0xFFFFFF8CUL) // /**< WDT base address */
+/** WDT address space size in bytes */
+#define WDT_SIZE (1*4) // /**< WDT address space size in bytes */
+
 /** Watchdog control register (r/w) */
-#define WDT_CT (*(IO_REG32 0xFFFFFF8CUL))
+#define WDT_CT (*(IO_REG32 (WDT_BASE + 0)))
 
 /** WTD control register bits */
 enum NEORV32_WDT_CT_enum {
@@ -765,14 +832,19 @@ enum NEORV32_WDT_CT_enum {
  * @name IO Device: Machine System Timer (MTIME)
  **************************************************************************/
 /**@{*/
+/** MTIME base address */
+#define MTIME_BASE (0xFFFFFF90UL) // /**< MTIME base address */
+/** MTIME address space size in bytes */
+#define MTIME_SIZE (4*4) // /**< MTIME address space size in bytes */
+
 /** MTIME (time register) low word (r/w) */
-#define MTIME_LO     (*(IO_REG32 0xFFFFFF90UL))
+#define MTIME_LO     (*(IO_REG32 (MTIME_BASE + 0)))
 /** MTIME (time register) high word (r/w) */
-#define MTIME_HI     (*(IO_REG32 0xFFFFFF94UL))
+#define MTIME_HI     (*(IO_REG32 (MTIME_BASE + 4)))
 /** MTIMECMP (time compare register) low word (r/w) */
-#define MTIMECMP_LO  (*(IO_REG32 0xFFFFFF98UL))
+#define MTIMECMP_LO  (*(IO_REG32 (MTIME_BASE + 8)))
 /** MTIMECMP (time register) high word (r/w) */
-#define MTIMECMP_HI  (*(IO_REG32 0xFFFFFF9CUL))
+#define MTIMECMP_HI  (*(IO_REG32 (MTIME_BASE + 12)))
 
 /** MTIME (time register) 64-bit access (r/w) */
 #define MTIME        (*(IO_REG64 (&MTIME_LO)))
@@ -785,15 +857,26 @@ enum NEORV32_WDT_CT_enum {
  * @name IO Device: Primary/Secondary Universal Asynchronous Receiver and Transmitter (UART0 / UART1)
  **************************************************************************/
 /**@{*/
+/** UART0 base address */
+#define UART0_BASE (0xFFFFFFA0UL) // /**< UART0 base address */
+/** UART0 address space size in bytes */
+#define UART0_SIZE (2*4) // /**< UART0 address space size in bytes */
+
 /** UART0 control register (r/w) */
-#define UART0_CT  (*(IO_REG32 0xFFFFFFA0UL))
+#define UART0_CT   (*(IO_REG32 (UART0_BASE + 0)))
 /** UART0 receive/transmit data register (r/w) */
-#define UART0_DATA (*(IO_REG32 0xFFFFFFA4UL))
+#define UART0_DATA (*(IO_REG32 (UART0_BASE + 4)))
+
+
+/** UART1 base address */
+#define UART1_BASE (0xFFFFFFD0UL) // /**< UART1 base address */
+/** UART1 address space size in bytes */
+#define UART1_SIZE (2*4) // /**< UART1 address space size in bytes */
 
 /** UART1 control register (r/w) */
-#define UART1_CT  (*(IO_REG32 0xFFFFFFD0UL))
+#define UART1_CT   (*(IO_REG32 (UART1_BASE + 0)))
 /** UART1 receive/transmit data register (r/w) */
-#define UART1_DATA (*(IO_REG32 0xFFFFFFD4UL))
+#define UART1_DATA (*(IO_REG32 (UART1_BASE + 4)))
 
 /** UART0/UART1 control register bits */
 enum NEORV32_UART_CT_enum {
@@ -856,10 +939,15 @@ enum NEORV32_UART_DATA_enum {
  * @name IO Device: Serial Peripheral Interface Controller (SPI)
  **************************************************************************/
 /**@{*/
+/** SPI base address */
+#define SPI_BASE (0xFFFFFFA8UL) // /**< SPI base address */
+/** SPI address space size in bytes */
+#define SPI_SIZE (2*4) // /**< SPI address space size in bytes */
+
 /** SPI control register (r/w) */
-#define SPI_CT  (*(IO_REG32 0xFFFFFFA8UL))
+#define SPI_CT  (*(IO_REG32 (SPI_BASE + 0)))
 /** SPI receive/transmit data register (r/w) */
-#define SPI_DATA (*(IO_REG32 0xFFFFFFACUL))
+#define SPI_DATA (*(IO_REG32 (SPI_BASE + 4)))
 
 /** SPI control register bits */
 enum NEORV32_SPI_CT_enum {
@@ -888,10 +976,15 @@ enum NEORV32_SPI_CT_enum {
  * @name IO Device: Two-Wire Interface Controller (TWI)
  **************************************************************************/
 /**@{*/
+/** TWI base address */
+#define TWI_BASE (0xFFFFFFB0UL) // /**< TWI base address */
+/** TWI address space size in bytes */
+#define TWI_SIZE (2*4) // /**< TWI address space size in bytes */
+
 /** TWI control register (r/w) */
-#define TWI_CT   (*(IO_REG32 0xFFFFFFB0UL))
+#define TWI_CT   (*(IO_REG32 (TWI_BASE + 0)))
 /** TWI receive/transmit data register (r/w) */
-#define TWI_DATA (*(IO_REG32 0xFFFFFFB4UL))
+#define TWI_DATA (*(IO_REG32 (TWI_BASE + 4)))
 
 /** TWI control register bits */
 enum NEORV32_TWI_CT_enum {
@@ -917,48 +1010,22 @@ enum NEORV32_TWI_DATA_enum {
 
 
 /**********************************************************************//**
- * @name IO Device: Pulse Width Modulation Controller (PWM)
- **************************************************************************/
-/**@{*/
-/** PWM control register (r/w) */
-#define PWM_CT   (*(IO_REG32 0xFFFFFFB8UL)) // r/w: control register
-/** PWM duty cycle register (4-channels) (r/w) */
-#define PWM_DUTY (*(IO_REG32 0xFFFFFFBCUL)) // r/w: duty cycle channel 1 and 0
-
-/** PWM control register bits */
-enum NEORV32_PWM_CT_enum {
-  PWM_CT_EN    =  0, /**< PWM control register(0) (r/w): PWM controller enable */
-  PWM_CT_PRSC0 =  1, /**< PWM control register(1) (r/w): Clock prescaler select bit 0 */
-  PWM_CT_PRSC1 =  2, /**< PWM control register(2) (r/w): Clock prescaler select bit 1 */
-  PWM_CT_PRSC2 =  3  /**< PWM control register(3) (r/w): Clock prescaler select bit 2 */
-};
-
-/**PWM duty cycle register bits */
-enum NEORV32_PWM_DUTY_enum {
-  PWM_DUTY_CH0_LSB =  0, /**< PWM duty cycle register(0)  (r/w): Channel 0 duty cycle (8-bit) LSB */
-  PWM_DUTY_CH0_MSB =  7, /**< PWM duty cycle register(7)  (r/w): Channel 0 duty cycle (8-bit) MSB */
-  PWM_DUTY_CH1_LSB =  8, /**< PWM duty cycle register(8)  (r/w): Channel 1 duty cycle (8-bit) LSB */
-  PWM_DUTY_CH1_MSB = 15, /**< PWM duty cycle register(15) (r/w): Channel 1 duty cycle (8-bit) MSB */
-  PWM_DUTY_CH2_LSB = 16, /**< PWM duty cycle register(16) (r/w): Channel 2 duty cycle (8-bit) LSB */
-  PWM_DUTY_CH2_MSB = 23, /**< PWM duty cycle register(23) (r/w): Channel 2 duty cycle (8-bit) MSB */
-  PWM_DUTY_CH3_LSB = 24, /**< PWM duty cycle register(24) (r/w): Channel 3 duty cycle (8-bit) LSB */
-  PWM_DUTY_CH3_MSB = 31  /**< PWM duty cycle register(31) (r/w): Channel 3 duty cycle (8-bit) MSB */
-};
-/**@}*/
-
-
-/**********************************************************************//**
  * @name IO Device: Numerically-Controlled Oscillator (NCO)
  **************************************************************************/
 /**@{*/
+/** NCO base address */
+#define NCO_BASE (0xFFFFFFC0UL) // /**< NCO base address */
+/** NCO address space size in bytes */
+#define NCO_SIZE (4*4) // /**< NCO address space size in bytes */
+
 /** NCO control register (r/w) */
-#define NCO_CT       (*(IO_REG32 0xFFFFFFC0UL)) // r/w: control register
+#define NCO_CT       (*(IO_REG32 (NCO_BASE + 0))) // r/w: control register
 /** NCO channel 0 tuning word (r/w) */
-#define NCO_TUNE_CH0 (*(IO_REG32 0xFFFFFFC4UL)) // r/w: tuning word channel 0
+#define NCO_TUNE_CH0 (*(IO_REG32 (NCO_BASE + 4))) // r/w: tuning word channel 0
 /** NCO channel 1 tuning word (r/w) */
-#define NCO_TUNE_CH1 (*(IO_REG32 0xFFFFFFC8UL)) // r/w: tuning word channel 1
+#define NCO_TUNE_CH1 (*(IO_REG32 (NCO_BASE + 8))) // r/w: tuning word channel 1
 /** NCO channel 2 tuning word (r/w) */
-#define NCO_TUNE_CH2 (*(IO_REG32 0xFFFFFFCCUL)) // r/w: tuning word channel 2
+#define NCO_TUNE_CH2 (*(IO_REG32 (NCO_BASE + 12))) // r/w: tuning word channel 2
 
 /** NCO control register bits */
 enum NEORV32_NCO_CT_enum {
@@ -1007,10 +1074,15 @@ enum NEORV32_NCO_CT_enum {
  * @name IO Device: Smart LED Hardware Interface (NEOLED)
  **************************************************************************/
 /**@{*/
+/** NEOLED base address */
+#define NEOLED_BASE (0xFFFFFFD8UL) // /**< NEOLED base address */
+/** NEOLED address space size in bytes */
+#define NEOLED_SIZE (2*4) // /**< NEOLED address space size in bytes */
+
 /** NEOLED control register (r/w) */
-#define NEOLED_CT   (*(IO_REG32 0xFFFFFFD8UL)) // r/w: control register
+#define NEOLED_CT   (*(IO_REG32 (NEOLED_BASE + 0))) // r/w: control register
 /** NEOLED TX data register (-/w) */
-#define NEOLED_DATA (*(IO_REG32 0xFFFFFFDCUL)) // -/w: TX data register
+#define NEOLED_DATA (*(IO_REG32 (NEOLED_BASE + 4))) // -/w: TX data register
 
 /** NEOLED control register bits */
 enum NEORV32_NEOLED_CT_enum {
@@ -1054,22 +1126,27 @@ enum NEORV32_NEOLED_CT_enum {
  * @name IO Device: System Configuration Info Memory (SYSINFO)
  **************************************************************************/
 /**@{*/
+/** NEOLED base address */
+#define SYSINFO_BASE (0xFFFFFFE0UL) // /**< SYSINFO base address */
+/** NEOLED address space size in bytes */
+#define SYSINFO_SIZE (8*4) // /**< SYSINFO address space size in bytes */
+
 /** SYSINFO(0): Clock speed */
-#define SYSINFO_CLK         (*(IO_ROM32 0xFFFFFFE0UL))
+#define SYSINFO_CLK         (*(IO_ROM32 (SYSINFO_BASE + 0)))
 /** SYSINFO(1): Custom user code (via "USER_CODE" generic) */
-#define SYSINFO_USER_CODE   (*(IO_ROM32 0xFFFFFFE4UL))
+#define SYSINFO_USER_CODE   (*(IO_ROM32 (SYSINFO_BASE + 4)))
 /** SYSINFO(2): Clock speed */
-#define SYSINFO_FEATURES    (*(IO_ROM32 0xFFFFFFE8UL))
+#define SYSINFO_FEATURES    (*(IO_ROM32 (SYSINFO_BASE + 8)))
 /** SYSINFO(3): Cache configuration */
-#define SYSINFO_CACHE       (*(IO_ROM32 0xFFFFFFECUL))
+#define SYSINFO_CACHE       (*(IO_ROM32 (SYSINFO_BASE + 12)))
 /** SYSINFO(4): Instruction memory address space base */
-#define SYSINFO_ISPACE_BASE (*(IO_ROM32 0xFFFFFFF0UL))
+#define SYSINFO_ISPACE_BASE (*(IO_ROM32 (SYSINFO_BASE + 16)))
 /** SYSINFO(5): Data memory address space base */
-#define SYSINFO_DSPACE_BASE (*(IO_ROM32 0xFFFFFFF4UL))
+#define SYSINFO_DSPACE_BASE (*(IO_ROM32 (SYSINFO_BASE + 20)))
 /** SYSINFO(6): Internal instruction memory (IMEM) size in bytes */
-#define SYSINFO_IMEM_SIZE   (*(IO_ROM32 0xFFFFFFF8UL))
+#define SYSINFO_IMEM_SIZE   (*(IO_ROM32 (SYSINFO_BASE + 24)))
 /** SYSINFO(7): Internal data memory (DMEM) size in bytes */
-#define SYSINFO_DMEM_SIZE   (*(IO_ROM32 0xFFFFFFFCUL))
+#define SYSINFO_DMEM_SIZE   (*(IO_ROM32 (SYSINFO_BASE + 28)))
 /**@}*/
 
 /**********************************************************************//**

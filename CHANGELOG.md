@@ -17,13 +17,23 @@ defined by the `hw_version_c` constant in the main VHDL package file [`rtl/core/
 
 * :bug: = bug-fix
 * :sparkles: = new feature
-* :warning: = major change / important note
+* :warning: = (major) change that might impact compatibility with previous versions
 * :lock: = security issue
 * :rocket: = release
 
 
 | Date (*dd.mm.yyyy*) | Version | Comment |
 |:----------:|:-------:|:--------|
+| 04.06.2021 | 1.5.6.4 | :warning: removed `IO_PWM_EN` generic, replaced by `IO_PWM_NUM_CH` generic - PWM ontroller now supports implementation of up to 60 channels via `IO_PWM_NUM_CH` (`IO_PWM_NUM_CH` = 0 will omit the PWM controller); :bug: fixed minor bug in `minstreth` counter logic |
+| 04.06.2021 | 1.5.6.3 | :warning: increased processor-internal IO size from 256 bytes to 512 bytes; relocated base adress of CFS |
+| 03.06.2021 | 1.5.6.2 | :warning: The `B` ISA extension (bit manipulation) has been (temporarily) removed from the project. See [B ISA Extension](https://github.com/stnolting/neorv32/projects/7) project board. |
+| 03.06.2021 | 1.5.6.1 | CPU/HPM counter size configuration (`CPU_CNT_WIDTH` and `HPM_CNT_WIDTH` generics) can now be 0-bit (no counters implemented at all) to 64-bit (full-scale / RISC-V standard) wide |
+| 01.08.2021 | [**:rocket:1.5.6.0**](https://github.com/stnolting/neorv32/releases/tag/v1.5.6.0) | **New release** |
+| 01.06.2021 | 1.5.5.13 | :warning: fixed project's endianness inconsistency (issue [#50](https://github.com/stnolting/neorv32/issues/50)) - CPU and processor are **little-endian**; changed image generator (`sw/image_gen`) and bootloader to generate/use little-endian executables; external memory interface is little-endian by default; removed `mstatus.ube` bit (reads as zero now); removed `mstatush` CSR |
+| 31.05.2021 | 1.5.5.12 | `mret` instruction now clears `mstatus.mpp` (according to _new_ RISC-V privileged specs.) |
+| 31.05.2021 | 1.5.5.11 | :warning: `mtval` CSR is now read-only; a write access will raise an illegal instruction exception |
+| 30.05.2021 | 1.5.5.10 | :bug: fixed bug in processor's reset system (system reset stuck at `0` if on-chip debugger not implemented); reworked processor's reset generator system; VHDL code clean-up; reworked SoC's bus infrastructure (now using array of records for module bus response) |
+| 28.05.2021 | 1.5.5.9 | integrated DBMEM (debug memory) component into DM (debug module); removing now-obsolete `neorv32_debug_dbmem.vhd` component |
 | 22.05.2021 | 1.5.5.8 | :sparkles: **on-chip debugger (OCD)**: added debug module (`DM`) component; **OCD is operational now** (but still experimental) |
 | 22.05.2021 | 1.5.5.7 | :bug: fixed bug in internal memory monitoring: if accessing an unused address which is not re-directed to the external bus interface (because WISHBONE module is disabled) caused the CPU to stall since that bus access was not correctly monitored and aborted by the BUS_KEEPER |
 | 21.05.2021 | 1.5.5.6 | **on-chip debugger**: added debug transport module (`DTM`) component |

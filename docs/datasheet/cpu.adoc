@@ -6,7 +6,7 @@ image::riscv_logo.png[width=350,align=center]
 **Key Features**
 
 * 32-bit pipelined/multi-cycle in-order `rv32` RISC-V CPU
-* Optional RISC-V extensions: `rv32[i/e][m][a][c][b][u]` + `[Zfinx][Zicsr][Zifencei]` + `[debug_mode]` (for on-chip debugging)
+* Optional RISC-V extensions: `rv32[i/e][m][a][c][u]` + `[Zfinx][Zicsr][Zifencei]` + `[debug_mode]` (for on-chip debugging)
 * Compatible to the RISC-V user specifications and a subset of the RISC-V privileged architecture specifications – passes the official RISC-V Architecture Tests (v2+)
 * Official RISC-V open-source architecture ID
 * Standard RISC-V interrupts (_external_, _timer_, _software_) plus 16 _fast_ interrupts and 1 non-maskable interrupt
@@ -15,7 +15,7 @@ image::riscv_logo.png[width=350,align=center]
 * Optional hardware performance monitors (HPM) for application benchmarking
 * Separated interfaces for instruction fetch and data access (merged into single bus via a bus switch for
 the NEORV32 processor)
-* BIG-endian byte order
+* little-endian byte order
 * Configurable hardware reset
 * No hardware support of unaligned data/instruction accesses – they will trigger an exception. If the C extension is enabled instructions
 can also be 16-bit aligned and a misaligned instruction address exception is not possible anymore
@@ -27,6 +27,8 @@ wrapper" that provides a minimal CPU environment and an external bus interface (
 setup also allows to further use the default bootloader and software framework. From this base you
 can start building your own SoC. Of course you can also use the CPU in it’s true stand-alone mode.
 
+[NOTE]
+This documentation assumes the reader is familiar with the official RISC-V "User" and "Privileged Architecture" specifications.
 
 <<<
 // ####################################################################################################################
@@ -202,10 +204,6 @@ This list shows the currently known issues regarding full RISC-V-compatibility. 
 can be found in section <<_instruction_sets_and_extensions>>.
 
 [IMPORTANT]
-CPU and Processor are BIG-ENDIAN, but this should be no problem as the external memory bus
-interface provides big- and little-endian configurations. See section <<_processor_external_memory_interface_wishbone_axi4_lite>> for more information.
-
-[IMPORTANT]
 The `misa` CSR is read-only. It shows the synthesized CPU extensions. Hence, all implemented
 CPU extensions are always active and cannot be enabled/disabled dynamically during runtime. Any
 write access to it (in machine mode) is ignored and will not cause any exception or side-effects.
@@ -214,30 +212,15 @@ write access to it (in machine mode) is ignored and will not cause any exception
 The `mip` CSR is read-only. Pending IRQs can be cleared using the `mie` CSR.
 
 [IMPORTANT]
+The `mtval` CSR is read-only.
+
+[IMPORTANT]
 The physical memory protection (see section <<_machine_physical_memory_protection>>)
 only supports the modes _OFF_ and _NAPOT_ yet and a minimal granularity of 8 bytes per region.
 
 [IMPORTANT]
 The `A` CPU extension (atomic memory access) only implements the `lr.w` and `sc.w` instructions yet.
 However, these instructions are sufficient to emulate all further AMO operations.
-
-
-==== NEORV32-Specific (Custom) Extensions
-
-The NEORV32-specific extensions are always enabled and are indicated by the set `X` bit in the `misa` CSR.
-
-[NOTE]
-The CPU provides eight _fast interrupt_ interrupts, which are controlled via custom bit in the `mie`
-and `mip` CSR. This extension is mapped to bits, that are available for custom use (according to the
-RISC-V specs). Also, custom trap codes for `mcause` are implemented.
-
-[NOTE]
-A custom CSR `mzext` is available that can be used to check for implemented `Z*` CPU extensions
-(for example `Zifencei`). This CSR is mapped to the official "custom CSR address region".
-
-[NOTE]
-All undefined/unimplemented/malformed/illegal instructions do raise an illegal instruction exception
-<<_execution_safety>>.
 
 
 <<<
@@ -342,6 +325,10 @@ The NEORV32 is an RISC-V `rv32i` architecture that provides several optional RIS
 see the The _RISC-V Instruction Set Manual – Volume I: Unprivileged ISA_ and _The RISC-V Instruction Set Manual
 Volume II: Privileged Architecture_, which are available in the projects `docs/references` folder.
 
+[TIP]
+The CPU can discover available ISA extensions via the <<_misa>> and <<_mzext>> CSRs or by executing an instruction
+and checking for an _illegal instruction exception_.
+
 
 ==== **`A`** - Atomic Memory Access
 
@@ -361,30 +348,6 @@ implemented) AMO (atomic memory operation) will trigger an illegal instruction e
 [NOTE]
 The atomic instructions have special requirements for memory system / bus interconnect. More
 information can be found in sections <<_bus_interface>> and <<_processor_external_memory_interface_wishbone_axi4_lite>>, respectively.
-
-
-
-==== **`B`** - Bit-Manipulation
-
-The bit-manipulation instructions extension are available when the `CPU_EXTENSION_RISCV_B` configuration generic
-is _true_. Note that not all sub-extensions are implemented yet. When the bit-manipulation extension is enabled
-the following instructions are available:
-
-* base subset **`Zbb`**: `clz`, `ctz`, `cpop`, `sext.b`, `sext.h`, `min[u]`, `max[u]`, `andn`, `orn`, `xnor`, `rol`, `ror`,
-`rori`, `c.xor`, `zext` (_pseudo instruction_ `for pack rd, rs, zero`), `rev8` (_pseudo instruction_ for `grevi rd, rs, -8`),
-`orc.b` (_pseudo instruction_ for `gorci rd, rs, 7`)
-* single-bit operations **`Zbs`**: `sbset[i]`, `sbclr[i]`, `sbclr[i]`, `sbext[i]`
-* shifted-add operations **`Zba`**: `sh1add`, `sh2add`, `sh3add`
-
-[WARNING]
-The bit manipulation extension is not yet officially ratified and the NEORV32 implementation is still
-_work-in-progess_. There is no software support in the upstream GCC RISC-V port yet. However, an intrinsic library
-is provided to utilize the provided bit manipulation extension from C-language code (see
-`sw/example/bit_manipulation`).
-
-[NOTE]
-The current version of the bit manipulation specs that are supported by the NEORV32 can be found
-in `docs/references/bitmanip-draft.pdf`.
 
 
 ==== **`C`** - Compressed Instructions
@@ -460,6 +423,27 @@ instance, use-level code cannot access machine-mode CSRs. Furthermore, access to
 peripheral/IO devices) can be limited via the physical memory protection (_PMP_) unit for code running in user mode.
 
 
+==== **`X`** - NEORV32-Specific (Custom) Extensions
+
+The NEORV32-specific extensions are always enabled and are indicated by the set `X` bit in the `misa` CSR.
+
+[NOTE]
+The CPU provides 16 _fast interrupt_ interrupts (`FIRQ)`, which are controlled via custom bits in the `mie`
+and `mip` CSR. This extension is mapped to bits, that are available for custom use (according to the
+RISC-V specs). Also, custom trap codes for `mcause` are implemented.
+
+[NOTE]
+The CPU provides a single _non-maskable_ interrupt (`NMI)` that also provides a custom trap code for `mcause`.
+
+[NOTE]
+A custom CSR `mzext` is available that can be used to check for implemented `Z*` CPU extensions
+(for example `Zifencei`). This CSR is mapped to the official "custom CSR address region".
+
+[NOTE]
+All undefined/unimplemented/malformed/illegal instructions do raise an illegal instruction exception
+(see <<_execution_safety>>).
+
+
 ==== **`Zfinx`** Single-Precision Floating-Point Operations
 
 The `Zfinx` floating-point extension is an alternative of the `F` floating-point instruction that also uses the
@@ -529,8 +513,13 @@ generic is _true_. It allows manual synchronization of the instruction stream vi
 [NOTE]
 The `fence.i` instruction resets the CPU's internal instruction fetch engine and flushes the prefetch buffer.
 This allows a clean re-fetch of modified data from memory. Also, the top's `i_bus_fencei_o` signal is set
-high for one cycle to inform the memory system. Any additional flags within the `fence.i` instruction word are ignore by the hardware.
-If _CPU_EXTENSION_RISCV_Zifencei_ is false, executing `fence.i` will **not trap** and none of the described functions will be executed.
+high for one cycle to inform the memory system. Any additional flags within the `fence.i` instruction word
+are ignore by the hardware.
+
+[NOTE]
+If the `Zifencei` extension is disabled (_CPU_EXTENSION_RISCV_Zifencei_ generic = false) executing
+a `fence.i` instruction will be executed as `nop` (and will **not trap**) and none of the functions
+described above will be executed.
 
 
 ==== **`PMP`** Physical Memory Protection
@@ -596,7 +585,7 @@ Instruction Set Manual – Volume II: Privileged Architecture_ specifications.
 In additions to the mandatory cycles (`[m]cycle[h]`) and instruction (`[m]instret[h]`) counters the NEORV32 CPU provides
 up to 29 hardware performance monitors (HPM 3..31), which can be used to benchmark applications. Each HPM consists of an
 N-bit wide counter (split in a high-word 32-bit CSR and a low-word 32-bit CSR), where N is defined via the top's
-`HPM_CNT_WIDTH` generic (1..64-bit), and a corresponding event configuration CSR. The event configuration
+`HPM_CNT_WIDTH` generic (0..64-bit), and a corresponding event configuration CSR. The event configuration
 CSR defines the architectural events that lead to an increment of the associated HPM counter.
 
 The cycle, time and instructions-retired counters (`[m]cycle[h]`, `time[h]`, `[m]instret[h]`) are
@@ -783,22 +772,22 @@ cause multiple triggering of the interrupt).
 | 2     | `0x8000000B` | 1.11     | _TRAP_CODE_MEI_ | machine external interrupt | _I-PC_ | _0_
 | 3     | `0x80000003` | 1.3      | _TRAP_CODE_MSI_ | machine software interrupt | _I-PC_ | _0_
 | 4     | `0x80000007` | 1.7      | _TRAP_CODE_MTI_ | machine timer interrupt | _I-PC_ | _0_
-| 5     | `0x80000010` | 1.16     | _TRAP_CODE_FIRQ_0_ | fast interrupt request channel | _I-PC_ | _0_
-| 6     | `0x80000011` | 1.17     | _TRAP_CODE_FIRQ_1_ | fast interrupt request channel | _I-PC_ | _0_
-| 7     | `0x80000012` | 1.18     | _TRAP_CODE_FIRQ_2_ | fast interrupt request channel | _I-PC_ | _0_
-| 8     | `0x80000013` | 1.19     | _TRAP_CODE_FIRQ_3_ | fast interrupt request channel | _I-PC_ | _0_
-| 9     | `0x80000014` | 1.20     | _TRAP_CODE_FIRQ_4_ | fast interrupt request channel | _I-PC_ | _0_
-| 10    | `0x80000015` | 1.21     | _TRAP_CODE_FIRQ_5_ | fast interrupt request channel | _I-PC_ | _0_
-| 11    | `0x80000016` | 1.22     | _TRAP_CODE_FIRQ_6_ | fast interrupt request channel | _I-PC_ | _0_
-| 12    | `0x80000017` | 1.23     | _TRAP_CODE_FIRQ_7_ | fast interrupt request channel | _I-PC_ | _0_
-| 13    | `0x80000018` | 1.24     | _TRAP_CODE_FIRQ_8_ | fast interrupt request channel | _I-PC_ | _0_
-| 14    | `0x80000019` | 1.25     | _TRAP_CODE_FIRQ_9_ | fast interrupt request channel | _I-PC_ | _0_
-| 15    | `0x8000001a` | 1.26     | _TRAP_CODE_FIRQ_10_ | fast interrupt request channel | _I-PC_ | _0_
-| 16    | `0x8000001b` | 1.27     | _TRAP_CODE_FIRQ_11_ | fast interrupt request channel | _I-PC_ | _0_
-| 17    | `0x8000001c` | 1.28     | _TRAP_CODE_FIRQ_12_ | fast interrupt request channel | _I-PC_ | _0_
-| 18    | `0x8000001d` | 1.29     | _TRAP_CODE_FIRQ_13_ | fast interrupt request channel | _I-PC_ | _0_
-| 19    | `0x8000001e` | 1.30     | _TRAP_CODE_FIRQ_14_ | fast interrupt request channel | _I-PC_ | _0_
-| 20    | `0x8000001f` | 1.31     | _TRAP_CODE_FIRQ_15_ | fast interrupt request channel | _I-PC_ | _0_
+| 5     | `0x80000010` | 1.16     | _TRAP_CODE_FIRQ_0_ | fast interrupt request channel 0 | _I-PC_ | _0_
+| 6     | `0x80000011` | 1.17     | _TRAP_CODE_FIRQ_1_ | fast interrupt request channel 1 | _I-PC_ | _0_
+| 7     | `0x80000012` | 1.18     | _TRAP_CODE_FIRQ_2_ | fast interrupt request channel 2 | _I-PC_ | _0_
+| 8     | `0x80000013` | 1.19     | _TRAP_CODE_FIRQ_3_ | fast interrupt request channel 3 | _I-PC_ | _0_
+| 9     | `0x80000014` | 1.20     | _TRAP_CODE_FIRQ_4_ | fast interrupt request channel 4 | _I-PC_ | _0_
+| 10    | `0x80000015` | 1.21     | _TRAP_CODE_FIRQ_5_ | fast interrupt request channel 5 | _I-PC_ | _0_
+| 11    | `0x80000016` | 1.22     | _TRAP_CODE_FIRQ_6_ | fast interrupt request channel 6 | _I-PC_ | _0_
+| 12    | `0x80000017` | 1.23     | _TRAP_CODE_FIRQ_7_ | fast interrupt request channel 7 | _I-PC_ | _0_
+| 13    | `0x80000018` | 1.24     | _TRAP_CODE_FIRQ_8_ | fast interrupt request channel 8 | _I-PC_ | _0_
+| 14    | `0x80000019` | 1.25     | _TRAP_CODE_FIRQ_9_ | fast interrupt request channel 9 | _I-PC_ | _0_
+| 15    | `0x8000001a` | 1.26     | _TRAP_CODE_FIRQ_10_ | fast interrupt request channel 10 | _I-PC_ | _0_
+| 16    | `0x8000001b` | 1.27     | _TRAP_CODE_FIRQ_11_ | fast interrupt request channel 11 | _I-PC_ | _0_
+| 17    | `0x8000001c` | 1.28     | _TRAP_CODE_FIRQ_12_ | fast interrupt request channel 12 | _I-PC_ | _0_
+| 18    | `0x8000001d` | 1.29     | _TRAP_CODE_FIRQ_13_ | fast interrupt request channel 13 | _I-PC_ | _0_
+| 19    | `0x8000001e` | 1.30     | _TRAP_CODE_FIRQ_14_ | fast interrupt request channel 14 | _I-PC_ | _0_
+| 20    | `0x8000001f` | 1.31     | _TRAP_CODE_FIRQ_15_ | fast interrupt request channel 15 | _I-PC_ | _0_
 | 21    | `0x00000001` | 0.1      | _TRAP_CODE_I_ACCESS_ | instruction access fault | _B-ADR_ | _PC_
 | 22    | `0x00000002` | 0.2      | _TRAP_CODE_I_ILLEGAL_ | illegal instruction | _PC_ | _Inst_
 | 23    | `0x00000000` | 0.0      | _TRAP_CODE_I_MISALIGNED_ | instruction address misaligned | _B-ADR_ | _PC_
@@ -904,12 +893,10 @@ an _optional_ bus timeout (see section <<_processor_external_memory_interface_wi
 [cols="^2,^2"]
 [grid="none"]
 |=======================
-| image::cpu_interface_read_long.png[read,300,150] +
-Read access
-| image::cpu_interface_write_long.png[write,300,150] +
-Write access
+a| image::cpu_interface_read_long.png[read,300,150]
+a| image::cpu_interface_write_long.png[write,300,150]
+| Read access | Write access
 |=======================
-
 
 **Write Access**
 

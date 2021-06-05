@@ -77,7 +77,6 @@ begin
     ON_CHIP_DEBUGGER_EN          => false,       -- implement on-chip debugger
     -- RISC-V CPU Extensions --
     CPU_EXTENSION_RISCV_A        => false,       -- implement atomic extension?
-    CPU_EXTENSION_RISCV_B        => false,       -- implement bit manipulation extensions?
     CPU_EXTENSION_RISCV_C        => true,        -- implement compressed extension?
     CPU_EXTENSION_RISCV_E        => false,       -- implement embedded RF extension?
     CPU_EXTENSION_RISCV_M        => true,        -- implement muld/div extension?
@@ -95,7 +94,7 @@ begin
     PMP_MIN_GRANULARITY          => 64*1024,     -- minimal region granularity in bytes, has to be a power of 2, min 8 bytes
     -- Hardware Performance Monitors (HPM) --
     HPM_NUM_CNTS                 => 4,           -- number of implemented HPM counters (0..29)
-    HPM_CNT_WIDTH                => 40,          -- total size of HPM counters (1..64)
+    HPM_CNT_WIDTH                => 40,          -- total size of HPM counters (0..64)
     -- Internal Instruction memory --
     MEM_INT_IMEM_EN              => true,        -- implement processor-internal instruction memory
     MEM_INT_IMEM_SIZE            => 16*1024,     -- size of processor-internal instruction memory in bytes
@@ -118,7 +117,7 @@ begin
     IO_UART1_EN                  => false,       -- implement secondary universal asynchronous receiver/transmitter (UART1)?
     IO_SPI_EN                    => false,       -- implement serial peripheral interface (SPI)?
     IO_TWI_EN                    => false,       -- implement two-wire interface (TWI)?
-    IO_PWM_EN                    => false,       -- implement pulse-width modulation unit (PWM)?
+    IO_PWM_NUM_CH                => 0,           -- number of PWM channels to implement (0..60); 0 = disabled
     IO_WDT_EN                    => true,        -- implement watch dog timer (WDT)?
     IO_TRNG_EN                   => false,       -- implement true random number generator (TRNG)?
     IO_CFS_EN                    => false,       -- implement custom functions subsystem (CFS)?
@@ -174,7 +173,7 @@ begin
     -- TWI (available if IO_TWI_EN = true) --
     twi_sda_io  => open,            -- twi serial data line
     twi_scl_io  => open,            -- twi serial clock line
-    -- PWM (available if IO_PWM_EN = true) --
+    -- PWM (available if IO_PWM_NUM_CH > 0) --
     pwm_o       => open,            -- pwm channels
     -- Custom Functions Subsystem IO --
     cfs_in_i    => (others => '0'), -- custom inputs

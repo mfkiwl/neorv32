@@ -2,7 +2,13 @@ name: Implementation
 
 on:
   push:
+    paths:
+    - 'boards/**'
+    - 'rtl/**'
   pull_request:
+    paths:
+    - 'boards/**'
+    - 'rtl/**'
   schedule:
     - cron: '0 0 * * 5'
   workflow_dispatch:

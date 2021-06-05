@@ -85,7 +85,7 @@ architecture neorv32_upduino_v3_top_rtl of neorv32_upduino_v3_top is
   signal cpu_rstn : std_ulogic;
 
   -- internal IO connection --
-  signal con_pwm      : std_ulogic_vector(03 downto 0);
+  signal con_pwm      : std_ulogic_vector(02 downto 0);
   signal con_gpio_o   : std_ulogic_vector(31 downto 0);
   signal con_gpio_i   : std_ulogic_vector(31 downto 0);
   signal con_spi_sck  : std_ulogic;
@@ -168,7 +168,6 @@ begin
 
     -- RISC-V CPU Extensions --
     CPU_EXTENSION_RISCV_A        => true,        -- implement atomic extension?
-    CPU_EXTENSION_RISCV_B        => false,       -- implement bit manipulation extensions?
     CPU_EXTENSION_RISCV_C        => true,        -- implement compressed extension?
     CPU_EXTENSION_RISCV_E        => false,       -- implement embedded RF extension?
     CPU_EXTENSION_RISCV_M        => true,        -- implement mul/div extension?
@@ -217,7 +216,7 @@ begin
     IO_UART1_EN                  => false,       -- implement secondary universal asynchronous receiver/transmitter (UART1)?
     IO_SPI_EN                    => true,        -- implement serial peripheral interface (SPI)?
     IO_TWI_EN                    => true,        -- implement two-wire interface (TWI)?
-    IO_PWM_EN                    => true,        -- implement pulse-width modulation unit (PWM)?
+    IO_PWM_NUM_CH                => 3,           -- number of PWM channels to implement (0..60); 0 = disabled
     IO_WDT_EN                    => true,        -- implement watch dog timer (WDT)?
     IO_TRNG_EN                   => false,       -- implement true random number generator (TRNG)?
     IO_CFS_EN                    => false,       -- implement custom functions subsystem (CFS)?

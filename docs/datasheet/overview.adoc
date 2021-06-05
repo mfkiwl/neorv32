@@ -1,37 +1,43 @@
 :sectnums:
 == Overview
 
-The NEORV32footnote:[Pronounced "neo-R-V-thirty-two" or "neo-risc-five-thirty-two" in its long form.] Processor
-is a customizable microcontroller-like system on chip (SoC) that is based on the
-RISC-V NEORV32 CPU. The processor is intended as ready-to-go auxiliary processor within a larger SoC
-designs or as stand-alone custom microcontroller. Its top entity can be directly synthesized for any target
-technology without modifications.
+[quote]
+____
+RISC-V - Instruction Sets Want To Be Free!
+____
+
+The NEORV32footnote:[Pronounced "neo-R-V-thirty-two" or "neo-risc-five-thirty-two" in its long form.] is an open-source
+RISC-V compatible processor system that is intended as *ready-to-go* auxiliary processor within a larger SoC
+designs or as stand-alone custom / customizable microcontroller.
 
 The system is highly configurable and provides optional common peripherals like embedded memories,
 timers, serial interfaces, general purpose IO ports and an external bus interface to connect custom IP like
-memories, NoCs and peripherals.
+memories, NoCs and other peripherals. On-line and in-system debugging is supported by an OpenOCD/gdb
+compatible on-chip debugger accessible via JTAG.
 
 The software framework of the processor comes with application makefiles, software libraries for all CPU
 and processor features, a bootloader, a runtime environment and several example programs – including a port
 of the CoreMark MCU benchmark and the official RISC-V architecture test suite. RISC-V GCC is used as
-default toolchain (https://github.com/stnolting/riscv-gcc-prebuilt[a prebuilt toolchain is also available on GitHub]).
+default toolchain (https://github.com/stnolting/riscv-gcc-prebuilt[prebuilt toolchains are also provided]).
 
-The project's change log is available in the https://github.com/stnolting/neorv32/blob/master/CHANGELOG.md[CHANGELOG.md]
-file in the root directory of the NEORV32 repository.
+[TIP]
+The project's change log is available in https://github.com/stnolting/neorv32/blob/master/CHANGELOG.md[CHANGELOG.md]
+in the root directory of the NEORV32 repository. Please also check out the <<_legal>> section.
+
 
 
 :sectnums!:
 === Structure
 
-Chapter <<_neorv32_central_processing_unit_cpu>>
-
-* instruction set(s) and extensions, instruction timing, control ans status registers, traps, exceptions and interrupts,
-hardware execution safety, native bus interface
-
 Chapter <<_neorv32_processor_soc>>
 
 * top entity signals and configuration generics, address space layout, internal peripheral devices and interrupts, internal
 memories and caches, internal bus architecture, external bus interface
+
+Chapter <<_neorv32_central_processing_unit_cpu>>
+
+* instruction set(s) and extensions, instruction timing, control ans status registers, traps, exceptions and interrupts,
+hardware execution safety, native bus interface
 
 Chapter <<_on_chip_debugger_ocd>>
 
@@ -44,6 +50,7 @@ Chapter <<_software_framework>>
 Chapter <<_lets_get_it_started>>
 
 * toolchain installation and setup, hardware setup, software setup, application compilation, simulating the processor
+debugging using the on-chip debugger
 
 [TIP]
 Links in this document are <<_structure,highlighted>>.
@@ -82,7 +89,7 @@ Links in this document are <<_structure,highlighted>>.
 ** general purpose IO and PWM and native NeoPixel (c) compatible smart LED interface
 ** embedded memories / caches for data, instructions and bootloader
 ** external memory interface (Wishbone or AXI4-Lite)
-* on-chip debugging compatible to the _Minimal RISC-V Debug Specification Version 0.13.2_
+* on-chip debugger compatible with OpenOCD and gdb
 * fully synchronous design, no latches, no gated clocks
 * completely described in behavioral, platform-independent VHDL
 * small hardware footprint and high operating frequency
@@ -155,11 +162,9 @@ neorv32_top.vhd                      - NEORV32 Processor top entity
 │├neorv32_cpu_bus.vhd              - Bus interface unit + physical memory protection
 │├neorv32_cpu_control.vhd          - CPU control, exception/IRQ system and CSRs
 ││└neorv32_cpu_decompressor.vhd   - Compressed instructions decoder
-│├neorv32_cpu_cp_bitmanip.vhd      - Bit manipulation co-processor (B extension)
 │├neorv32_cpu_cp_fpu.vhd           - Floating-point co-processor (Zfinx extension)
 │├neorv32_cpu_cp_muldiv.vhd        - Mul/Div co-processor (M extension)
 │└neorv32_cpu_regfile.vhd          - Data register file
-├neorv32_debug_dbmem.vhd            - on-chip debugger: debug memory
 ├neorv32_debug_dm.vhd               - on-chip debugger: debug module
 ├neorv32_debug_dtm.vhd              - on-chip debugger: debug transfer module
 ├neorv32_dmem.vhd                   - Processor-internal data memory
@@ -203,7 +208,7 @@ between entity boundaries, so the actual utilization results might vary a bit.
 [options="header",grid="rows"]
 |=======================
 | CPU                                   | LEs  | FFs  | MEM bits | DSPs | _f~max~_
-| `rv32i`                               |  980 | 409  | 1024     | 0    | 123 MHz
+| `rv32i`                               |  980 |  409 | 1024     | 0    | 123 MHz
 | `rv32i_Zicsr`                         | 1835 |  856 | 1024     | 0    | 124 MHz
 | `rv32im_Zicsr`                        | 2443 | 1134 | 1024     | 0    | 124 MHz
 | `rv32imc_Zicsr`                       | 2669 | 1149 | 1024     | 0    | 125 MHz
@@ -221,7 +226,7 @@ between entity boundaries, so the actual utilization results might vary a bit.
 [cols="<2,<8"]
 [grid="topbot"]
 |=======================
-| Hardware version: | `1.5.5.5`
+| Hardware version: | `1.5.5.9`
 | Top entity:       | `rtl/core/neorv32_top.vhd`
 |=======================
 
@@ -235,8 +240,7 @@ between entity boundaries, so the actual utilization results might vary a bit.
 | **BUSSWITCH** | Bus mux for CPU instr. and data interface           |  49 |   8 |        0 |    0
 | CFS           | Custom functions subsystem                          |   - |   - |        - |    -
 | DMEM          | Processor-internal data memory (8kB)                |  18 |   2 |    65536 |    0
-| DBMEM         | On-chip debugger - debug memory                     | 248 | 124 |        0 |    0
-| DM            | On-chip debugger - debug module                     | 292 | 171 |        0 |    0
+| DM            | On-chip debugger - debug module                     | 493 | 240 |        0 |    0
 | DTM           | On-chip debugger - debug transfer module (JTAG)     | 254 | 218 |        0 |    0
 | GPIO          | General purpose input/output ports                  |  67 |  65 |        0 |    0
 | iCACHE        | Instruction cache (1x4 blocks, 256 bytes per block) | 220 | 154 |     8192 |    0
@@ -244,7 +248,7 @@ between entity boundaries, so the actual utilization results might vary a bit.
 | MTIME         | Machine system timer                                | 289 | 200 |        0 |    0
 | NCO           | Numerically-controlled oscillator                   | 254 | 226 |        0 |    0
 | NEOLED        | Smart LED Interface (NeoPixel/WS28128) [4xFIFO]     | 347 | 309 |        0 |    0
-| PWM           | Pulse_width modulation controller                   |  71 |  69 |        0 |    0
+| PWM           | Pulse_width modulation controller (4 channels)      |  71 |  69 |        0 |    0
 | SPI           | Serial peripheral interface                         | 138 | 124 |        0 |    0
 | **SYSINFO**   | System configuration information memory             |  10 |  10 |        0 |    0
 | TRNG          | True random number generator                        | 132 | 105 |        0 |    0
@@ -264,9 +268,9 @@ Exemplary setups for different technologies and various FPGA boards can be found
 (https://github.com/stnolting/neorv32/tree/master/boards).
 
 The following table shows exemplary NEORV32 processor implementation results for different FPGA
-platforms. The processor setup uses the default peripheral configuration (like no CFS, no caches and no
-TRNG), no external memory interface and only internal instruction and data memories. IMEM uses 16kB
-and DMEM uses 8kB memory space.
+platforms. Most setups use the default peripheral configuration (like no CFS, no caches and no
+TRNG), no external memory interface and only internal instruction and data memories (IMEM uses 16kB
+and DMEM uses 8kB memory space).
 
 [cols="<2,<8"]
 [grid="topbot"]
@@ -278,10 +282,10 @@ and DMEM uses 8kB memory space.
 [cols="<4,<5,<4,<4,<3,<3,<3,<4,<4,<3"]
 [options="header",grid="rows"]
 |=======================
-| Vendor  | FPGA                             | Board            | Toolchain               | CPU                                    | LUT        | FF         | DSP    | Memory                        | _f_
-| Intel   | Cyclone IV `EP4CE22F17-C6N`      | Terasic DE0-Nano | Quartus Prime Lite 20.1 | `rv32imc_Zicsr_Zifencei` + `u` + `PMP` | 3813 (17%) | 1890 (8%)  | 0 (0%) | Memory bits: 231424 (38%)     | 119 MHz
-| Lattice | iCE40 UltraPlus `iCE40UP5KSG48I` | Upduino v2.0     | Radiant 2.1             | `rv32ic_Zicsr_Zifencei` + `u`          | 4397 (83%) | 1679 (31%) | 0 (0%) | EBR: 12 (40%) SPRAM: 4 (100%) | 22.15 MHz
-| Xilinx  | Artix-7 `XC7A35TICSG324-1L`      | Arty A7-35T      | Vivado 2019.2           | `rv32imc_Zicsr_Zifencei` + `u` + `PMP` | 2465 (12%) | 1912 (5%)  | 0 (0%) | BRAM: 8 (16%)                 | 100 MHz
+| Vendor  | FPGA                             | Board            | Toolchain               | CPU                               | LUT        | FF         | DSP    | Memory                        | _f_
+| Intel   | Cyclone IV `EP4CE22F17-C6N`      | Terasic DE0-Nano | Quartus Prime Lite 20.1 | `rv32imcu_Zicsr_Zifencei` + `PMP` | 3813 (17%) | 1890 (8%)  | 0 (0%) | Memory bits: 231424 (38%)     | 119 MHz
+| Lattice | iCE40 UltraPlus `iCE40UP5KSG48I` | Upduino v3.0     | Radiant 2.1             | `rv32icu_Zicsr_Zifencei`          | 5123 (97%) | 1972 (37%) | 0 (0%) | EBR: 12 (40%) SPRAM: 4 (100%) | 24 MHz
+| Xilinx  | Artix-7 `XC7A35TICSG324-1L`      | Arty A7-35T      | Vivado 2019.2           | `rv32imcu_Zicsr_Zifencei` + `PMP` | 2465 (12%) | 1912 (5%)  | 0 (0%) | BRAM: 8 (16%)                 | 100 MHz
 |=======================
 
 **Notes**
@@ -318,9 +322,6 @@ system. The according source code and the SW project can be found in the `sw/exa
 The resulting CoreMark score is defined as CoreMark iterations per second.
 The execution time is determined via the RISC-V `[m]cycle[h]` CSRs. The relative CoreMark score is
 defined as CoreMark score divided by the CPU's clock frequency in MHz.
-
-:sectnums!:
-===== Results
 
 [cols="<2,<8"]
 [grid="topbot"]

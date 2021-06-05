@@ -53,7 +53,6 @@ entity neorv32_cpu_control is
     CPU_DEBUG_ADDR               : std_ulogic_vector(31 downto 0) := x"00000000"; -- cpu debug mode start address
     -- RISC-V CPU Extensions --
     CPU_EXTENSION_RISCV_A        : boolean := false; -- implement atomic extension?
-    CPU_EXTENSION_RISCV_B        : boolean := false; -- implement bit manipulation extensions?
     CPU_EXTENSION_RISCV_C        : boolean := false; -- implement compressed extension?
     CPU_EXTENSION_RISCV_E        : boolean := false; -- implement embedded RF extension?
     CPU_EXTENSION_RISCV_M        : boolean := false; -- implement muld/div extension?
@@ -69,7 +68,7 @@ entity neorv32_cpu_control is
     PMP_MIN_GRANULARITY          : natural := 64*1024; -- minimal region granularity in bytes, has to be a power of 2, min 8 bytes
     -- Hardware Performance Monitors (HPM) --
     HPM_NUM_CNTS                 : natural := 0;     -- number of implemented HPM counters (0..29)
-    HPM_CNT_WIDTH                : natural := 40     -- total size of HPM counters (1..64)
+    HPM_CNT_WIDTH                : natural := 40     -- total size of HPM counters (0..64)
   );
   port (
     -- global control --
@@ -194,14 +193,12 @@ architecture neorv32_cpu_control_rtl of neorv32_cpu_control is
 
   -- instruction decoding helper logic --
   type decode_aux_t is record
-    alu_immediate   : std_ulogic;
-    rs1_is_r0       : std_ulogic;
-    is_atomic_lr    : std_ulogic;
-    is_atomic_sc    : std_ulogic;
-    is_bitmanip_imm : std_ulogic;
-    is_bitmanip_reg : std_ulogic;
-    is_float_op     : std_ulogic;
-    sys_env_cmd     : std_ulogic_vector(11 downto 0);
+    alu_immediate : std_ulogic;
+    rs1_is_r0     : std_ulogic;
+    is_atomic_lr  : std_ulogic;
+    is_atomic_sc  : std_ulogic;
+    is_float_op   : std_ulogic;
+    sys_env_cmd   : std_ulogic_vector(11 downto 0);
   end record;
   signal decode_aux : decode_aux_t;
 
@@ -320,11 +317,14 @@ architecture neorv32_cpu_control_rtl of neorv32_cpu_control is
     mscratch          : std_ulogic_vector(data_width_c-1 downto 0); -- mscratch: scratch register (R/W)
     --
     mcycle            : std_ulogic_vector(32 downto 0); -- mcycle (R/W), plus carry bit
-    minstret          : std_ulogic_vector(32 downto 0); -- minstret (R/W), plus carry bit
+    mcycle_msb        : std_ulogic; -- counter low-to-high-word overflow
     mcycleh           : std_ulogic_vector(31 downto 0); -- mcycleh (R/W)
+    minstret          : std_ulogic_vector(32 downto 0); -- minstret (R/W), plus carry bit
+    minstret_msb      : std_ulogic; -- counter low-to-high-word overflow
     minstreth         : std_ulogic_vector(31 downto 0); -- minstreth (R/W)
     --
     mhpmcounter       : mhpmcnt_t; -- mhpmcounter* (R/W), plus carry bit
+    mhpmcounter_msb   : std_ulogic_vector(HPM_NUM_CNTS-1 downto 0); -- counter low-to-high-word overflow
     mhpmcounterh      : mhpmcnth_t; -- mhpmcounter*h (R/W)
     mhpmcounter_rd    : mhpmcnt_rd_t; -- mhpmcounter* (R/W): actual read data
     mhpmcounterh_rd   : mhpmcnth_rd_t; -- mhpmcounter*h (R/W): actual read data
@@ -365,11 +365,6 @@ architecture neorv32_cpu_control_rtl of neorv32_cpu_control is
     ext_halt_req : std_ulogic_vector(1 downto 0); -- rising edge detector for external halt request
   end record;
   signal debug_ctrl : debug_ctrl_t;
-
-  -- counter low-to-high-word carry --
-  signal mcycle_msb      : std_ulogic;
-  signal minstret_msb    : std_ulogic;
-  signal mhpmcounter_msb : std_ulogic_vector(HPM_NUM_CNTS-1 downto 0);
 
   -- (hpm) counter events --
   signal cnt_event, cnt_event_nxt : std_ulogic_vector(hpmcnt_event_size_c-1 downto 0);
@@ -802,7 +797,7 @@ begin
 
   -- CPU Control Bus Output -----------------------------------------------------------------
   -- -------------------------------------------------------------------------------------------
-  ctrl_output: process(ctrl, fetch_engine, trap_ctrl, bus_fast_ir, execute_engine, csr)
+  ctrl_output: process(ctrl, fetch_engine, trap_ctrl, bus_fast_ir, execute_engine, csr, debug_ctrl)
   begin
     -- signals from execute engine --
     ctrl_o <= ctrl;
@@ -828,8 +823,8 @@ begin
     ctrl_o(ctrl_ir_funct12_11_c downto ctrl_ir_funct12_0_c) <= execute_engine.i_reg(instr_funct12_msb_c downto instr_funct12_lsb_c);
     ctrl_o(ctrl_ir_funct3_2_c   downto ctrl_ir_funct3_0_c)  <= execute_engine.i_reg(instr_funct3_msb_c  downto instr_funct3_lsb_c);
     -- cpu status --
-    ctrl_o(ctrl_sleep_c)         <= execute_engine.sleep; -- cpu is in sleep mode
-    ctrl_o(ctrl_trap_c)          <= trap_ctrl.env_start_ack; -- cpu is starting a trap handler
+    ctrl_o(ctrl_sleep_c) <= execute_engine.sleep; -- cpu is in sleep mode
+    ctrl_o(ctrl_trap_c)  <= trap_ctrl.env_start_ack; -- cpu is starting a trap handler
     if (CPU_EXTENSION_RISCV_DEBUG = true) then
       ctrl_o(ctrl_debug_running_c) <= debug_ctrl.running; -- cpu is currently in debug mode
     else
@@ -844,71 +839,22 @@ begin
     variable sys_env_cmd_mask_v : std_ulogic_vector(11 downto 0);
   begin
     -- defaults --
-    decode_aux.alu_immediate   <= '0';
-    decode_aux.rs1_is_r0       <= '0';
-    decode_aux.is_atomic_lr    <= '0';
-    decode_aux.is_atomic_sc    <= '0';
-    decode_aux.is_bitmanip_imm <= '0';
-    decode_aux.is_bitmanip_reg <= '0';
-    decode_aux.is_float_op     <= '0';
+    decode_aux.alu_immediate <= '0';
+    decode_aux.rs1_is_r0     <= '0';
+    decode_aux.is_atomic_lr  <= '0';
+    decode_aux.is_atomic_sc  <= '0';
+    decode_aux.is_float_op   <= '0';
 
     -- is immediate ALU operation? --
     decode_aux.alu_immediate <= not execute_engine.i_reg(instr_opcode_msb_c-1);
 
     -- is rs1 == r0? --
-    decode_aux.rs1_is_r0 <= not or_all_f(execute_engine.i_reg(instr_rs1_msb_c downto instr_rs1_lsb_c));
+    decode_aux.rs1_is_r0 <= not or_reduce_f(execute_engine.i_reg(instr_rs1_msb_c downto instr_rs1_lsb_c));
 
     -- is atomic load-reservate/store-conditional? --
     if (CPU_EXTENSION_RISCV_A = true) and (execute_engine.i_reg(instr_opcode_lsb_c+3 downto instr_opcode_lsb_c+2) = "11") then -- valid atomic sub-opcode
       decode_aux.is_atomic_lr <= not execute_engine.i_reg(instr_funct5_lsb_c);
       decode_aux.is_atomic_sc <=     execute_engine.i_reg(instr_funct5_lsb_c);
-    end if;
-
-    -- is BITMANIP instruction? --
-    -- pretty complex as we have to extract this from the ALU/ALUI instruction space --
-    -- immediate operation --
-    if ((execute_engine.i_reg(instr_funct7_msb_c downto instr_funct7_lsb_c) = "0110000") and (execute_engine.i_reg(instr_funct3_msb_c downto instr_funct3_lsb_c) = "001") and
-         (
-          (execute_engine.i_reg(instr_funct12_lsb_c+4 downto instr_funct12_lsb_c) = "00000") or -- CLZ
-          (execute_engine.i_reg(instr_funct12_lsb_c+4 downto instr_funct12_lsb_c) = "00001") or -- CTZ
-          (execute_engine.i_reg(instr_funct12_lsb_c+4 downto instr_funct12_lsb_c) = "00010") or -- PCNT
-          (execute_engine.i_reg(instr_funct12_lsb_c+4 downto instr_funct12_lsb_c) = "00100") or -- SEXT.B
-          (execute_engine.i_reg(instr_funct12_lsb_c+4 downto instr_funct12_lsb_c) = "00101")    -- SEXT.H
-         )
-       ) or
-       ((execute_engine.i_reg(instr_funct7_msb_c downto instr_funct7_lsb_c+2) = "01001") and (execute_engine.i_reg(instr_funct3_msb_c downto instr_funct3_lsb_c) = "001")) or -- SBCLRI
-       ((execute_engine.i_reg(instr_funct7_msb_c downto instr_funct7_lsb_c+2) = "00101") and (execute_engine.i_reg(instr_funct3_msb_c downto instr_funct3_lsb_c) = "001")) or -- SBSETI
-       ((execute_engine.i_reg(instr_funct7_msb_c downto instr_funct7_lsb_c+2) = "01101") and (execute_engine.i_reg(instr_funct3_msb_c downto instr_funct3_lsb_c) = "001")) or -- SBINVI
-       ((execute_engine.i_reg(instr_funct7_msb_c downto instr_funct7_lsb_c+2) = "01001") and (execute_engine.i_reg(instr_funct3_msb_c downto instr_funct3_lsb_c) = "101")) or -- SBEXTI
-       --
-       ((execute_engine.i_reg(instr_funct7_msb_c downto instr_funct7_lsb_c+2) = "01100") and (execute_engine.i_reg(instr_funct3_msb_c downto instr_funct3_lsb_c) = "101")) or -- RORI
-       ((execute_engine.i_reg(instr_funct7_msb_c downto instr_funct7_lsb_c+2) = "00101") and (execute_engine.i_reg(instr_funct3_msb_c downto instr_funct3_lsb_c) = "101") and (execute_engine.i_reg(instr_imm12_lsb_c+6 downto instr_imm12_lsb_c) = "0000111")) or -- GORCI.b 7 (orc.b)
-       ((execute_engine.i_reg(instr_funct7_msb_c downto instr_funct7_lsb_c+2) = "01101") and (execute_engine.i_reg(instr_funct3_msb_c downto instr_funct3_lsb_c) = "101") and (execute_engine.i_reg(instr_imm12_lsb_c+6 downto instr_imm12_lsb_c) = "0011000")) then -- GREVI.-8 (rev8)
-      decode_aux.is_bitmanip_imm <= '1';
-    end if;
-    -- register operation --
-    if ((execute_engine.i_reg(instr_funct7_msb_c downto instr_funct7_lsb_c) = "0110000") and (execute_engine.i_reg(instr_funct3_msb_c-1 downto instr_funct3_lsb_c) = "01")) or -- ROR / ROL
-       ((execute_engine.i_reg(instr_funct7_msb_c downto instr_funct7_lsb_c) = "0000101") and (execute_engine.i_reg(instr_funct3_msb_c) = '1')) or -- MIN[U] / MAX[U]
-       ((execute_engine.i_reg(instr_funct7_msb_c downto instr_funct7_lsb_c) = "0000100") and (execute_engine.i_reg(instr_funct3_msb_c downto instr_funct3_lsb_c) = "100")) or -- PACK
-       ((execute_engine.i_reg(instr_funct7_msb_c downto instr_funct7_lsb_c) = "0100000") and
-        (
-         (execute_engine.i_reg(instr_funct3_msb_c downto instr_funct3_lsb_c) = "111") or -- ANDN
-         (execute_engine.i_reg(instr_funct3_msb_c downto instr_funct3_lsb_c) = "110") or -- ORN
-         (execute_engine.i_reg(instr_funct3_msb_c downto instr_funct3_lsb_c) = "100")    -- XORN
-         )
-        ) or
-       ((execute_engine.i_reg(instr_funct7_msb_c downto instr_funct7_lsb_c) = "0010000") and
-        (
-         (execute_engine.i_reg(instr_funct3_msb_c downto instr_funct3_lsb_c) = "010") or -- SH1ADD
-         (execute_engine.i_reg(instr_funct3_msb_c downto instr_funct3_lsb_c) = "100") or -- SH2ADD
-         (execute_engine.i_reg(instr_funct3_msb_c downto instr_funct3_lsb_c) = "110")    -- SH3ADD
-         )
-        ) or
-       ((execute_engine.i_reg(instr_funct7_msb_c downto instr_funct7_lsb_c) = "0100100") and (execute_engine.i_reg(instr_funct3_msb_c downto instr_funct3_lsb_c) = "001")) or -- SBCLR
-       ((execute_engine.i_reg(instr_funct7_msb_c downto instr_funct7_lsb_c) = "0010100") and (execute_engine.i_reg(instr_funct3_msb_c downto instr_funct3_lsb_c) = "001")) or -- SBSET
-       ((execute_engine.i_reg(instr_funct7_msb_c downto instr_funct7_lsb_c) = "0110100") and (execute_engine.i_reg(instr_funct3_msb_c downto instr_funct3_lsb_c) = "001")) or -- SBINV
-       ((execute_engine.i_reg(instr_funct7_msb_c downto instr_funct7_lsb_c) = "0100100") and (execute_engine.i_reg(instr_funct3_msb_c downto instr_funct3_lsb_c) = "101")) then -- SBSEXT
-      decode_aux.is_bitmanip_reg <= '1';
     end if;
 
     -- floating-point operations (Zfinx) --
@@ -925,7 +871,7 @@ begin
 
     -- system/environment instructions --
     sys_env_cmd_mask_v := funct12_ecall_c or funct12_ebreak_c or funct12_mret_c or funct12_wfi_c or funct12_dret_c; -- sum-up set bits
-    decode_aux.sys_env_cmd(11 downto 0) <= execute_engine.i_reg(instr_funct12_msb_c downto instr_funct12_lsb_c) and sys_env_cmd_mask_v; -- set unsued bits to always-zero
+    decode_aux.sys_env_cmd <= execute_engine.i_reg(instr_funct12_msb_c downto instr_funct12_lsb_c) and sys_env_cmd_mask_v; -- set unused bits to always-zero
   end process decode_helper;
 
 
@@ -1041,27 +987,27 @@ begin
         trap_ctrl.env_end        <= '1';
         execute_engine.state_nxt <= TRAP_EXECUTE;
 
-      when TRAP_EXECUTE => -- Start trap environment - jump to TVEC / return from trap environment - jump to EPC
+      when TRAP_EXECUTE => -- Start trap environment -> jump to TVEC / return from trap environment -> jump to EPC
       -- ------------------------------------------------------------
-        execute_engine.pc_mux_sel <= '0'; -- next PC (csr.mtvec)
+        execute_engine.pc_mux_sel <= '0'; -- next_PC
         fetch_engine.reset        <= '1';
         execute_engine.pc_we      <= '1';
         execute_engine.sleep_nxt  <= '0'; -- disable sleep mode
         execute_engine.state_nxt  <= SYS_WAIT;
 
 
-      when EXECUTE => -- Decode and execute instruction (control has to be here for excatly 1 cyle in any case!)
+      when EXECUTE => -- Decode and execute instruction (control has to be here for exactly 1 cycle in any case!)
       -- ------------------------------------------------------------
         opcode_v := execute_engine.i_reg(instr_opcode_msb_c downto instr_opcode_lsb_c+2) & "11"; -- save some bits here, LSBs are always 11 for rv32
         case opcode_v is
 
-          when opcode_alu_c | opcode_alui_c => -- (immediate) ALU operation
+          when opcode_alu_c | opcode_alui_c => -- (register/immediate) ALU operation
           -- ------------------------------------------------------------
             ctrl_nxt(ctrl_alu_opa_mux_c) <= '0'; -- use RS1 as ALU.OPA
             ctrl_nxt(ctrl_alu_opb_mux_c) <= decode_aux.alu_immediate; -- use IMM as ALU.OPB for immediate operations
             ctrl_nxt(ctrl_rf_in_mux_c)   <= '0'; -- RF input = ALU result
 
-            -- ALU arithmetic operation type and ADD/SUB --
+            -- ALU arithmetic operation type --
             if (execute_engine.i_reg(instr_funct3_msb_c downto instr_funct3_lsb_c) = funct3_slt_c) or
                (execute_engine.i_reg(instr_funct3_msb_c downto instr_funct3_lsb_c) = funct3_sltu_c) then
               ctrl_nxt(ctrl_alu_arith_c) <= alu_arith_cmd_slt_c;
@@ -1090,13 +1036,6 @@ begin
               ctrl_nxt(ctrl_cp_id_msb_c downto ctrl_cp_id_lsb_c) <= cp_sel_muldiv_c; -- use MULDIV CP
               execute_engine.is_cp_op_nxt                        <= '1'; -- this is a CP operation
               ctrl_nxt(ctrl_alu_func1_c downto ctrl_alu_func0_c) <= alu_func_cmd_copro_c;
-            -- co-processor bit manipulation operation? --
-            elsif (CPU_EXTENSION_RISCV_B = true) and
-              (((execute_engine.i_reg(instr_opcode_lsb_c+5) = opcode_alu_c(5))  and (decode_aux.is_bitmanip_reg = '1')) or -- register operation
-               ((execute_engine.i_reg(instr_opcode_lsb_c+5) = opcode_alui_c(5)) and (decode_aux.is_bitmanip_imm = '1'))) then -- immediate operation
-              ctrl_nxt(ctrl_cp_id_msb_c downto ctrl_cp_id_lsb_c) <= cp_sel_bitmanip_c; -- use BITMANIP CP
-              execute_engine.is_cp_op_nxt                        <= '1'; -- this is a CP operation
-              ctrl_nxt(ctrl_alu_func1_c downto ctrl_alu_func0_c) <= alu_func_cmd_copro_c;
             -- ALU operation, function select --
             else
               execute_engine.is_cp_op_nxt <= '0'; -- no CP operation
@@ -1107,13 +1046,10 @@ begin
               end case;
             end if;
 
-            -- multi cycle alu operation? --
+            -- multi cycle ALU operation? --
             if (execute_engine.i_reg(instr_funct3_msb_c downto instr_funct3_lsb_c) = funct3_sll_c) or -- SLL shift operation?
                (execute_engine.i_reg(instr_funct3_msb_c downto instr_funct3_lsb_c) = funct3_sr_c) or -- SR shift operation?
-               ((CPU_EXTENSION_RISCV_M = true) and (execute_engine.i_reg(instr_opcode_lsb_c+5) = opcode_alu_c(5)) and (execute_engine.i_reg(instr_funct7_lsb_c) = '1')) or -- MULDIV CP op?
-               ((CPU_EXTENSION_RISCV_B = true) and (
-                 ((execute_engine.i_reg(instr_opcode_lsb_c+5) = opcode_alu_c(5))  and (decode_aux.is_bitmanip_reg = '1')) or -- BITMANIP CP register operation?
-                 ((execute_engine.i_reg(instr_opcode_lsb_c+5) = opcode_alui_c(5)) and (decode_aux.is_bitmanip_imm = '1'))) ) then -- BITMANIP CP immediate operation?
+               ((CPU_EXTENSION_RISCV_M = true) and (execute_engine.i_reg(instr_opcode_lsb_c+5) = opcode_alu_c(5)) and (execute_engine.i_reg(instr_funct7_lsb_c) = '1')) then -- MULDIV CP op?
               execute_engine.state_nxt <= ALU_WAIT;
             else -- single cycle ALU operation
               ctrl_nxt(ctrl_rf_wb_en_c) <= '1'; -- valid RF write-back
@@ -1208,7 +1144,7 @@ begin
           when funct12_ecall_c  => trap_ctrl.env_call       <= '1'; -- ECALL
           when funct12_ebreak_c => trap_ctrl.break_point    <= '1'; -- EBREAK
           when funct12_mret_c   => execute_engine.state_nxt <= TRAP_EXIT; -- MRET
-          when funct12_wfi_c =>
+          when funct12_wfi_c => -- WFI
             if (CPU_EXTENSION_RISCV_DEBUG = true) and (debug_ctrl.running = '1') then
               NULL; -- just a NOP when in debug mode
             else
@@ -1221,7 +1157,7 @@ begin
             else
               NULL;
             end if;
-          when others => NULL;-- undefined
+          when others => NULL; -- undefined
         end case;
 
 
@@ -1366,7 +1302,7 @@ begin
        (execute_engine.i_reg(instr_funct3_msb_c downto instr_funct3_lsb_c) = funct3_csrrwi_c) then
       csr_wacc_v := '1'; -- always write CSR
     else -- clear/set
-      csr_wacc_v := or_all_f(execute_engine.i_reg(instr_rs1_msb_c downto instr_rs1_lsb_c)); -- write allowed if rs1/uimm5 != 0
+      csr_wacc_v := or_reduce_f(execute_engine.i_reg(instr_rs1_msb_c downto instr_rs1_lsb_c)); -- write allowed if rs1/uimm5 != 0
     end if;
 
     -- low privilege level access to hpm counters? --
@@ -1389,26 +1325,13 @@ begin
           NULL;
         end if;
 
-      -- machine trap setup --
-      when csr_mstatus_c | csr_misa_c | csr_mie_c | csr_mtvec_c | csr_mcounteren_c | csr_mstatush_c =>
+      -- machine trap setup & handling --
+      when csr_mstatus_c | csr_misa_c | csr_mie_c | csr_mtvec_c | csr_mcounteren_c | csr_mscratch_c | csr_mepc_c | csr_mcause_c =>
         csr_acc_valid <= csr.priv_m_mode; -- M-mode only, NOTE: MISA is read-only in the NEORV32 but we do not cause an exception here for compatibility
-
-      -- machine trap handling --
-      when csr_mscratch_c | csr_mepc_c | csr_mcause_c | csr_mtval_c  =>
-        csr_acc_valid <= csr.priv_m_mode; -- M-mode only
-      when csr_mip_c => -- NOTE: MIP is read-only in the NEORV32
+      when csr_mip_c | csr_mtval_c => -- NOTE: MIP and MTVAL are read-only in the NEORV32!
         csr_acc_valid <= (not csr_wacc_v) and csr.priv_m_mode; -- M-mode only, read-only
 
-      -- physical memory protection - configuration --
-      when csr_pmpcfg0_c | csr_pmpcfg1_c | csr_pmpcfg2_c  | csr_pmpcfg3_c  | csr_pmpcfg4_c  | csr_pmpcfg5_c  | csr_pmpcfg6_c  | csr_pmpcfg7_c |
-           csr_pmpcfg8_c | csr_pmpcfg9_c | csr_pmpcfg10_c | csr_pmpcfg11_c | csr_pmpcfg12_c | csr_pmpcfg13_c | csr_pmpcfg14_c | csr_pmpcfg15_c =>
-        if (PMP_NUM_REGIONS > 0) then
-          csr_acc_valid <= csr.priv_m_mode; -- M-mode only
-        else
-          NULL;
-        end if;
-
-      -- physical memory protection - address --
+      -- physical memory protection - address & configuration --
       when csr_pmpaddr0_c  | csr_pmpaddr1_c  | csr_pmpaddr2_c  | csr_pmpaddr3_c  | csr_pmpaddr4_c  | csr_pmpaddr5_c  | csr_pmpaddr6_c  | csr_pmpaddr7_c  |
            csr_pmpaddr8_c  | csr_pmpaddr9_c  | csr_pmpaddr10_c | csr_pmpaddr11_c | csr_pmpaddr12_c | csr_pmpaddr13_c | csr_pmpaddr14_c | csr_pmpaddr15_c |
            csr_pmpaddr16_c | csr_pmpaddr17_c | csr_pmpaddr18_c | csr_pmpaddr19_c | csr_pmpaddr20_c | csr_pmpaddr21_c | csr_pmpaddr22_c | csr_pmpaddr23_c |
@@ -1416,7 +1339,9 @@ begin
            csr_pmpaddr32_c | csr_pmpaddr33_c | csr_pmpaddr34_c | csr_pmpaddr35_c | csr_pmpaddr36_c | csr_pmpaddr37_c | csr_pmpaddr38_c | csr_pmpaddr39_c |
            csr_pmpaddr40_c | csr_pmpaddr41_c | csr_pmpaddr42_c | csr_pmpaddr43_c | csr_pmpaddr44_c | csr_pmpaddr45_c | csr_pmpaddr46_c | csr_pmpaddr47_c |
            csr_pmpaddr48_c | csr_pmpaddr49_c | csr_pmpaddr50_c | csr_pmpaddr51_c | csr_pmpaddr52_c | csr_pmpaddr53_c | csr_pmpaddr54_c | csr_pmpaddr55_c |
-           csr_pmpaddr56_c | csr_pmpaddr57_c | csr_pmpaddr58_c | csr_pmpaddr59_c | csr_pmpaddr60_c | csr_pmpaddr61_c | csr_pmpaddr62_c | csr_pmpaddr63_c =>
+           csr_pmpaddr56_c | csr_pmpaddr57_c | csr_pmpaddr58_c | csr_pmpaddr59_c | csr_pmpaddr60_c | csr_pmpaddr61_c | csr_pmpaddr62_c | csr_pmpaddr63_c |
+           csr_pmpcfg0_c | csr_pmpcfg1_c | csr_pmpcfg2_c  | csr_pmpcfg3_c  | csr_pmpcfg4_c  | csr_pmpcfg5_c  | csr_pmpcfg6_c  | csr_pmpcfg7_c |
+           csr_pmpcfg8_c | csr_pmpcfg9_c | csr_pmpcfg10_c | csr_pmpcfg11_c | csr_pmpcfg12_c | csr_pmpcfg13_c | csr_pmpcfg14_c | csr_pmpcfg15_c =>
         if (PMP_NUM_REGIONS > 0) then
           csr_acc_valid <= csr.priv_m_mode; -- M-mode only
         else
@@ -1496,7 +1421,7 @@ begin
       -- debug mode CSRs --
       when csr_dcsr_c | csr_dpc_c | csr_dscratch0_c =>
         if (CPU_EXTENSION_RISCV_DEBUG = true) then
-          csr_acc_valid <= debug_ctrl.running; -- DEBUG-mode only
+          csr_acc_valid <= debug_ctrl.running; -- access in only in debug-mode
         else
           NULL;
         end if;
@@ -1528,7 +1453,7 @@ begin
       end if;
 
       -- check instructions --
-      opcode_v := execute_engine.i_reg(instr_opcode_msb_c downto instr_opcode_lsb_c+2) & "11";
+      opcode_v := execute_engine.i_reg(instr_opcode_msb_c downto instr_opcode_lsb_c+2) & "11"; -- save some bits here, LSBs are always 11 for rv32
       case opcode_v is
 
         
@@ -1544,10 +1469,6 @@ begin
         -- ------------------------------------------------------------
           if (execute_engine.i_reg(instr_funct7_msb_c downto instr_funct7_lsb_c) = "0000001") then -- MULDIV
             if (CPU_EXTENSION_RISCV_M = false) then -- not implemented
-              illegal_instruction <= '1';
-            end if;
-          elsif (decode_aux.is_bitmanip_reg = '1') then -- bit manipulation
-            if (CPU_EXTENSION_RISCV_B = false) then -- not implemented
               illegal_instruction <= '1';
             end if;
           elsif ((execute_engine.i_reg(instr_funct3_msb_c downto instr_funct3_lsb_c) = funct3_subadd_c) or
@@ -1566,11 +1487,7 @@ begin
 
         when opcode_alui_c => -- check ALUI.funct7
         -- ------------------------------------------------------------
-          if (decode_aux.is_bitmanip_imm = '1') then -- bit manipulation
-            if (CPU_EXTENSION_RISCV_B = false) then -- not implemented
-              illegal_instruction <= '1';
-            end if;
-          elsif ((execute_engine.i_reg(instr_funct3_msb_c downto instr_funct3_lsb_c) = funct3_sll_c) and
+          if ((execute_engine.i_reg(instr_funct3_msb_c downto instr_funct3_lsb_c) = funct3_sll_c) and
               (execute_engine.i_reg(instr_funct7_msb_c downto instr_funct7_lsb_c) /= "0000000")) or -- shift logical left
              ((execute_engine.i_reg(instr_funct3_msb_c downto instr_funct3_lsb_c) = funct3_sr_c) and
               ((execute_engine.i_reg(instr_funct7_msb_c downto instr_funct7_lsb_c) /= "0000000") and
@@ -1677,13 +1594,13 @@ begin
               end if;
             end if;
 
-          -- ecall, ebreak, mret, wfi --
+          -- ecall, ebreak, mret, wfi, dret --
           elsif (execute_engine.i_reg(instr_rd_msb_c  downto instr_rd_lsb_c)  = "00000") and
                 (execute_engine.i_reg(instr_rs1_msb_c downto instr_rs1_lsb_c) = "00000") then
             if (execute_engine.i_reg(instr_funct12_msb_c  downto instr_funct12_lsb_c) = funct12_ecall_c)  or -- ECALL
                (execute_engine.i_reg(instr_funct12_msb_c  downto instr_funct12_lsb_c) = funct12_ebreak_c) or -- EBREAK 
                (execute_engine.i_reg(instr_funct12_msb_c  downto instr_funct12_lsb_c) = funct12_mret_c)   or -- MRET
-               ((execute_engine.i_reg(instr_funct12_msb_c downto instr_funct12_lsb_c) = (funct12_dret_c)) and (CPU_EXTENSION_RISCV_DEBUG = true) and (debug_ctrl.running = '1')) or
+               ((execute_engine.i_reg(instr_funct12_msb_c downto instr_funct12_lsb_c) = (funct12_dret_c)) and (CPU_EXTENSION_RISCV_DEBUG = true) and (debug_ctrl.running = '1')) or -- DRET
                (execute_engine.i_reg(instr_funct12_msb_c  downto instr_funct12_lsb_c) = funct12_wfi_c) then  -- WFI
               illegal_instruction <= '0';
             else
@@ -1821,13 +1738,13 @@ begin
   end process trap_controller;
 
   -- any exception/interrupt? --
-  trap_ctrl.exc_fire <= or_all_f(trap_ctrl.exc_buf); -- exceptions/faults CANNOT be masked
-  trap_ctrl.irq_fire <= (or_all_f(trap_ctrl.irq_buf) and csr.mstatus_mie and trap_ctrl.db_irq_en) or trap_ctrl.db_irq_fire; -- interrupts CAN be masked
+  trap_ctrl.exc_fire <= or_reduce_f(trap_ctrl.exc_buf); -- exceptions/faults CANNOT be masked
+  trap_ctrl.irq_fire <= (or_reduce_f(trap_ctrl.irq_buf) and csr.mstatus_mie and trap_ctrl.db_irq_en) or trap_ctrl.db_irq_fire; -- interrupts CAN be masked
 
-  -- debug mode entry interrupts --
-  trap_ctrl.db_irq_en   <= '1' when (CPU_EXTENSION_RISCV_DEBUG = false) else
-                           '0' when (debug_ctrl.running = '1') else -- no interrupts when IN debug mode
-                           csr.dcsr_stepie when (csr.dcsr_step = '1') else '1'; -- allow IRQ in single-step mode when dcsr.stepie is set
+  -- debug mode (entry) interrupts --
+  trap_ctrl.db_irq_en <= '1' when (CPU_EXTENSION_RISCV_DEBUG = false) else
+                         '0' when (debug_ctrl.running = '1') else -- no interrupts when IN debug mode
+                         csr.dcsr_stepie when (csr.dcsr_step = '1') else '1'; -- allow IRQ in single-step mode when dcsr.stepie is set
   trap_ctrl.db_irq_fire <= (trap_ctrl.irq_buf(interrupt_db_step_c) or trap_ctrl.irq_buf(interrupt_db_halt_c)) when (CPU_EXTENSION_RISCV_DEBUG = true) else '0'; -- "NMI" for debug mode entry
 
   -- acknowledge mask output --
@@ -2018,7 +1935,7 @@ begin
 
     -- ----------------------------------------------------------------------------------------
     -- re-enter debug mode during single-stepping; this debug mode entry trap has the lowest
-    -- priority in order to let traps kick in during single stepping
+    -- priority to let "normal" traps kick in during single stepping
     -- ----------------------------------------------------------------------------------------
 
     -- single stepping --
@@ -2184,10 +2101,6 @@ begin
             if (csr.addr(3 downto 0) = csr_mcause_c(3 downto 0)) then
               csr.mcause(csr.mcause'left) <= csr.wdata(31); -- 1: interrupt, 0: exception
               csr.mcause(4 downto 0)      <= csr.wdata(4 downto 0); -- identifier
-            end if;
-            -- R/W: mtval - machine bad address/instruction --
-            if (csr.addr(3 downto 0) = csr_mtval_c(3 downto 0)) then
-              csr.mtval <= csr.wdata;
             end if;
           end if;
 
@@ -2364,15 +2277,9 @@ begin
               csr.mstatus_mpie <= '1';
               if (CPU_EXTENSION_RISCV_U = true) then -- implement user mode
                 csr.privilege   <= csr.mstatus_mpp; -- go back to previous privilege mode
-                csr.mstatus_mpp <= priv_mode_m_c;
+                csr.mstatus_mpp <= (others => '0');
               end if;
             end if;
-          end if;
-
-          -- user mode NOT implemented --
-          if (CPU_EXTENSION_RISCV_U = false) then
-            csr.privilege   <= priv_mode_m_c;
-            csr.mstatus_mpp <= priv_mode_m_c;
           end if;
 
         end if; -- /hardware csr access
@@ -2391,6 +2298,7 @@ begin
         csr.mcounteren_ir  <= '0';
         csr.mcounteren_hpm <= (others => '0');
         csr.dcsr_ebreaku   <= '0';
+        csr.dcsr_prv       <= priv_mode_m_c;
       end if;
 
       -- pmp disabled --
@@ -2426,7 +2334,6 @@ begin
         csr.dcsr_ebreaku <= '0';
         csr.dcsr_step    <= '0';
         csr.dcsr_stepie  <= '0';
-        csr.dcsr_prv     <= (others => '0');
         csr.dcsr_cause   <= (others => '0');
         csr.dpc          <= (others => '0');
         csr.dscratch0    <= (others => '0');
@@ -2475,95 +2382,99 @@ begin
   begin
     -- Counter CSRs (each counter is split into two 32-bit counters - coupled via an MSB overflow detector)
     if (rstn_i = '0') then
-      csr.mcycle       <= (others => def_rst_val_c);
-      mcycle_msb       <= def_rst_val_c;
-      csr.mcycleh      <= (others => def_rst_val_c);
-      csr.minstret     <= (others => def_rst_val_c);
-      minstret_msb     <= def_rst_val_c;
-      csr.minstreth    <= (others => def_rst_val_c);
-      csr.mhpmcounter  <= (others => (others => def_rst_val_c));
-      mhpmcounter_msb  <= (others => def_rst_val_c);
-      csr.mhpmcounterh <= (others => (others => def_rst_val_c));
+      csr.mcycle          <= (others => def_rst_val_c);
+      csr.mcycle_msb      <= def_rst_val_c;
+      csr.mcycleh         <= (others => def_rst_val_c);
+      csr.minstret        <= (others => def_rst_val_c);
+      csr.minstret_msb    <= def_rst_val_c;
+      csr.minstreth       <= (others => def_rst_val_c);
+      csr.mhpmcounter     <= (others => (others => def_rst_val_c));
+      csr.mhpmcounter_msb <= (others => def_rst_val_c);
+      csr.mhpmcounterh    <= (others => (others => def_rst_val_c));
     elsif rising_edge(clk_i) then
 
       -- [m]cycle --
-      csr.mcycle(csr.mcycle'left downto cpu_cnt_lo_width_c+1) <= (others => '0'); -- set unused bits to zero
-      if (cpu_cnt_lo_width_c = 0) then
-        csr.mcycle <= (others => '0');
-        mcycle_msb <= '0';
-      elsif (csr.we = '1') and (csr.addr = csr_mcycle_c) then -- write access
-        csr.mcycle(cpu_cnt_lo_width_c downto 0) <= '0' & csr.wdata(cpu_cnt_lo_width_c-1 downto 0);
-        mcycle_msb <= '0';
-      elsif (csr.mcountinhibit_cy = '0') and (cnt_event(hpmcnt_event_cy_c) = '1') then -- non-inhibited automatic update
-        csr.mcycle(cpu_cnt_lo_width_c downto 0) <= std_ulogic_vector(unsigned(csr.mcycle(cpu_cnt_lo_width_c downto 0)) + 1);
-        mcycle_msb <= csr.mcycle(cpu_cnt_lo_width_c);
+      if (cpu_cnt_lo_width_c > 0) then
+        csr.mcycle_msb <= csr.mcycle(csr.mcycle'left);
+        if (csr.we = '1') and (csr.addr = csr_mcycle_c) then -- write access
+          csr.mcycle(cpu_cnt_lo_width_c downto 0) <= '0' & csr.wdata(cpu_cnt_lo_width_c-1 downto 0);
+        elsif (csr.mcountinhibit_cy = '0') and (cnt_event(hpmcnt_event_cy_c) = '1') then -- non-inhibited automatic update
+          csr.mcycle(cpu_cnt_lo_width_c downto 0) <= std_ulogic_vector(unsigned('0' & csr.mcycle(cpu_cnt_lo_width_c-1 downto 0)) + 1);
+        end if;
+      else
+        csr.mcycle     <= (others => '-');
+        csr.mcycle_msb <= '-';
       end if;
 
       -- [m]cycleh --
-      csr.mcycleh(csr.mcycleh'left downto cpu_cnt_hi_width_c+1) <= (others => '0'); -- set unused bits to zero
-      if (cpu_cnt_hi_width_c = 0) then
-        csr.mcycleh <= (others => '0');
-      elsif (csr.we = '1') and (csr.addr = csr_mcycleh_c) then -- write access
-        csr.mcycleh(cpu_cnt_hi_width_c-1 downto 0) <= csr.wdata(cpu_cnt_hi_width_c-1 downto 0);
-      elsif ((mcycle_msb xor csr.mcycle(cpu_cnt_lo_width_c)) = '1') then -- automatic update (continued)
-        csr.mcycleh(cpu_cnt_hi_width_c-1 downto 0) <= std_ulogic_vector(unsigned(csr.mcycleh(cpu_cnt_hi_width_c-1 downto 0)) + 1);
+      if (cpu_cnt_hi_width_c > 0) then
+        if (csr.we = '1') and (csr.addr = csr_mcycleh_c) then -- write access
+          csr.mcycleh(cpu_cnt_hi_width_c-1 downto 0) <= csr.wdata(cpu_cnt_hi_width_c-1 downto 0);
+        elsif (csr.mcycle_msb = '0') and (csr.mcycle(csr.mcycle'left) = '1') then -- automatic update (continued)
+          csr.mcycleh(cpu_cnt_hi_width_c-1 downto 0) <= std_ulogic_vector(unsigned(csr.mcycleh(cpu_cnt_hi_width_c-1 downto 0)) + 1);
+        end if;
+      else
+        csr.mcycleh <= (others => '-');
       end if;
 
+
       -- [m]instret --
-      csr.minstret(csr.minstret'left downto cpu_cnt_lo_width_c+1) <= (others => '0'); -- set unused bits to zero
-      if (cpu_cnt_lo_width_c = 0) then
-        csr.minstret <= (others => '0');
-        minstret_msb <= '0';
-      elsif (csr.we = '1') and (csr.addr = csr_minstret_c) then -- write access
-        csr.minstret(cpu_cnt_lo_width_c downto 0) <= '0' & csr.wdata(cpu_cnt_lo_width_c-1 downto 0);
-        minstret_msb <= '0';
-      elsif (csr.mcountinhibit_ir = '0') and (cnt_event(hpmcnt_event_ir_c) = '1') then -- non-inhibited automatic update
-        csr.minstret(cpu_cnt_lo_width_c downto 0) <= std_ulogic_vector(unsigned(csr.minstret(cpu_cnt_lo_width_c downto 0)) + 1);
-        minstret_msb <= csr.minstret(csr.minstret'left);
+      if (cpu_cnt_lo_width_c > 0) then
+        csr.minstret_msb <= csr.minstret(csr.minstret'left);
+        if (csr.we = '1') and (csr.addr = csr_minstret_c) then -- write access
+          csr.minstret(cpu_cnt_lo_width_c downto 0) <= '0' & csr.wdata(cpu_cnt_lo_width_c-1 downto 0);
+        elsif (csr.mcountinhibit_ir = '0') and (cnt_event(hpmcnt_event_ir_c) = '1') then -- non-inhibited automatic update
+          csr.minstret(cpu_cnt_lo_width_c downto 0) <= std_ulogic_vector(unsigned('0' & csr.minstret(cpu_cnt_lo_width_c-1 downto 0)) + 1);
+        end if;
+      else
+        csr.minstret     <= (others => '-');
+        csr.minstret_msb <= '-';
       end if;
 
       -- [m]instreth --
-      csr.minstreth(csr.minstreth'left downto cpu_cnt_hi_width_c+1) <= (others => '0'); -- set unsued bits to zero
-      if (cpu_cnt_hi_width_c = 0) then
-        csr.minstreth <= (others => '0');
-      elsif (csr.we = '1') and (csr.addr = csr_minstreth_c) then -- write access
-        csr.minstreth(cpu_cnt_hi_width_c-1 downto 0) <= csr.wdata(cpu_cnt_hi_width_c-1 downto 0);
-      elsif ((minstret_msb xor csr.minstret(cpu_cnt_lo_width_c)) = '1') then -- automatic update (continued)
-        csr.minstreth(cpu_cnt_hi_width_c-1 downto 0) <= std_ulogic_vector(unsigned(csr.minstreth(cpu_cnt_hi_width_c-1 downto 0)) + 1);
+      if (cpu_cnt_hi_width_c > 0) then
+        if (csr.we = '1') and (csr.addr = csr_minstreth_c) then -- write access
+          csr.minstreth(cpu_cnt_hi_width_c-1 downto 0) <= csr.wdata(cpu_cnt_hi_width_c-1 downto 0);
+        elsif (csr.minstret_msb = '0') and (csr.minstret(csr.minstret'left) = '1') then -- automatic update (continued)
+          csr.minstreth(cpu_cnt_hi_width_c-1 downto 0) <= std_ulogic_vector(unsigned(csr.minstreth(cpu_cnt_hi_width_c-1 downto 0)) + 1);
+        end if;
+      else
+        csr.minstreth <= (others => '-');
       end if;
+
 
       -- [machine] hardware performance monitors (counters) --
       for i in 0 to HPM_NUM_CNTS-1 loop
-        csr.mhpmcounter(i)(csr.mhpmcounter(i)'left downto hpm_cnt_lo_width_c+1) <= (others => '0'); -- set unused bits to zero
-        if (hpm_cnt_lo_width_c = 0) then
-          csr.mhpmcounter(i) <= (others => '0');
-          mhpmcounter_msb(i) <= '0';
-        else
-          -- [m]hpmcounter* --
+
+        -- [m]hpmcounter* --
+        if (hpm_cnt_lo_width_c > 0) then
+          csr.mhpmcounter_msb(i) <= csr.mhpmcounter(i)(csr.mhpmcounter(i)'left);
           if (csr.we = '1') and (csr.addr = std_ulogic_vector(unsigned(csr_mhpmcounter3_c) + i)) then -- write access
             csr.mhpmcounter(i)(hpm_cnt_lo_width_c downto 0) <= '0' & csr.wdata(hpm_cnt_lo_width_c-1 downto 0);
-            mhpmcounter_msb(i) <= '0';
           elsif (csr.mcountinhibit_hpm(i) = '0') and (hpmcnt_trigger(i) = '1') then -- non-inhibited automatic update
-            csr.mhpmcounter(i)(hpm_cnt_lo_width_c downto 0) <= std_ulogic_vector(unsigned(csr.mhpmcounter(i)(hpm_cnt_lo_width_c downto 0)) + 1);
-            mhpmcounter_msb(i) <= csr.mhpmcounter(i)(csr.mhpmcounter(i)'left);
+            csr.mhpmcounter(i)(hpm_cnt_lo_width_c downto 0) <= std_ulogic_vector(unsigned('0' & csr.mhpmcounter(i)(hpm_cnt_lo_width_c-1 downto 0)) + 1);
           end if;
+        else
+          csr.mhpmcounter(i)     <= (others => '-');
+          csr.mhpmcounter_msb(i) <= '-';
         end if;
 
         -- [m]hpmcounter*h --
-        csr.mhpmcounterh(i)(csr.mhpmcounterh(i)'left downto hpm_cnt_hi_width_c+1) <= (others => '0'); -- set unused bits to zero
-        if (hpm_cnt_hi_width_c = 0) then
-          csr.mhpmcounterh(i) <= (others => '0');
-        else
+        if (hpm_cnt_hi_width_c > 0) then
           if (csr.we = '1') and (csr.addr = std_ulogic_vector(unsigned(csr_mhpmcounter3h_c) + i)) then -- write access
             csr.mhpmcounterh(i)(hpm_cnt_hi_width_c-1 downto 0) <= csr.wdata(hpm_cnt_hi_width_c-1 downto 0);
-          elsif ((mhpmcounter_msb(i) xor csr.mhpmcounter(i)(hpm_cnt_lo_width_c)) = '1') then -- automatic update (continued)
+          elsif (csr.mhpmcounter_msb(i) = '0') and (csr.mhpmcounter(i)(csr.mhpmcounter(i)'left) = '1') then -- automatic update (continued)
             csr.mhpmcounterh(i)(hpm_cnt_hi_width_c-1 downto 0) <= std_ulogic_vector(unsigned(csr.mhpmcounterh(i)(hpm_cnt_hi_width_c-1 downto 0)) + 1);
           end if;
+        else
+          csr.mhpmcounterh(i) <= (others => '-');
         end if;
+
       end loop; -- i
 
     end if;
   end process csr_counters;
+
 
   -- hpm counters read dummy --
   hpm_rd_dummy: process(csr)
@@ -2573,7 +2484,7 @@ begin
     if (HPM_NUM_CNTS /= 0) then
       for i in 0 to HPM_NUM_CNTS-1 loop
         if (hpm_cnt_lo_width_c > 0) then
-          csr.mhpmcounter_rd(i)(hpm_cnt_lo_width_c-1 downto 0)  <= csr.mhpmcounter(i)(hpm_cnt_lo_width_c-1 downto 0);
+          csr.mhpmcounter_rd(i)(hpm_cnt_lo_width_c-1 downto 0) <= csr.mhpmcounter(i)(hpm_cnt_lo_width_c-1 downto 0);
         end if;
         if (hpm_cnt_hi_width_c > 0) then
           csr.mhpmcounterh_rd(i)(hpm_cnt_hi_width_c-1 downto 0) <= csr.mhpmcounterh(i)(hpm_cnt_hi_width_c-1 downto 0);
@@ -2598,7 +2509,7 @@ begin
       hpmcnt_trigger <= (others => '0'); -- default
       if (HPM_NUM_CNTS /= 0) then
         for i in 0 to HPM_NUM_CNTS-1 loop
-          hpmcnt_trigger(i) <= or_all_f(cnt_event and csr.mhpmevent(i)(cnt_event'left downto 0));
+          hpmcnt_trigger(i) <= or_reduce_f(cnt_event and csr.mhpmevent(i)(cnt_event'left downto 0));
         end loop; -- i
       end if;
     end if;
@@ -2653,15 +2564,11 @@ begin
           -- --------------------------------------------------------------------
           when csr_mstatus_c => -- mstatus (r/w): machine status register
             csr.rdata(03) <= csr.mstatus_mie; -- MIE
-            csr.rdata(06) <= '1' and bool_to_ulogic_f(CPU_EXTENSION_RISCV_U); -- UBE: CPU/Processor is BIG-ENDIAN (in user-mode)
             csr.rdata(07) <= csr.mstatus_mpie; -- MPIE
             csr.rdata(11) <= csr.mstatus_mpp(0); -- MPP: machine previous privilege mode low
             csr.rdata(12) <= csr.mstatus_mpp(1); -- MPP: machine previous privilege mode high
-          when csr_mstatush_c => -- mstatush (r/-): machine status register - high part
-            csr.rdata(05) <= '1'; -- MBE: CPU/Processor is BIG-ENDIAN (in machine-mode)
           when csr_misa_c => -- misa (r/-): ISA and extensions
             csr.rdata(00) <= bool_to_ulogic_f(CPU_EXTENSION_RISCV_A);     -- A CPU extension
-            csr.rdata(01) <= bool_to_ulogic_f(CPU_EXTENSION_RISCV_B);     -- B CPU extension
             csr.rdata(02) <= bool_to_ulogic_f(CPU_EXTENSION_RISCV_C);     -- C CPU extension
             csr.rdata(04) <= bool_to_ulogic_f(CPU_EXTENSION_RISCV_E);     -- E CPU extension
             csr.rdata(08) <= not bool_to_ulogic_f(CPU_EXTENSION_RISCV_E); -- I CPU extension (if not E)
@@ -2922,9 +2829,6 @@ begin
           when csr_mzext_c => -- mzext (r/-): available RISC-V Z* sub-extensions
             csr.rdata(0) <= bool_to_ulogic_f(CPU_EXTENSION_RISCV_Zicsr);    -- Zicsr
             csr.rdata(1) <= bool_to_ulogic_f(CPU_EXTENSION_RISCV_Zifencei); -- Zifencei
-            csr.rdata(2) <= bool_to_ulogic_f(CPU_EXTENSION_RISCV_B);        -- Zbb (B)
-            csr.rdata(3) <= bool_to_ulogic_f(CPU_EXTENSION_RISCV_B);        -- Zbs (B)
-            csr.rdata(4) <= bool_to_ulogic_f(CPU_EXTENSION_RISCV_B);        -- Zba (B)
             csr.rdata(5) <= bool_to_ulogic_f(CPU_EXTENSION_RISCV_Zfinx);    -- Zfinx ("F-alternative")
             if (CPU_CNT_WIDTH = 64) then
               csr.rdata(6) <= '0'; -- Zxscnt (custom)
@@ -2949,7 +2853,7 @@ begin
           -- undefined/unavailable --
           -- --------------------------------------------------------------------
           when others =>
-            NULL; -- not implemented
+            NULL; -- not implemented, read as zero if read access is granted
 
         end case;
       end if;
@@ -3015,39 +2919,37 @@ begin
 
   -- entry debug mode triggers --
   debug_ctrl.trig_break <= trap_ctrl.break_point and (debug_ctrl.running or -- we are in debug mode: re-enter debug mode
-                             (csr.priv_m_mode and csr.dcsr_ebreakm and (not debug_ctrl.running)) or -- enable goto-debug-mode in machine mode on "ebreak"
-                             (csr.priv_u_mode and csr.dcsr_ebreaku and (not debug_ctrl.running))); -- enable goto-debug-mode in user mode on "ebreak"
-  debug_ctrl.trig_halt  <= (not debug_ctrl.ext_halt_req(1)) and debug_ctrl.ext_halt_req(0) and (not debug_ctrl.running); -- rising edge detector from external halt request (if not halted already)
-  debug_ctrl.trig_step  <= csr.dcsr_step and (not debug_ctrl.running); -- single-step mode (trigger when NOT CURRENTLY in debug mode)
+                           (csr.priv_m_mode and csr.dcsr_ebreakm and (not debug_ctrl.running)) or -- enabled goto-debug-mode in machine mode on "ebreak"
+                           (csr.priv_u_mode and csr.dcsr_ebreaku and (not debug_ctrl.running))); -- enabled goto-debug-mode in user mode on "ebreak"
+  debug_ctrl.trig_halt <= (not debug_ctrl.ext_halt_req(1)) and debug_ctrl.ext_halt_req(0) and (not debug_ctrl.running); -- rising edge detector from external halt request (if not halted already)
+  debug_ctrl.trig_step <= csr.dcsr_step and (not debug_ctrl.running); -- single-step mode (trigger when NOT CURRENTLY in debug mode)
 
 
-  -- Debug Control and Status Register (dcsr) Read-Back --
-  dcsr_readback: process(csr, trap_ctrl)
-  begin
-    if (CPU_EXTENSION_RISCV_DEBUG = false) then
-      csr.dcsr_rd <= (others => '0');
-    else
-      csr.dcsr_rd(31 downto 28) <= "0100"; -- xdebugver: external debug support compatible to spec
-      csr.dcsr_rd(27 downto 16) <= (others => '0'); -- reserved
-      csr.dcsr_rd(15) <= csr.dcsr_ebreakm; -- ebreakm: what happens on ebreak in m-mode? (normal trap OR debug-enter)
-      csr.dcsr_rd(14) <= '0'; -- ebreakh: not available
-      csr.dcsr_rd(13) <= '0'; -- ebreaks: not available
-      if (CPU_EXTENSION_RISCV_U = true) then
-        csr.dcsr_rd(12) <= csr.dcsr_ebreaku; -- ebreaku: what happens on ebreak in u-mode? (normal trap OR debug-enter)
-      else
-        csr.dcsr_rd(12) <= '0';
-      end if;
-      csr.dcsr_rd(11) <= csr.dcsr_stepie; -- stepie: interrupts enabled during single-stepping?
-      csr.dcsr_rd(10) <= '0'; -- stopcount: counters increment as usual FIXME ???
-      csr.dcsr_rd(09) <= '0'; -- stoptime: timers increment as usual FIXME ???
-      csr.dcsr_rd(08 downto 06) <= csr.dcsr_cause; -- cause
-      csr.dcsr_rd(05) <= '0'; -- reserved
-      csr.dcsr_rd(04) <= '0'; -- mprven: mstatus.mprv is ignored in debug mode
-      csr.dcsr_rd(03) <= trap_ctrl.irq_buf(interrupt_nm_irq_c); -- nmip: pending non-maskable interrupt
-      csr.dcsr_rd(02) <= csr.dcsr_step; -- step: single-step mode
-      csr.dcsr_rd(01 downto 00) <= csr.dcsr_prv; -- prv: privilege mode when debug mode was entered
-    end if;
-  end process dcsr_readback;
+  -- Debug Control and Status Register (dcsr) - Read-Back -----------------------------------
+  -- -------------------------------------------------------------------------------------------
+  dcsr_readback_false:
+  if (CPU_EXTENSION_RISCV_DEBUG = false) generate
+    csr.dcsr_rd <= (others => '-');
+  end generate;
+
+  dcsr_readback_true:
+  if (CPU_EXTENSION_RISCV_DEBUG = true) generate
+    csr.dcsr_rd(31 downto 28) <= "0100"; -- xdebugver: external debug support compatible to spec
+    csr.dcsr_rd(27 downto 16) <= (others => '0'); -- reserved
+    csr.dcsr_rd(15) <= csr.dcsr_ebreakm; -- ebreakm: what happens on ebreak in m-mode? (normal trap OR debug-enter)
+    csr.dcsr_rd(14) <= '0'; -- ebreakh: not available
+    csr.dcsr_rd(13) <= '0'; -- ebreaks: not available
+    csr.dcsr_rd(12) <= csr.dcsr_ebreaku when (CPU_EXTENSION_RISCV_U = true) else '0'; -- ebreaku: what happens on ebreak in u-mode? (normal trap OR debug-enter)
+    csr.dcsr_rd(11) <= csr.dcsr_stepie; -- stepie: interrupts enabled during single-stepping?
+    csr.dcsr_rd(10) <= '0'; -- stopcount: counters increment as usual FIXME ???
+    csr.dcsr_rd(09) <= '0'; -- stoptime: timers increment as usual FIXME ???
+    csr.dcsr_rd(08 downto 06) <= csr.dcsr_cause; -- debug mode entry cause
+    csr.dcsr_rd(05) <= '0'; -- reserved
+    csr.dcsr_rd(04) <= '0'; -- mprven: mstatus.mprv is ignored in debug mode
+    csr.dcsr_rd(03) <= trap_ctrl.irq_buf(interrupt_nm_irq_c); -- nmip: pending non-maskable interrupt
+    csr.dcsr_rd(02) <= csr.dcsr_step; -- step: single-step mode
+    csr.dcsr_rd(01 downto 00) <= csr.dcsr_prv; -- prv: privilege mode when debug mode was entered
+  end generate;
 
 
 end neorv32_cpu_control_rtl;

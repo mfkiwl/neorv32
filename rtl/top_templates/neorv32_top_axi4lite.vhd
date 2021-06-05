@@ -56,7 +56,6 @@ entity neorv32_top_axi4lite is
     ON_CHIP_DEBUGGER_EN          : boolean := false;  -- implement on-chip debugger
     -- RISC-V CPU Extensions --
     CPU_EXTENSION_RISCV_A        : boolean := false;  -- implement atomic extension?
-    CPU_EXTENSION_RISCV_B        : boolean := false;  -- implement bit manipulation extensions?
     CPU_EXTENSION_RISCV_C        : boolean := false;  -- implement compressed extension?
     CPU_EXTENSION_RISCV_E        : boolean := false;  -- implement embedded RF extension?
     CPU_EXTENSION_RISCV_M        : boolean := false;  -- implement muld/div extension?
@@ -74,7 +73,7 @@ entity neorv32_top_axi4lite is
     PMP_MIN_GRANULARITY          : natural := 64*1024; -- minimal region granularity in bytes, has to be a power of 2, min 8 bytes
     -- Hardware Performance Monitors (HPM) --
     HPM_NUM_CNTS                 : natural := 0;      -- number of implemented HPM counters (0..29)
-    HPM_CNT_WIDTH                : natural := 40;     -- total size of HPM counters (1..64)
+    HPM_CNT_WIDTH                : natural := 40;     -- total size of HPM counters (0..64)
     -- Internal Instruction memory --
     MEM_INT_IMEM_EN              : boolean := true;   -- implement processor-internal instruction memory
     MEM_INT_IMEM_SIZE            : natural := 16*1024; -- size of processor-internal instruction memory in bytes
@@ -94,7 +93,7 @@ entity neorv32_top_axi4lite is
     IO_UART1_EN                  : boolean := true;   -- implement secondary universal asynchronous receiver/transmitter (UART1)?
     IO_SPI_EN                    : boolean := true;   -- implement serial peripheral interface (SPI)?
     IO_TWI_EN                    : boolean := true;   -- implement two-wire interface (TWI)?
-    IO_PWM_EN                    : boolean := true;   -- implement pulse-width modulation unit (PWM)?
+    IO_PWM_NUM_CH                : natural := 4;      -- number of PWM channels to implement (0..60); 0 = disabled
     IO_WDT_EN                    : boolean := true;   -- implement watch dog timer (WDT)?
     IO_TRNG_EN                   : boolean := false;  -- implement true random number generator (TRNG)?
     IO_CFS_EN                    : boolean := false;  -- implement custom functions subsystem (CFS)?
@@ -167,8 +166,8 @@ entity neorv32_top_axi4lite is
     -- TWI (available if IO_TWI_EN = true) --
     twi_sda_io    : inout std_logic; -- twi serial data line
     twi_scl_io    : inout std_logic; -- twi serial clock line
-    -- PWM (available if IO_PWM_EN = true) --
-    pwm_o         : out std_logic_vector(03 downto 0);  -- pwm channels
+    -- PWM (available if IO_PWM_NUM_CH > 0) --
+    pwm_o         : out std_logic_vector(IO_PWM_NUM_CH-1 downto 0);  -- pwm channels
     -- Custom Functions Subsystem IO (available if IO_CFS_EN = true) --
     cfs_in_i      : in  std_logic_vector(IO_CFS_IN_SIZE-1  downto 0); -- custom inputs
     cfs_out_o     : out std_logic_vector(IO_CFS_OUT_SIZE-1 downto 0); -- custom outputs
@@ -217,7 +216,7 @@ architecture neorv32_top_axi4lite_rtl of neorv32_top_axi4lite is
   signal spi_sdi_i_int   : std_ulogic;
   signal spi_csn_o_int   : std_ulogic_vector(07 downto 0);
   --
-  signal pwm_o_int       : std_ulogic_vector(03 downto 0);
+  signal pwm_o_int       : std_ulogic_vector(IO_PWM_NUM_CH-1 downto 0);
   --
   signal cfs_in_i_int    : std_ulogic_vector(IO_CFS_IN_SIZE-1  downto 0);
   signal cfs_out_o_int   : std_ulogic_vector(IO_CFS_OUT_SIZE-1 downto 0);
@@ -279,7 +278,6 @@ begin
     ON_CHIP_DEBUGGER_EN          => ON_CHIP_DEBUGGER_EN,          -- implement on-chip debugger
     -- RISC-V CPU Extensions --
     CPU_EXTENSION_RISCV_A        => CPU_EXTENSION_RISCV_A,        -- implement atomic extension?
-    CPU_EXTENSION_RISCV_B        => CPU_EXTENSION_RISCV_B,        -- implement bit manipulation extensions?
     CPU_EXTENSION_RISCV_C        => CPU_EXTENSION_RISCV_C,        -- implement compressed extension?
     CPU_EXTENSION_RISCV_E        => CPU_EXTENSION_RISCV_E,        -- implement embedded RF extension?
     CPU_EXTENSION_RISCV_M        => CPU_EXTENSION_RISCV_M,        -- implement muld/div extension?
@@ -297,7 +295,7 @@ begin
     PMP_MIN_GRANULARITY          => PMP_MIN_GRANULARITY, -- minimal region granularity in bytes, has to be a power of 2, min 8 bytes
     -- Hardware Performance Monitors (HPM) --
     HPM_NUM_CNTS                 => HPM_NUM_CNTS,       -- number of implemented HPM counters (0..29)
-    HPM_CNT_WIDTH                => HPM_CNT_WIDTH,      -- total size of HPM counters (1..64)
+    HPM_CNT_WIDTH                => HPM_CNT_WIDTH,      -- total size of HPM counters (0..64)
     -- Internal Instruction memory --
     MEM_INT_IMEM_EN              => MEM_INT_IMEM_EN,    -- implement processor-internal instruction memory
     MEM_INT_IMEM_SIZE            => MEM_INT_IMEM_SIZE,  -- size of processor-internal instruction memory in bytes
@@ -320,7 +318,7 @@ begin
     IO_UART1_EN                  => IO_UART1_EN,        -- implement secondary universal asynchronous receiver/transmitter (UART1)?
     IO_SPI_EN                    => IO_SPI_EN,          -- implement serial peripheral interface (SPI)?
     IO_TWI_EN                    => IO_TWI_EN,          -- implement two-wire interface (TWI)?
-    IO_PWM_EN                    => IO_PWM_EN,          -- implement pulse-width modulation unit (PWM)?
+    IO_PWM_NUM_CH                => IO_PWM_NUM_CH,      -- number of PWM channels to implement (0..60); 0 = disabled
     IO_WDT_EN                    => IO_WDT_EN,          -- implement watch dog timer (WDT)?
     IO_TRNG_EN                   => IO_TRNG_EN,         -- implement true random number generator (TRNG)?
     IO_CFS_EN                    => IO_CFS_EN,          -- implement custom functions subsystem (CFS)?
@@ -376,7 +374,7 @@ begin
     -- TWI (available if IO_TWI_EN = true) --
     twi_sda_io  => twi_sda_io,      -- twi serial data line
     twi_scl_io  => twi_scl_io,      -- twi serial clock line
-    -- PWM available if IO_PWM_EN = true) --
+    -- PWM available if IO_PWM_NUM_CH > 0) --
     pwm_o       => pwm_o_int,       -- pwm channels
     -- Custom Functions Subsystem IO (available if IO_CFS_EN = true) --
     cfs_in_i    => cfs_in_i_int,    -- custom inputs

@@ -61,7 +61,6 @@ entity neorv32_cpu is
     CPU_DEBUG_ADDR               : std_ulogic_vector(31 downto 0) := x"00000000"; -- cpu debug mode start address
     -- RISC-V CPU Extensions --
     CPU_EXTENSION_RISCV_A        : boolean := false; -- implement atomic extension?
-    CPU_EXTENSION_RISCV_B        : boolean := false; -- implement bit manipulation extensions?
     CPU_EXTENSION_RISCV_C        : boolean := false; -- implement compressed extension?
     CPU_EXTENSION_RISCV_E        : boolean := false; -- implement embedded RF extension?
     CPU_EXTENSION_RISCV_M        : boolean := false; -- implement muld/div extension?
@@ -80,7 +79,7 @@ entity neorv32_cpu is
     PMP_MIN_GRANULARITY          : natural := 64*1024; -- minimal region granularity in bytes, has to be a power of 2, min 8 bytes
     -- Hardware Performance Monitors (HPM) --
     HPM_NUM_CNTS                 : natural := 0;     -- number of implemented HPM counters (0..29)
-    HPM_CNT_WIDTH                : natural := 40     -- total size of HPM counters (1..64)
+    HPM_CNT_WIDTH                : natural := 40     -- total size of HPM counters (0..64)
   );
   port (
     -- global control --
@@ -130,30 +129,30 @@ end neorv32_cpu;
 architecture neorv32_cpu_rtl of neorv32_cpu is
 
   -- local signals --
-  signal ctrl        : std_ulogic_vector(ctrl_width_c-1 downto 0); -- main control bus
-  signal comparator  : std_ulogic_vector(1 downto 0); -- comparator result
-  signal imm         : std_ulogic_vector(data_width_c-1 downto 0); -- immediate
-  signal instr       : std_ulogic_vector(data_width_c-1 downto 0); -- new instruction
-  signal rs1, rs2    : std_ulogic_vector(data_width_c-1 downto 0); -- source registers
-  signal alu_res     : std_ulogic_vector(data_width_c-1 downto 0); -- alu result
-  signal alu_add     : std_ulogic_vector(data_width_c-1 downto 0); -- alu address result
-  signal mem_rdata   : std_ulogic_vector(data_width_c-1 downto 0); -- memory read data
-  signal alu_wait    : std_ulogic; -- alu is busy due to iterative unit
-  signal bus_i_wait  : std_ulogic; -- wait for current bus instruction fetch
-  signal bus_d_wait  : std_ulogic; -- wait for current bus data access
-  signal csr_rdata   : std_ulogic_vector(data_width_c-1 downto 0); -- csr read data
-  signal mar         : std_ulogic_vector(data_width_c-1 downto 0); -- current memory address register
-  signal ma_instr    : std_ulogic; -- misaligned instruction address
-  signal ma_load     : std_ulogic; -- misaligned load data address
-  signal ma_store    : std_ulogic; -- misaligned store data address
-  signal excl_state  : std_ulogic; -- atomic/exclusive access lock status
-  signal be_instr    : std_ulogic; -- bus error on instruction access
-  signal be_load     : std_ulogic; -- bus error on load data access
-  signal be_store    : std_ulogic; -- bus error on store data access
-  signal fetch_pc    : std_ulogic_vector(data_width_c-1 downto 0); -- pc for instruction fetch
-  signal curr_pc     : std_ulogic_vector(data_width_c-1 downto 0); -- current pc (for current executed instruction)
-  signal fpu_rm      : std_ulogic_vector(2 downto 0); -- FPU rounding mode
-  signal fpu_flags   : std_ulogic_vector(4 downto 0); -- FPU exception flags
+  signal ctrl       : std_ulogic_vector(ctrl_width_c-1 downto 0); -- main control bus
+  signal comparator : std_ulogic_vector(1 downto 0); -- comparator result
+  signal imm        : std_ulogic_vector(data_width_c-1 downto 0); -- immediate
+  signal instr      : std_ulogic_vector(data_width_c-1 downto 0); -- new instruction
+  signal rs1, rs2   : std_ulogic_vector(data_width_c-1 downto 0); -- source registers
+  signal alu_res    : std_ulogic_vector(data_width_c-1 downto 0); -- alu result
+  signal alu_add    : std_ulogic_vector(data_width_c-1 downto 0); -- alu address result
+  signal mem_rdata  : std_ulogic_vector(data_width_c-1 downto 0); -- memory read data
+  signal alu_wait   : std_ulogic; -- alu is busy due to iterative unit
+  signal bus_i_wait : std_ulogic; -- wait for current bus instruction fetch
+  signal bus_d_wait : std_ulogic; -- wait for current bus data access
+  signal csr_rdata  : std_ulogic_vector(data_width_c-1 downto 0); -- csr read data
+  signal mar        : std_ulogic_vector(data_width_c-1 downto 0); -- current memory address register
+  signal ma_instr   : std_ulogic; -- misaligned instruction address
+  signal ma_load    : std_ulogic; -- misaligned load data address
+  signal ma_store   : std_ulogic; -- misaligned store data address
+  signal excl_state : std_ulogic; -- atomic/exclusive access lock status
+  signal be_instr   : std_ulogic; -- bus error on instruction access
+  signal be_load    : std_ulogic; -- bus error on load data access
+  signal be_store   : std_ulogic; -- bus error on store data access
+  signal fetch_pc   : std_ulogic_vector(data_width_c-1 downto 0); -- pc for instruction fetch
+  signal curr_pc    : std_ulogic_vector(data_width_c-1 downto 0); -- current pc (for current executed instruction)
+  signal fpu_rm     : std_ulogic_vector(2 downto 0); -- FPU rounding mode
+  signal fpu_flags  : std_ulogic_vector(4 downto 0); -- FPU exception flags
 
   -- co-processor interface --
   signal cp_start  : std_ulogic_vector(7 downto 0); -- trigger co-processor i
@@ -185,18 +184,13 @@ begin
 
   -- Instruction prefetch buffer size --
   assert not (is_power_of_two_f(ipb_entries_c) = false) report "NEORV32 CPU CONFIG ERROR! Number of entries in instruction prefetch buffer <ipb_entries_c> has to be a power of two." severity error;
-  -- A extension - only lr.w and sc.w are supported yet --
-  assert not (CPU_EXTENSION_RISCV_A = true) report "NEORV32 CPU CONFIG WARNING! Atomic operations extension (A) only supports <lr.w> and <sc.w> instructions." severity warning;
-
-  -- FIXME: Bit manipulation warning --
-  assert not (CPU_EXTENSION_RISCV_B = true) report "NEORV32 CPU CONFIG WARNING! Bit manipulation extension (B) is still EXPERIMENTAL (and spec. is not ratified yet)." severity warning;
 
   -- Co-processor timeout counter (for debugging only) --
   assert not (cp_timeout_en_c = true) report "NEORV32 CPU CONFIG WARNING! Co-processor timeout counter enabled. This should be used for debugging/simulation only." severity warning;
 
   -- PMP regions check --
   assert not (PMP_NUM_REGIONS > 64) report "NEORV32 CPU CONFIG ERROR! Number of PMP regions <PMP_NUM_REGIONS> out xf valid range (0..64)." severity error;
-  -- PMP granulartiy --
+  -- PMP granularity --
   assert not ((is_power_of_two_f(PMP_MIN_GRANULARITY) = false) and (PMP_NUM_REGIONS > 0)) report "NEORV32 CPU CONFIG ERROR! <PMP_MIN_GRANULARITY> has to be a power of two." severity error;
   assert not ((PMP_MIN_GRANULARITY < 8) and (PMP_NUM_REGIONS > 0)) report "NEORV32 CPU CONFIG ERROR! <PMP_MIN_GRANULARITY> has to be >= 8 bytes." severity error;
   -- PMP notifier --
@@ -206,7 +200,7 @@ begin
 
   -- HPM counters check --
   assert not (HPM_NUM_CNTS > 29) report "NEORV32 CPU CONFIG ERROR! Number of HPM counters <HPM_NUM_CNTS> out of valid range (0..29)." severity error;
-  assert not ((HPM_CNT_WIDTH < 1) or (HPM_CNT_WIDTH > 64)) report "NEORV32 CPU CONFIG ERROR! HPM counter width <HPM_CNT_WIDTH> has to be 1..64 bit." severity error; 
+  assert not ((HPM_CNT_WIDTH < 0) or (HPM_CNT_WIDTH > 64)) report "NEORV32 CPU CONFIG ERROR! HPM counter width <HPM_CNT_WIDTH> has to be 0..64 bit." severity error; 
   -- HPM counters notifier --
   assert not (HPM_NUM_CNTS > 0) report "NEORV32 CPU CONFIG NOTE: Implementing " & integer'image(HPM_NUM_CNTS) & " HPM counters (each " & integer'image(HPM_CNT_WIDTH) & "-bit wide)." severity note;
   -- HPM CNT requires Zicsr extension --
@@ -215,8 +209,6 @@ begin
   -- Debug mode --
   assert not (CPU_EXTENSION_RISCV_DEBUG = true) report "NEORV32 CPU CONFIG NOTE: Implementing RISC-V DEBUG MODE extension." severity note;
   assert not ((CPU_EXTENSION_RISCV_DEBUG = true) and (CPU_EXTENSION_RISCV_Zicsr = false)) report "NEORV32 CPU CONFIG ERROR! Debug mode requires <CPU_EXTENSION_RISCV_Zicsr> extension to be enabled." severity error;
-  -- FIXME: debug mode extension warning --
-  assert not (CPU_EXTENSION_RISCV_DEBUG = true) report "NEORV32 CPU CONFIG WARNING! RISC-V DEBUG MODE extension <CPU_EXTENSION_RISCV_DEBUG> is still EXPERIMENTAL." severity warning;
 
 
   -- Control Unit ---------------------------------------------------------------------------
@@ -229,7 +221,6 @@ begin
     CPU_DEBUG_ADDR               => CPU_DEBUG_ADDR,               -- cpu debug mode start address
     -- RISC-V CPU Extensions --
     CPU_EXTENSION_RISCV_A        => CPU_EXTENSION_RISCV_A,        -- implement atomic extension?
-    CPU_EXTENSION_RISCV_B        => CPU_EXTENSION_RISCV_B,        -- implement bit manipulation extensions?
     CPU_EXTENSION_RISCV_C        => CPU_EXTENSION_RISCV_C,        -- implement compressed extension?
     CPU_EXTENSION_RISCV_M        => CPU_EXTENSION_RISCV_M,        -- implement muld/div extension?
     CPU_EXTENSION_RISCV_U        => CPU_EXTENSION_RISCV_U,        -- implement user mode extension?
@@ -387,32 +378,10 @@ begin
   end generate;
 
 
-  -- Co-Processor 2: Bit Manipulation ('B' Extension) ---------------------------------------
+  -- Co-Processor 2: reseverd ---------------------------------------------------------------
   -- -------------------------------------------------------------------------------------------
-  neorv32_cpu_cp_bitmanip_inst_true:
-  if (CPU_EXTENSION_RISCV_B = true) generate
-    neorv32_cpu_cp_bitmanip_inst: neorv32_cpu_cp_bitmanip
-    port map (
-      -- global control --
-      clk_i   => clk_i,           -- global clock, rising edge
-      rstn_i  => rstn_i,          -- global reset, low-active, async
-      ctrl_i  => ctrl,            -- main control bus
-      start_i => cp_start(2),     -- trigger operation
-      -- data input --
-      cmp_i   => comparator,      -- comparator status
-      rs1_i   => rs1,             -- rf source 1
-      rs2_i   => rs2,             -- rf source 2
-      -- result and status --
-      res_o   => cp_result(2),    -- operation result
-      valid_o => cp_valid(2)      -- data output valid
-    );
-  end generate;
-
-  neorv32_cpu_cp_bitmanip_inst_false:
-  if (CPU_EXTENSION_RISCV_B = false) generate
-    cp_result(2) <= (others => '0');
-    cp_valid(2)  <= cp_start(2); -- to make sure CPU does not get stalled if there is an accidental access
-  end generate;
+  cp_result(2) <= (others => '0');
+  cp_valid(2)  <= cp_start(2); -- to make sure CPU does not get stalled if there is an accidental access
 
 
   -- Co-Processor 3: Single-Precision Floating-Point Unit ('Zfinx' Extension) ---------------

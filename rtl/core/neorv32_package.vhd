@@ -44,9 +44,9 @@ package neorv32_package is
   constant ispace_base_c : std_ulogic_vector(31 downto 0) := x"00000000"; -- default instruction memory address space base address
   constant dspace_base_c : std_ulogic_vector(31 downto 0) := x"80000000"; -- default data memory address space base address
 
-  -- (external) bus interface --
-  constant wb_pipe_mode_c    : boolean := false; -- *external* bus protocol: false=classic/standard wishbone mode (default), true=pipelined wishbone mode
-  constant xbus_big_endian_c : boolean := true; -- external memory access byte order: true=big endian (default); false=little endian
+  -- external bus interface --
+  constant wb_pipe_mode_c    : boolean := false; -- external bus protocol: false=classic/standard wishbone mode (default), true=pipelined wishbone mode
+  constant xbus_big_endian_c : boolean := false; -- external memory access byte order: true=big-endian, false=little-endian (default)
 
   -- CPU core --
   constant ipb_entries_c     : natural := 4; -- entries in CPU instruction prefetch buffer, has to be a power of 2, default=2
@@ -75,10 +75,9 @@ package neorv32_package is
   function cond_sel_stdulogic_f(cond : boolean; val_t : std_ulogic; val_f : std_ulogic) return std_ulogic;
   function cond_sel_string_f(cond : boolean; val_t : string; val_f : string) return string;
   function bool_to_ulogic_f(cond : boolean) return std_ulogic;
-  function or_all_f(a : std_ulogic_vector) return std_ulogic;
-  function and_all_f(a : std_ulogic_vector) return std_ulogic;
-  function xor_all_f(a : std_ulogic_vector) return std_ulogic;
-  function xnor_all_f(a : std_ulogic_vector) return std_ulogic;
+  function or_reduce_f(a : std_ulogic_vector) return std_ulogic;
+  function and_reduce_f(a : std_ulogic_vector) return std_ulogic;
+  function xor_reduce_f(a : std_ulogic_vector) return std_ulogic;
   function to_hexchar_f(input : std_ulogic_vector(3 downto 0)) return character;
   function hexchar_to_stdulogicvector_f(input : character) return std_ulogic_vector;
   function bit_rev_f(input : std_ulogic_vector) return std_ulogic_vector;
@@ -88,7 +87,7 @@ package neorv32_package is
   -- Architecture Constants (do not modify!) ------------------------------------------------
   -- -------------------------------------------------------------------------------------------
   constant data_width_c   : natural := 32; -- native data path width - do not change!
-  constant hw_version_c   : std_ulogic_vector(31 downto 0) := x"01050508"; -- no touchy!
+  constant hw_version_c   : std_ulogic_vector(31 downto 0) := x"01050604"; -- no touchy!
   constant archid_c       : natural := 19; -- official NEORV32 architecture ID - hands off!
   constant rf_r0_is_reg_c : boolean := true; -- x0 is a *physical register* that has to be initialized to zero by the CPU
   constant def_rst_val_c  : std_ulogic := cond_sel_stdulogic_f(dedicated_reset_c, '0', '-');
@@ -111,54 +110,82 @@ package neorv32_package is
   constant boot_rom_size_c      : natural := 4*1024; -- module's address space in bytes
   constant boot_rom_max_size_c  : natural := 32*1024; -- max module's address space in bytes, fixed!
 
-  -- On-Chip Debugger: Debug Memory --
-  constant dbmem_base_c         : std_ulogic_vector(data_width_c-1 downto 0) := x"fffff800"; -- base address, fixed!
-  constant dbmem_size_c         : natural := 4*32*4; -- debug ROM address space in bytes
-  constant dbmem_code_base_c    : std_ulogic_vector(data_width_c-1 downto 0) := x"fffff800";
-  constant dbmem_pbuf_base_c    : std_ulogic_vector(data_width_c-1 downto 0) := x"fffff880";
-  constant dbmem_data_base_c    : std_ulogic_vector(data_width_c-1 downto 0) := x"fffff900";
-  constant dbmem_sreg_base_c    : std_ulogic_vector(data_width_c-1 downto 0) := x"fffff980";
+  -- On-Chip Debugger: Debug Module --
+  constant dm_base_c            : std_ulogic_vector(data_width_c-1 downto 0) := x"fffff800"; -- base address, fixed!
+  constant dm_size_c            : natural := 4*32*4; -- debug ROM address space in bytes, fixed
+  constant dm_code_base_c       : std_ulogic_vector(data_width_c-1 downto 0) := x"fffff800";
+  constant dm_pbuf_base_c       : std_ulogic_vector(data_width_c-1 downto 0) := x"fffff880";
+  constant dm_data_base_c       : std_ulogic_vector(data_width_c-1 downto 0) := x"fffff900";
+  constant dm_sreg_base_c       : std_ulogic_vector(data_width_c-1 downto 0) := x"fffff980";
 
   -- IO: Peripheral Devices ("IO") Area --
   -- Control register(s) (including the device-enable) should be located at the base address of each device
-  constant io_base_c            : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff00";
-  constant io_size_c            : natural := 64*4; -- module's address space in bytes, fixed!
+  constant io_base_c            : std_ulogic_vector(data_width_c-1 downto 0) := x"fffffe00";
+  constant io_size_c            : natural := 512; -- module's address space in bytes, fixed!
 
   -- Custom Functions Subsystem (CFS) --
-  constant cfs_base_c           : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff00"; -- base address
-  constant cfs_size_c           : natural := 32*4; -- module's address space in bytes
-  constant cfs_reg0_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff00";
-  constant cfs_reg1_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff04";
-  constant cfs_reg2_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff08";
-  constant cfs_reg3_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff0c";
-  constant cfs_reg4_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff10";
-  constant cfs_reg5_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff14";
-  constant cfs_reg6_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff18";
-  constant cfs_reg7_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff1c";
-  constant cfs_reg8_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff20";
-  constant cfs_reg9_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff24";
-  constant cfs_reg10_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff28";
-  constant cfs_reg11_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff2c";
-  constant cfs_reg12_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff30";
-  constant cfs_reg13_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff34";
-  constant cfs_reg14_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff38";
-  constant cfs_reg15_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff3c";
-  constant cfs_reg16_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff40";
-  constant cfs_reg17_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff44";
-  constant cfs_reg18_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff48";
-  constant cfs_reg19_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff4c";
-  constant cfs_reg20_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff50";
-  constant cfs_reg21_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff54";
-  constant cfs_reg22_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff58";
-  constant cfs_reg23_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff5c";
-  constant cfs_reg24_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff60";
-  constant cfs_reg25_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff64";
-  constant cfs_reg26_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff68";
-  constant cfs_reg27_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff6c";
-  constant cfs_reg28_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff70";
-  constant cfs_reg29_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff74";
-  constant cfs_reg30_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff78";
-  constant cfs_reg31_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff7c";
+  constant cfs_base_c           : std_ulogic_vector(data_width_c-1 downto 0) := x"fffffe00"; -- base address
+  constant cfs_size_c           : natural := 64*4; -- module's address space in bytes
+  constant cfs_reg0_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"fffffe00";
+  constant cfs_reg1_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"fffffe04";
+  constant cfs_reg2_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"fffffe08";
+  constant cfs_reg3_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"fffffe0c";
+  constant cfs_reg4_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"fffffe10";
+  constant cfs_reg5_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"fffffe14";
+  constant cfs_reg6_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"fffffe18";
+  constant cfs_reg7_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"fffffe1c";
+  constant cfs_reg8_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"fffffe20";
+  constant cfs_reg9_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"fffffe24";
+  constant cfs_reg10_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"fffffe28";
+  constant cfs_reg11_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"fffffe2c";
+  constant cfs_reg12_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"fffffe30";
+  constant cfs_reg13_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"fffffe34";
+  constant cfs_reg14_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"fffffe38";
+  constant cfs_reg15_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"fffffe3c";
+  constant cfs_reg16_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"fffffe40";
+  constant cfs_reg17_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"fffffe44";
+  constant cfs_reg18_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"fffffe48";
+  constant cfs_reg19_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"fffffe4c";
+  constant cfs_reg20_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"fffffe50";
+  constant cfs_reg21_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"fffffe54";
+  constant cfs_reg22_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"fffffe58";
+  constant cfs_reg23_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"fffffe5c";
+  constant cfs_reg24_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"fffffe60";
+  constant cfs_reg25_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"fffffe64";
+  constant cfs_reg26_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"fffffe68";
+  constant cfs_reg27_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"fffffe6c";
+  constant cfs_reg28_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"fffffe70";
+  constant cfs_reg29_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"fffffe74";
+  constant cfs_reg30_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"fffffe78";
+  constant cfs_reg31_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"fffffe7c";
+
+  -- Pulse-Width Modulation Controller (PWM) --
+  constant pwm_base_c           : std_ulogic_vector(data_width_c-1 downto 0) := x"fffffe80"; -- base address
+  constant pwm_size_c           : natural := 16*4; -- module's address space in bytes
+  constant pwm_ctrl_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"fffffe80";
+  constant pwm_duty0_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"fffffe84";
+  constant pwm_duty1_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"fffffe88";
+  constant pwm_duty2_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"fffffe8c";
+  constant pwm_duty3_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"fffffe90";
+  constant pwm_duty4_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"fffffe94";
+  constant pwm_duty5_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"fffffe98";
+  constant pwm_duty6_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"fffffe9c";
+  constant pwm_duty7_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"fffffea0";
+  constant pwm_duty8_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"fffffea4";
+  constant pwm_duty9_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"fffffea8";
+  constant pwm_duty10_addr_c    : std_ulogic_vector(data_width_c-1 downto 0) := x"fffffeac";
+  constant pwm_duty11_addr_c    : std_ulogic_vector(data_width_c-1 downto 0) := x"fffffeb0";
+  constant pwm_duty12_addr_c    : std_ulogic_vector(data_width_c-1 downto 0) := x"fffffeb4";
+  constant pwm_duty13_addr_c    : std_ulogic_vector(data_width_c-1 downto 0) := x"fffffeb8";
+  constant pwm_duty14_addr_c    : std_ulogic_vector(data_width_c-1 downto 0) := x"fffffebc";
+
+  -- reserved --
+--constant reserved_base_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffffc0"; -- base address
+--constant reserved_size_c      : natural := 16*4; -- module's address space in bytes
+
+  -- reserved --
+--constant reserved_base_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff00"; -- base address
+--constant reserved_size_c      : natural := 32*4; -- module's address space in bytes
 
   -- General Purpose Input/Output Unit (GPIO) --
   constant gpio_base_c          : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff80"; -- base address
@@ -202,11 +229,9 @@ package neorv32_package is
   constant twi_ctrl_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffffb0";
   constant twi_rtx_addr_c       : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffffb4";
 
-  -- Pulse-Width Modulation Controller (PWM) --
-  constant pwm_base_c           : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffffb8"; -- base address
-  constant pwm_size_c           : natural := 2*4; -- module's address space in bytes
-  constant pwm_ctrl_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffffb8";
-  constant pwm_duty_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffffbc";
+  -- reserved --
+--constant reserved_base_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffffb8"; -- base address
+--constant reserved_size_c      : natural := 2*4; -- module's address space in bytes
 
   -- Numerically-Controlled Oscillator (NCO) --
   constant nco_base_c           : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffffc0"; -- base address
@@ -232,7 +257,7 @@ package neorv32_package is
   constant sysinfo_base_c       : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffffe0"; -- base address
   constant sysinfo_size_c       : natural := 8*4; -- module's address space in bytes
 
-  -- Main Control Bus -----------------------------------------------------------------------
+  -- Main CPU Control Bus -------------------------------------------------------------------
   -- -------------------------------------------------------------------------------------------
   -- register file --
   constant ctrl_rf_in_mux_c     : natural :=  0; -- input source select lsb (0=MEM, 1=ALU)
@@ -473,7 +498,6 @@ package neorv32_package is
   constant csr_mie_c            : std_ulogic_vector(11 downto 0) := x"304";
   constant csr_mtvec_c          : std_ulogic_vector(11 downto 0) := x"305";
   constant csr_mcounteren_c     : std_ulogic_vector(11 downto 0) := x"306";
-  constant csr_mstatush_c       : std_ulogic_vector(11 downto 0) := x"310";
   -- machine counter setup --
   constant csr_cnt_setup_c      : std_ulogic_vector(06 downto 0) := x"3" & "001"; -- counter setup
   constant csr_mcountinhibit_c  : std_ulogic_vector(11 downto 0) := x"320";
@@ -749,7 +773,7 @@ package neorv32_package is
   -- -------------------------------------------------------------------------------------------
   constant cp_sel_csr_rd_c   : std_ulogic_vector(2 downto 0) := "000"; -- CSR read access ('Zicsr' extension)
   constant cp_sel_muldiv_c   : std_ulogic_vector(2 downto 0) := "001"; -- multiplication/division operations ('M' extension)
-  constant cp_sel_bitmanip_c : std_ulogic_vector(2 downto 0) := "010"; -- bit manipulation ('B' extension)
+--constant cp_sel_bitmanip_c : std_ulogic_vector(2 downto 0) := "010"; -- bit manipulation ('B' extension)
   constant cp_sel_fpu_c      : std_ulogic_vector(2 downto 0) := "011"; -- floating-point unit ('Zfinx' extension)
 --constant cp_sel_reserved_c : std_ulogic_vector(2 downto 0) := "100"; -- reserved
 --constant cp_sel_reserved_c : std_ulogic_vector(2 downto 0) := "101"; -- reserved
@@ -769,12 +793,12 @@ package neorv32_package is
   -- function select (actual alu result) --
   constant alu_func_cmd_arith_c   : std_ulogic_vector(1 downto 0) := "00"; -- r <= r.arith
   constant alu_func_cmd_logic_c   : std_ulogic_vector(1 downto 0) := "01"; -- r <= r.logic
-  constant alu_func_cmd_shift_c   : std_ulogic_vector(1 downto 0) := "10"; -- r <= A <</>> B (iterative)
-  constant alu_func_cmd_copro_c   : std_ulogic_vector(1 downto 0) := "11"; -- r <= CP result (iterative)
+  constant alu_func_cmd_shift_c   : std_ulogic_vector(1 downto 0) := "10"; -- r <= A <</>> B (multi-cycle)
+  constant alu_func_cmd_copro_c   : std_ulogic_vector(1 downto 0) := "11"; -- r <= CP result (multi-cycle)
 
   -- Trap ID Codes --------------------------------------------------------------------------
   -- -------------------------------------------------------------------------------------------
-  -- MSB   : 1 = async exception (IRQ); 0 = sync exception (eg. ebreak)
+  -- MSB   : 1 = async exception (IRQ); 0 = sync exception (e.g. ebreak)
   -- MSB-1 : 1 = entry to debug mode; 0 = normal trapping
   -- RISC-V compliant sync. exceptions --
   constant trap_ima_c      : std_ulogic_vector(6 downto 0) := "0" & "0" & "00000"; -- 0.0:  instruction misaligned
@@ -907,7 +931,6 @@ package neorv32_package is
       ON_CHIP_DEBUGGER_EN          : boolean := false;  -- implement on-chip debugger
       -- RISC-V CPU Extensions --
       CPU_EXTENSION_RISCV_A        : boolean := false;  -- implement atomic extension?
-      CPU_EXTENSION_RISCV_B        : boolean := false;  -- implement bit manipulation extensions?
       CPU_EXTENSION_RISCV_C        : boolean := false;  -- implement compressed extension?
       CPU_EXTENSION_RISCV_E        : boolean := false;  -- implement embedded RF extension?
       CPU_EXTENSION_RISCV_M        : boolean := false;  -- implement muld/div extension?
@@ -925,7 +948,7 @@ package neorv32_package is
       PMP_MIN_GRANULARITY          : natural := 64*1024; -- minimal region granularity in bytes, has to be a power of 2, min 8 bytes
       -- Hardware Performance Monitors (HPM) --
       HPM_NUM_CNTS                 : natural := 0;      -- number of implemented HPM counters (0..29)
-      HPM_CNT_WIDTH                : natural := 40;     -- total size of HPM counters (1..64)
+      HPM_CNT_WIDTH                : natural := 40;     -- total size of HPM counters (0..64)
       -- Internal Instruction memory --
       MEM_INT_IMEM_EN              : boolean := true;   -- implement processor-internal instruction memory
       MEM_INT_IMEM_SIZE            : natural := 16*1024; -- size of processor-internal instruction memory in bytes
@@ -948,7 +971,7 @@ package neorv32_package is
       IO_UART1_EN                  : boolean := true;   -- implement secondary universal asynchronous receiver/transmitter (UART1)?
       IO_SPI_EN                    : boolean := true;   -- implement serial peripheral interface (SPI)?
       IO_TWI_EN                    : boolean := true;   -- implement two-wire interface (TWI)?
-      IO_PWM_EN                    : boolean := true;   -- implement pulse-width modulation unit (PWM)?
+      IO_PWM_NUM_CH                : natural := 4;      -- number of PWM channels to implement (0..60); 0 = disabled
       IO_WDT_EN                    : boolean := true;   -- implement watch dog timer (WDT)?
       IO_TRNG_EN                   : boolean := false;  -- implement true random number generator (TRNG)?
       IO_CFS_EN                    : boolean := false;  -- implement custom functions subsystem (CFS)?
@@ -1004,8 +1027,8 @@ package neorv32_package is
       -- TWI (available if IO_TWI_EN = true) --
       twi_sda_io  : inout std_logic; -- twi serial data line
       twi_scl_io  : inout std_logic; -- twi serial clock line
-      -- PWM (available if IO_PWM_EN = true) --
-      pwm_o       : out std_ulogic_vector(03 downto 0); -- pwm channels
+      -- PWM (available if IO_PWM_NUM_CH > 0) --
+      pwm_o       : out std_ulogic_vector(IO_PWM_NUM_CH-1 downto 0); -- pwm channels
       -- Custom Functions Subsystem IO --
       cfs_in_i    : in  std_ulogic_vector(IO_CFS_IN_SIZE-1  downto 0); -- custom CFS inputs conduit
       cfs_out_o   : out std_ulogic_vector(IO_CFS_OUT_SIZE-1 downto 0); -- custom CFS outputs conduit
@@ -1035,7 +1058,6 @@ package neorv32_package is
       CPU_DEBUG_ADDR               : std_ulogic_vector(31 downto 0) := x"00000000"; -- cpu debug mode start address
       -- RISC-V CPU Extensions --
       CPU_EXTENSION_RISCV_A        : boolean := false; -- implement atomic extension?
-      CPU_EXTENSION_RISCV_B        : boolean := false; -- implement bit manipulation extensions?
       CPU_EXTENSION_RISCV_C        : boolean := false; -- implement compressed extension?
       CPU_EXTENSION_RISCV_E        : boolean := false; -- implement embedded RF extension?
       CPU_EXTENSION_RISCV_M        : boolean := false; -- implement muld/div extension?
@@ -1054,7 +1076,7 @@ package neorv32_package is
       PMP_MIN_GRANULARITY          : natural := 64*1024; -- minimal region granularity in bytes, has to be a power of 2, min 8 bytes
       -- Hardware Performance Monitors (HPM) --
       HPM_NUM_CNTS                 : natural := 0;     -- number of implemented HPM counters (0..29)
-      HPM_CNT_WIDTH                : natural := 40     -- total size of HPM counters (1..64)
+      HPM_CNT_WIDTH                : natural := 40     -- total size of HPM counters (0..64)
     );
     port (
       -- global control --
@@ -1111,7 +1133,6 @@ package neorv32_package is
       CPU_DEBUG_ADDR               : std_ulogic_vector(31 downto 0) := x"00000000"; -- cpu debug mode start address
       -- RISC-V CPU Extensions --
       CPU_EXTENSION_RISCV_A        : boolean := false; -- implement atomic extension?
-      CPU_EXTENSION_RISCV_B        : boolean := false; -- implement bit manipulation extensions?
       CPU_EXTENSION_RISCV_C        : boolean := false; -- implement compressed extension?
       CPU_EXTENSION_RISCV_E        : boolean := false; -- implement embedded RF extension?
       CPU_EXTENSION_RISCV_M        : boolean := false; -- implement muld/div extension?
@@ -1127,7 +1148,7 @@ package neorv32_package is
       PMP_MIN_GRANULARITY          : natural := 64*1024; -- minimal region granularity in bytes, has to be a power of 2, min 8 bytes
       -- Hardware Performance Monitors (HPM) --
       HPM_NUM_CNTS                 : natural := 0;     -- number of implemented HPM counters (0..29)
-      HPM_CNT_WIDTH                : natural := 40     -- total size of HPM counters (1..64)
+      HPM_CNT_WIDTH                : natural := 40     -- total size of HPM counters (0..64)
     );
     port (
       -- global control --
@@ -1242,25 +1263,6 @@ package neorv32_package is
       ctrl_i  : in  std_ulogic_vector(ctrl_width_c-1 downto 0); -- main control bus
       start_i : in  std_ulogic; -- trigger operation
       -- data input --
-      rs1_i   : in  std_ulogic_vector(data_width_c-1 downto 0); -- rf source 1
-      rs2_i   : in  std_ulogic_vector(data_width_c-1 downto 0); -- rf source 2
-      -- result and status --
-      res_o   : out std_ulogic_vector(data_width_c-1 downto 0); -- operation result
-      valid_o : out std_ulogic -- data output valid
-    );
-  end component;
-
-  -- Component: CPU Co-Processor Bit Manipulation ('B' extension) ---------------------------
-  -- -------------------------------------------------------------------------------------------
-  component neorv32_cpu_cp_bitmanip
-    port (
-      -- global control --
-      clk_i   : in  std_ulogic; -- global clock, rising edge
-      rstn_i  : in  std_ulogic; -- global reset, low-active, async
-      ctrl_i  : in  std_ulogic_vector(ctrl_width_c-1 downto 0); -- main control bus
-      start_i : in  std_ulogic; -- trigger operation
-      -- data input --
-      cmp_i   : in  std_ulogic_vector(1 downto 0); -- comparator status
       rs1_i   : in  std_ulogic_vector(data_width_c-1 downto 0); -- rf source 1
       rs2_i   : in  std_ulogic_vector(data_width_c-1 downto 0); -- rf source 2
       -- result and status --
@@ -1530,18 +1532,17 @@ package neorv32_package is
   component neorv32_mtime
     port (
       -- host access --
-      clk_i     : in  std_ulogic; -- global clock line
-      rstn_i    : in  std_ulogic := '0'; -- global reset, low-active, async
-      addr_i    : in  std_ulogic_vector(31 downto 0); -- address
-      rden_i    : in  std_ulogic; -- read enable
-      wren_i    : in  std_ulogic; -- write enable
-      data_i    : in  std_ulogic_vector(31 downto 0); -- data in
-      data_o    : out std_ulogic_vector(31 downto 0); -- data out
-      ack_o     : out std_ulogic; -- transfer acknowledge
+      clk_i  : in  std_ulogic; -- global clock line
+      addr_i : in  std_ulogic_vector(31 downto 0); -- address
+      rden_i : in  std_ulogic; -- read enable
+      wren_i : in  std_ulogic; -- write enable
+      data_i : in  std_ulogic_vector(31 downto 0); -- data in
+      data_o : out std_ulogic_vector(31 downto 0); -- data out
+      ack_o  : out std_ulogic; -- transfer acknowledge
       -- time output for CPU --
-      time_o    : out std_ulogic_vector(63 downto 0); -- current system time
+      time_o : out std_ulogic_vector(63 downto 0); -- current system time
       -- interrupt --
-      irq_o     : out std_ulogic  -- interrupt request
+      irq_o  : out std_ulogic  -- interrupt request
     );
   end component;
 
@@ -1668,6 +1669,9 @@ package neorv32_package is
   -- Component: Pulse-Width Modulation Controller (PWM) -------------------------------------
   -- -------------------------------------------------------------------------------------------
   component neorv32_pwm
+    generic (
+      NUM_CHANNELS : natural := 4 -- number of PWM channels (0..60)
+    );
     port (
       -- host access --
       clk_i       : in  std_ulogic; -- global clock line
@@ -1681,7 +1685,7 @@ package neorv32_package is
       clkgen_en_o : out std_ulogic; -- enable clock generator
       clkgen_i    : in  std_ulogic_vector(07 downto 0);
       -- pwm output channels --
-      pwm_o       : out std_ulogic_vector(03 downto 0)
+      pwm_o       : out std_ulogic_vector(NUM_CHANNELS-1 downto 0)
     );
   end component;
 
@@ -1850,7 +1854,7 @@ package neorv32_package is
       IO_UART1_EN          : boolean := true;   -- implement secondary universal asynchronous receiver/transmitter (UART1)?
       IO_SPI_EN            : boolean := true;   -- implement serial peripheral interface (SPI)?
       IO_TWI_EN            : boolean := true;   -- implement two-wire interface (TWI)?
-      IO_PWM_EN            : boolean := true;   -- implement pulse-width modulation unit (PWM)?
+      IO_PWM_NUM_CH        : natural := 4;      -- number of PWM channels to implement
       IO_WDT_EN            : boolean := true;   -- implement watch dog timer (WDT)?
       IO_TRNG_EN           : boolean := true;   -- implement true random number generator (TRNG)?
       IO_CFS_EN            : boolean := true;   -- implement custom functions subsystem (CFS)?
@@ -1867,64 +1871,34 @@ package neorv32_package is
     );
   end component;
 
-  -- Component: On-Chip Debugger - Debug Memory ---------------------------------------------
-  -- -------------------------------------------------------------------------------------------
-  component neorv32_debug_dbmem
-    port (
-      -- global control --
-      clk_i               : in  std_ulogic; -- global clock line
-      -- CPU bus access --
-      bus_addr_i          : in  std_ulogic_vector(31 downto 0); -- address
-      bus_rden_i          : in  std_ulogic; -- read enable
-      bus_wren_i          : in  std_ulogic; -- write enable
-      bus_data_i          : in  std_ulogic_vector(31 downto 0); -- data in
-      bus_data_o          : out std_ulogic_vector(31 downto 0); -- data out
-      bus_ack_o           : out std_ulogic; -- transfer acknowledge
-      -- Debug core interface --
-      dci_halt_ack_o      : out std_ulogic; -- CPU (re-)entered HALT state (single-shot)
-      dci_resume_req_i    : in  std_ulogic; -- DM wants the CPU to resume when set
-      dci_resume_ack_o    : out std_ulogic; -- CPU starts resuming when set (single-shot)
-      dci_execute_req_i   : in  std_ulogic; -- DM wants CPU to execute program buffer when set
-      dci_execute_ack_o   : out std_ulogic; -- CPU starts executing program buffer when set (single-shot)
-      dci_exception_ack_o : out std_ulogic; -- CPU has detected an exception (single-shot)
-      dci_progbuf_i       : in  std_ulogic_vector(255 downto 0); -- program buffer, 4 32-bit entries
-      dci_data_we_i       : in  std_ulogic; -- write abstract data
-      dci_data_i          : in  std_ulogic_vector(31 downto 0); -- abstract write data
-      dci_data_o          : out std_ulogic_vector(31 downto 0)  -- abstract read data
-    );
-  end component;
-
   -- Component: On-Chip Debugger - Debug Module (DM) ----------------------------------------
   -- -------------------------------------------------------------------------------------------
   component neorv32_debug_dm
     port (
       -- global control --
-      clk_i               : in  std_ulogic; -- global clock line
-      rstn_i              : in  std_ulogic; -- global reset line, low-active
+      clk_i            : in  std_ulogic; -- global clock line
+      rstn_i           : in  std_ulogic; -- global reset line, low-active
       -- debug module interface (DMI) --
-      dmi_rstn_i          : in  std_ulogic;
-      dmi_req_valid_i     : in  std_ulogic;
-      dmi_req_ready_o     : out std_ulogic; -- DMI is allowed to make new requests when set
-      dmi_req_addr_i      : in  std_ulogic_vector(06 downto 0);
-      dmi_req_op_i        : in  std_ulogic; -- 0=read, 1=write
-      dmi_req_data_i      : in  std_ulogic_vector(31 downto 0);
-      dmi_resp_valid_o    : out std_ulogic; -- response valid when set
-      dmi_resp_ready_i    : in  std_ulogic; -- ready to receive respond
-      dmi_resp_data_o     : out std_ulogic_vector(31 downto 0);
-      dmi_resp_err_o      : out std_ulogic; -- 0=ok, 1=error
-      -- debug core control interface (DCI) --
-      dci_ndmrstn_o       : out std_ulogic; -- soc reset
-      dci_halt_req_o      : out std_ulogic; -- request hart to halt (enter debug mode)
-      dci_halt_ack_i      : in  std_ulogic; -- CPU (re-)entered HALT state (single-shot)
-      dci_resume_req_o    : out std_ulogic; -- DM wants the CPU to resume when set
-      dci_resume_ack_i    : in  std_ulogic; -- CPU starts resuming when set (single-shot)
-      dci_execute_req_o   : out std_ulogic; -- DM wants CPU to execute program buffer when set
-      dci_execute_ack_i   : in  std_ulogic; -- CPU starts executing program buffer when set (single-shot)
-      dci_exception_ack_i : in  std_ulogic; -- CPU has detected an exception (single-shot)
-      dci_progbuf_o       : out std_ulogic_vector(255 downto 0); -- program buffer, 4 entries in total
-      dci_data_we_o       : out std_ulogic; -- write abstract data
-      dci_data_o          : out std_ulogic_vector(31 downto 0); -- abstract write data
-      dci_data_i          : in  std_ulogic_vector(31 downto 0)  -- abstract read data
+      dmi_rstn_i       : in  std_ulogic;
+      dmi_req_valid_i  : in  std_ulogic;
+      dmi_req_ready_o  : out std_ulogic; -- DMI is allowed to make new requests when set
+      dmi_req_addr_i   : in  std_ulogic_vector(06 downto 0);
+      dmi_req_op_i     : in  std_ulogic; -- 0=read, 1=write
+      dmi_req_data_i   : in  std_ulogic_vector(31 downto 0);
+      dmi_resp_valid_o : out std_ulogic; -- response valid when set
+      dmi_resp_ready_i : in  std_ulogic; -- ready to receive respond
+      dmi_resp_data_o  : out std_ulogic_vector(31 downto 0);
+      dmi_resp_err_o   : out std_ulogic; -- 0=ok, 1=error
+      -- CPU bus access --
+      cpu_addr_i       : in  std_ulogic_vector(31 downto 0); -- address
+      cpu_rden_i       : in  std_ulogic; -- read enable
+      cpu_wren_i       : in  std_ulogic; -- write enable
+      cpu_data_i       : in  std_ulogic_vector(31 downto 0); -- data in
+      cpu_data_o       : out std_ulogic_vector(31 downto 0); -- data out
+      cpu_ack_o        : out std_ulogic; -- transfer acknowledge
+      -- CPU control --
+      cpu_ndmrstn_o    : out std_ulogic; -- soc reset
+      cpu_halt_req_o   : out std_ulogic  -- request hart to halt (enter debug mode)
     );
   end component;
 
@@ -2042,9 +2016,9 @@ package body neorv32_package is
     end if;
   end function bool_to_ulogic_f;
 
-  -- Function: OR all bits ------------------------------------------------------------------
+  -- Function: OR-reduce all bits -----------------------------------------------------------
   -- -------------------------------------------------------------------------------------------
-  function or_all_f(a : std_ulogic_vector) return std_ulogic is
+  function or_reduce_f(a : std_ulogic_vector) return std_ulogic is
     variable tmp_v : std_ulogic;
   begin
     tmp_v := '0';
@@ -2054,11 +2028,11 @@ package body neorv32_package is
       end loop; -- i
     end if;
     return tmp_v;
-  end function or_all_f;
+  end function or_reduce_f;
 
-  -- Function: AND all bits -----------------------------------------------------------------
+  -- Function: AND-reduce all bits ----------------------------------------------------------
   -- -------------------------------------------------------------------------------------------
-  function and_all_f(a : std_ulogic_vector) return std_ulogic is
+  function and_reduce_f(a : std_ulogic_vector) return std_ulogic is
     variable tmp_v : std_ulogic;
   begin
     tmp_v := '1';
@@ -2068,11 +2042,11 @@ package body neorv32_package is
       end loop; -- i
     end if;
     return tmp_v;
-  end function and_all_f;
+  end function and_reduce_f;
 
-  -- Function: XOR all bits -----------------------------------------------------------------
+  -- Function: XOR-reduce all bits ----------------------------------------------------------
   -- -------------------------------------------------------------------------------------------
-  function xor_all_f(a : std_ulogic_vector) return std_ulogic is
+  function xor_reduce_f(a : std_ulogic_vector) return std_ulogic is
     variable tmp_v : std_ulogic;
   begin
     tmp_v := '0';
@@ -2082,21 +2056,7 @@ package body neorv32_package is
       end loop; -- i
     end if;
     return tmp_v;
-  end function xor_all_f;
-
-  -- Function: XNOR all bits ----------------------------------------------------------------
-  -- -------------------------------------------------------------------------------------------
-  function xnor_all_f(a : std_ulogic_vector) return std_ulogic is
-    variable tmp_v : std_ulogic;
-  begin
-    tmp_v := '1';
-    if (a'low < a'high) then -- not null range?
-      for i in a'low to a'high loop
-        tmp_v := tmp_v xnor a(i);
-      end loop; -- i
-    end if;
-    return tmp_v;
-  end function xnor_all_f;
+  end function xor_reduce_f;
 
   -- Function: Convert std_ulogic_vector to hex char ----------------------------------------
   -- -------------------------------------------------------------------------------------------

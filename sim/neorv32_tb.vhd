@@ -155,7 +155,7 @@ architecture neorv32_tb_rtl of neorv32_tb is
   begin
     mem_v := (others => (others => '0'));
     for i in 0 to init'length-1 loop -- init only in range of source data array
-      if (xbus_big_endian_c = true) then
+      if (xbus_big_endian_c = false) then
         mem_v(i) := init(i);
       else
         mem_v(i) := bswap32_f(init(i));
@@ -197,7 +197,6 @@ begin
     ON_CHIP_DEBUGGER_EN          => true,          -- implement on-chip debugger
     -- RISC-V CPU Extensions --
     CPU_EXTENSION_RISCV_A        => true,          -- implement atomic extension?
-    CPU_EXTENSION_RISCV_B        => true,          -- implement bit manipulation extensions?
     CPU_EXTENSION_RISCV_C        => true,          -- implement compressed extension?
     CPU_EXTENSION_RISCV_E        => false,         -- implement embedded RF extension?
     CPU_EXTENSION_RISCV_M        => true,          -- implement muld/div extension?
@@ -215,7 +214,7 @@ begin
     PMP_MIN_GRANULARITY          => 64*1024,       -- minimal region granularity in bytes, has to be a power of 2, min 8 bytes
     -- Hardware Performance Monitors (HPM) --
     HPM_NUM_CNTS                 => 12,            -- number of implemented HPM counters (0..29)
-    HPM_CNT_WIDTH                => 40,            -- total size of HPM counters (1..64)
+    HPM_CNT_WIDTH                => 40,            -- total size of HPM counters (0..64)
     -- Internal Instruction memory --
     MEM_INT_IMEM_EN              => int_imem_c ,   -- implement processor-internal instruction memory
     MEM_INT_IMEM_SIZE            => imem_size_c,   -- size of processor-internal instruction memory in bytes
@@ -238,7 +237,7 @@ begin
     IO_UART1_EN                  => true,          -- implement secondary universal asynchronous receiver/transmitter (UART1)?
     IO_SPI_EN                    => true,          -- implement serial peripheral interface (SPI)?
     IO_TWI_EN                    => true,          -- implement two-wire interface (TWI)?
-    IO_PWM_EN                    => true,          -- implement pulse-width modulation unit (PWM)?
+    IO_PWM_NUM_CH                => 30,            -- number of PWM channels to implement (0..60); 0 = disabled
     IO_WDT_EN                    => true,          -- implement watch dog timer (WDT)?
     IO_TRNG_EN                   => false,         -- trng cannot be simulated
     IO_CFS_EN                    => true,          -- implement custom functions subsystem (CFS)?
@@ -294,7 +293,7 @@ begin
     -- TWI (available if IO_TWI_EN = true) --
     twi_sda_io  => twi_sda,         -- twi serial data line
     twi_scl_io  => twi_scl,         -- twi serial clock line
-    -- PWM (available if IO_PWM_EN = true) --
+    -- PWM (available if IO_PWM_NUM_CH > 0) --
     pwm_o       => open,            -- pwm channels
     -- Custom Functions Subsystem IO --
     cfs_in_i    => (others => '0'), -- custom CFS inputs
@@ -603,14 +602,14 @@ begin
     if rising_edge(clk_gen) then
       -- bus interface --
       wb_irq.rdata <= (others => '0');
-      wb_irq.ack   <= wb_irq.cyc and wb_irq.stb and wb_irq.we and and_all_f(wb_irq.sel);
+      wb_irq.ack   <= wb_irq.cyc and wb_irq.stb and wb_irq.we and and_reduce_f(wb_irq.sel);
       wb_irq.err   <= '0';
       -- trigger IRQ using CSR.MIE bit layout --
       nmi_ring      <= '0';
       msi_ring      <= '0';
       mei_ring      <= '0';
       soc_firq_ring <= (others => '0');
-      if ((wb_irq.cyc and wb_irq.stb and wb_irq.we and and_all_f(wb_irq.sel)) = '1') then
+      if ((wb_irq.cyc and wb_irq.stb and wb_irq.we and and_reduce_f(wb_irq.sel)) = '1') then
         nmi_ring         <= wb_irq.wdata(00); -- non-maskable interrupt
         msi_ring         <= wb_irq.wdata(03); -- machine software interrupt
         mei_ring         <= wb_irq.wdata(11); -- machine software interrupt
