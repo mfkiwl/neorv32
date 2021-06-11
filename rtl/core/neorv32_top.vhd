@@ -3,7 +3,7 @@
 -- # ********************************************************************************************* #
 -- # This is the top entity of the NEORV32 PROCESSOR. Instantiate this unit in your own project    #
 -- # and define all the configuration generics according to your needs. Alternatively, you can use #
--- # one of the alternative top entities provided in the "rtl/top_templates" folder.               #
+-- # one of the alternative top entities provided in the "rtl/templates" folder.                   #
 -- #                                                                                               #
 -- # Check out the processor's documentation for more information.                                 #
 -- # ********************************************************************************************* #
@@ -739,7 +739,6 @@ begin
   if (MEM_EXT_EN = true) generate
     neorv32_wishbone_inst: neorv32_wishbone
     generic map (
-      WB_PIPELINED_MODE => wb_pipe_mode_c,    -- false: classic/standard wishbone mode, true: pipelined wishbone mode
       -- Internal instruction memory --
       MEM_INT_IMEM_EN   => MEM_INT_IMEM_EN,   -- implement processor-internal instruction memory
       MEM_INT_IMEM_SIZE => MEM_INT_IMEM_SIZE, -- size of processor-internal instruction memory in bytes
@@ -809,7 +808,7 @@ begin
   if (IO_CFS_EN = true) generate
     neorv32_cfs_inst: neorv32_cfs
     generic map (
-      CFS_CONFIG   => IO_CFS_CONFIG,  -- custom CFS configuration generic 
+      CFS_CONFIG   => IO_CFS_CONFIG,  -- custom CFS configuration generic
       CFS_IN_SIZE  => IO_CFS_IN_SIZE, -- size of CFS input conduit in bits
       CFS_OUT_SIZE => IO_CFS_OUT_SIZE -- size of CFS output conduit in bits
     )

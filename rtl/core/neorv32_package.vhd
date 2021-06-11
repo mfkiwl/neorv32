@@ -45,8 +45,9 @@ package neorv32_package is
   constant dspace_base_c : std_ulogic_vector(31 downto 0) := x"80000000"; -- default data memory address space base address
 
   -- external bus interface --
-  constant wb_pipe_mode_c    : boolean := false; -- external bus protocol: false=classic/standard wishbone mode (default), true=pipelined wishbone mode
-  constant xbus_big_endian_c : boolean := false; -- external memory access byte order: true=big-endian, false=little-endian (default)
+  constant wb_pipe_mode_c  : boolean := false; -- protocol: false=classic/standard wishbone mode (default), true=pipelined wishbone mode
+  constant wb_big_endian_c : boolean := false; -- byte order: true=big-endian, false=little-endian (default)
+  constant wb_rx_buffer_c  : boolean := true;  -- use register buffer for RX data when true (default)
 
   -- CPU core --
   constant ipb_entries_c     : natural := 4; -- entries in CPU instruction prefetch buffer, has to be a power of 2, default=2
@@ -87,7 +88,7 @@ package neorv32_package is
   -- Architecture Constants (do not modify!) ------------------------------------------------
   -- -------------------------------------------------------------------------------------------
   constant data_width_c   : natural := 32; -- native data path width - do not change!
-  constant hw_version_c   : std_ulogic_vector(31 downto 0) := x"01050604"; -- no touchy!
+  constant hw_version_c   : std_ulogic_vector(31 downto 0) := x"01050607"; -- no touchy!
   constant archid_c       : natural := 19; -- official NEORV32 architecture ID - hands off!
   constant rf_r0_is_reg_c : boolean := true; -- x0 is a *physical register* that has to be initialized to zero by the CPU
   constant def_rst_val_c  : std_ulogic := cond_sel_stdulogic_f(dedicated_reset_c, '0', '-');
@@ -108,11 +109,11 @@ package neorv32_package is
   -- Internal Bootloader ROM --
   constant boot_rom_base_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"ffff0000"; -- bootloader base address, fixed!
   constant boot_rom_size_c      : natural := 4*1024; -- module's address space in bytes
-  constant boot_rom_max_size_c  : natural := 32*1024; -- max module's address space in bytes, fixed!
+  constant boot_rom_max_size_c  : natural := 32*1024; -- max module's address space size in bytes, fixed!
 
   -- On-Chip Debugger: Debug Module --
   constant dm_base_c            : std_ulogic_vector(data_width_c-1 downto 0) := x"fffff800"; -- base address, fixed!
-  constant dm_size_c            : natural := 4*32*4; -- debug ROM address space in bytes, fixed
+  constant dm_size_c            : natural := 4*32*4; -- debug ROM address space size in bytes, fixed
   constant dm_code_base_c       : std_ulogic_vector(data_width_c-1 downto 0) := x"fffff800";
   constant dm_pbuf_base_c       : std_ulogic_vector(data_width_c-1 downto 0) := x"fffff880";
   constant dm_data_base_c       : std_ulogic_vector(data_width_c-1 downto 0) := x"fffff900";
@@ -121,7 +122,7 @@ package neorv32_package is
   -- IO: Peripheral Devices ("IO") Area --
   -- Control register(s) (including the device-enable) should be located at the base address of each device
   constant io_base_c            : std_ulogic_vector(data_width_c-1 downto 0) := x"fffffe00";
-  constant io_size_c            : natural := 512; -- module's address space in bytes, fixed!
+  constant io_size_c            : natural := 512; -- IO address space size in bytes, fixed!
 
   -- Custom Functions Subsystem (CFS) --
   constant cfs_base_c           : std_ulogic_vector(data_width_c-1 downto 0) := x"fffffe00"; -- base address
@@ -161,7 +162,7 @@ package neorv32_package is
 
   -- Pulse-Width Modulation Controller (PWM) --
   constant pwm_base_c           : std_ulogic_vector(data_width_c-1 downto 0) := x"fffffe80"; -- base address
-  constant pwm_size_c           : natural := 16*4; -- module's address space in bytes
+  constant pwm_size_c           : natural := 16*4; -- module's address space size in bytes
   constant pwm_ctrl_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"fffffe80";
   constant pwm_duty0_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"fffffe84";
   constant pwm_duty1_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"fffffe88";
@@ -181,31 +182,31 @@ package neorv32_package is
 
   -- reserved --
 --constant reserved_base_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffffc0"; -- base address
---constant reserved_size_c      : natural := 16*4; -- module's address space in bytes
+--constant reserved_size_c      : natural := 16*4; -- module's address space size in bytes
 
   -- reserved --
 --constant reserved_base_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff00"; -- base address
---constant reserved_size_c      : natural := 32*4; -- module's address space in bytes
+--constant reserved_size_c      : natural := 32*4; -- module's address space size in bytes
 
   -- General Purpose Input/Output Unit (GPIO) --
   constant gpio_base_c          : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff80"; -- base address
-  constant gpio_size_c          : natural := 2*4; -- module's address space in bytes
+  constant gpio_size_c          : natural := 2*4; -- module's address space size in bytes
   constant gpio_in_addr_c       : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff80";
   constant gpio_out_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff84";
 
   -- True Random Number Generator (TRNG) --
   constant trng_base_c          : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff88"; -- base address
-  constant trng_size_c          : natural := 1*4; -- module's address space in bytes
+  constant trng_size_c          : natural := 1*4; -- module's address space size in bytes
   constant trng_ctrl_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff88";
 
   -- Watch Dog Timer (WDT) --
   constant wdt_base_c           : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff8c"; -- base address
-  constant wdt_size_c           : natural := 1*4; -- module's address space in bytes
+  constant wdt_size_c           : natural := 1*4; -- module's address space size in bytes
   constant wdt_ctrl_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff8c";
 
   -- Machine System Timer (MTIME) --
   constant mtime_base_c         : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff90"; -- base address
-  constant mtime_size_c         : natural := 4*4; -- module's address space in bytes
+  constant mtime_size_c         : natural := 4*4; -- module's address space size in bytes
   constant mtime_time_lo_addr_c : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff90";
   constant mtime_time_hi_addr_c : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff94";
   constant mtime_cmp_lo_addr_c  : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff98";
@@ -213,29 +214,29 @@ package neorv32_package is
 
   -- Primary Universal Asynchronous Receiver/Transmitter (UART0) --
   constant uart0_base_c         : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffffa0"; -- base address
-  constant uart0_size_c         : natural := 2*4; -- module's address space in bytes
+  constant uart0_size_c         : natural := 2*4; -- module's address space size in bytes
   constant uart0_ctrl_addr_c    : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffffa0";
   constant uart0_rtx_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffffa4";
 
   -- Serial Peripheral Interface (SPI) --
   constant spi_base_c           : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffffa8"; -- base address
-  constant spi_size_c           : natural := 2*4; -- module's address space in bytes
+  constant spi_size_c           : natural := 2*4; -- module's address space size in bytes
   constant spi_ctrl_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffffa8";
   constant spi_rtx_addr_c       : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffffac";
 
   -- Two Wire Interface (TWI) --
   constant twi_base_c           : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffffb0"; -- base address
-  constant twi_size_c           : natural := 2*4; -- module's address space in bytes
+  constant twi_size_c           : natural := 2*4; -- module's address space size in bytes
   constant twi_ctrl_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffffb0";
   constant twi_rtx_addr_c       : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffffb4";
 
   -- reserved --
 --constant reserved_base_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffffb8"; -- base address
---constant reserved_size_c      : natural := 2*4; -- module's address space in bytes
+--constant reserved_size_c      : natural := 2*4; -- module's address space size in bytes
 
   -- Numerically-Controlled Oscillator (NCO) --
   constant nco_base_c           : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffffc0"; -- base address
-  constant nco_size_c           : natural := 4*4; -- module's address space in bytes
+  constant nco_size_c           : natural := 4*4; -- module's address space size in bytes
   constant nco_ctrl_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffffc0";
   constant nco_ch0_addr_c       : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffffc4";
   constant nco_ch1_addr_c       : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffffc8";
@@ -243,19 +244,19 @@ package neorv32_package is
 
   -- Secondary Universal Asynchronous Receiver/Transmitter (UART1) --
   constant uart1_base_c         : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffffd0"; -- base address
-  constant uart1_size_c         : natural := 2*4; -- module's address space in bytes
+  constant uart1_size_c         : natural := 2*4; -- module's address space size in bytes
   constant uart1_ctrl_addr_c    : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffffd0";
   constant uart1_rtx_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffffd4";
 
   -- Smart LED (WS2811/WS2812) Interface (NEOLED) --
   constant neoled_base_c        : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffffd8"; -- base address
-  constant neoled_size_c        : natural := 2*4; -- module's address space in bytes
+  constant neoled_size_c        : natural := 2*4; -- module's address space size in bytes
   constant neoled_ctrl_addr_c   : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffffd8";
   constant neoled_data_addr_c   : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffffdc";
 
   -- System Information Memory (SYSINFO) --
   constant sysinfo_base_c       : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffffe0"; -- base address
-  constant sysinfo_size_c       : natural := 8*4; -- module's address space in bytes
+  constant sysinfo_size_c       : natural := 8*4; -- module's address space size in bytes
 
   -- Main CPU Control Bus -------------------------------------------------------------------
   -- -------------------------------------------------------------------------------------------
@@ -698,69 +699,9 @@ package neorv32_package is
   constant csr_time_c           : std_ulogic_vector(11 downto 0) := x"c01";
   constant csr_instret_c        : std_ulogic_vector(11 downto 0) := x"c02";
   --
-  constant csr_hpmcounter3_c    : std_ulogic_vector(11 downto 0) := x"c03";
-  constant csr_hpmcounter4_c    : std_ulogic_vector(11 downto 0) := x"c04";
-  constant csr_hpmcounter5_c    : std_ulogic_vector(11 downto 0) := x"c05";
-  constant csr_hpmcounter6_c    : std_ulogic_vector(11 downto 0) := x"c06";
-  constant csr_hpmcounter7_c    : std_ulogic_vector(11 downto 0) := x"c07";
-  constant csr_hpmcounter8_c    : std_ulogic_vector(11 downto 0) := x"c08";
-  constant csr_hpmcounter9_c    : std_ulogic_vector(11 downto 0) := x"c09";
-  constant csr_hpmcounter10_c   : std_ulogic_vector(11 downto 0) := x"c0a";
-  constant csr_hpmcounter11_c   : std_ulogic_vector(11 downto 0) := x"c0b";
-  constant csr_hpmcounter12_c   : std_ulogic_vector(11 downto 0) := x"c0c";
-  constant csr_hpmcounter13_c   : std_ulogic_vector(11 downto 0) := x"c0d";
-  constant csr_hpmcounter14_c   : std_ulogic_vector(11 downto 0) := x"c0e";
-  constant csr_hpmcounter15_c   : std_ulogic_vector(11 downto 0) := x"c0f";
-  constant csr_hpmcounter16_c   : std_ulogic_vector(11 downto 0) := x"c10";
-  constant csr_hpmcounter17_c   : std_ulogic_vector(11 downto 0) := x"c11";
-  constant csr_hpmcounter18_c   : std_ulogic_vector(11 downto 0) := x"c12";
-  constant csr_hpmcounter19_c   : std_ulogic_vector(11 downto 0) := x"c13";
-  constant csr_hpmcounter20_c   : std_ulogic_vector(11 downto 0) := x"c14";
-  constant csr_hpmcounter21_c   : std_ulogic_vector(11 downto 0) := x"c15";
-  constant csr_hpmcounter22_c   : std_ulogic_vector(11 downto 0) := x"c16";
-  constant csr_hpmcounter23_c   : std_ulogic_vector(11 downto 0) := x"c17";
-  constant csr_hpmcounter24_c   : std_ulogic_vector(11 downto 0) := x"c18";
-  constant csr_hpmcounter25_c   : std_ulogic_vector(11 downto 0) := x"c19";
-  constant csr_hpmcounter26_c   : std_ulogic_vector(11 downto 0) := x"c1a";
-  constant csr_hpmcounter27_c   : std_ulogic_vector(11 downto 0) := x"c1b";
-  constant csr_hpmcounter28_c   : std_ulogic_vector(11 downto 0) := x"c1c";
-  constant csr_hpmcounter29_c   : std_ulogic_vector(11 downto 0) := x"c1d";
-  constant csr_hpmcounter30_c   : std_ulogic_vector(11 downto 0) := x"c1e";
-  constant csr_hpmcounter31_c   : std_ulogic_vector(11 downto 0) := x"c1f";
-  --
   constant csr_cycleh_c         : std_ulogic_vector(11 downto 0) := x"c80";
   constant csr_timeh_c          : std_ulogic_vector(11 downto 0) := x"c81";
   constant csr_instreth_c       : std_ulogic_vector(11 downto 0) := x"c82";
-  --
-  constant csr_hpmcounter3h_c   : std_ulogic_vector(11 downto 0) := x"c83";
-  constant csr_hpmcounter4h_c   : std_ulogic_vector(11 downto 0) := x"c84";
-  constant csr_hpmcounter5h_c   : std_ulogic_vector(11 downto 0) := x"c85";
-  constant csr_hpmcounter6h_c   : std_ulogic_vector(11 downto 0) := x"c86";
-  constant csr_hpmcounter7h_c   : std_ulogic_vector(11 downto 0) := x"c87";
-  constant csr_hpmcounter8h_c   : std_ulogic_vector(11 downto 0) := x"c88";
-  constant csr_hpmcounter9h_c   : std_ulogic_vector(11 downto 0) := x"c89";
-  constant csr_hpmcounter10h_c  : std_ulogic_vector(11 downto 0) := x"c8a";
-  constant csr_hpmcounter11h_c  : std_ulogic_vector(11 downto 0) := x"c8b";
-  constant csr_hpmcounter12h_c  : std_ulogic_vector(11 downto 0) := x"c8c";
-  constant csr_hpmcounter13h_c  : std_ulogic_vector(11 downto 0) := x"c8d";
-  constant csr_hpmcounter14h_c  : std_ulogic_vector(11 downto 0) := x"c8e";
-  constant csr_hpmcounter15h_c  : std_ulogic_vector(11 downto 0) := x"c8f";
-  constant csr_hpmcounter16h_c  : std_ulogic_vector(11 downto 0) := x"c90";
-  constant csr_hpmcounter17h_c  : std_ulogic_vector(11 downto 0) := x"c91";
-  constant csr_hpmcounter18h_c  : std_ulogic_vector(11 downto 0) := x"c92";
-  constant csr_hpmcounter19h_c  : std_ulogic_vector(11 downto 0) := x"c93";
-  constant csr_hpmcounter20h_c  : std_ulogic_vector(11 downto 0) := x"c94";
-  constant csr_hpmcounter21h_c  : std_ulogic_vector(11 downto 0) := x"c95";
-  constant csr_hpmcounter22h_c  : std_ulogic_vector(11 downto 0) := x"c96";
-  constant csr_hpmcounter23h_c  : std_ulogic_vector(11 downto 0) := x"c97";
-  constant csr_hpmcounter24h_c  : std_ulogic_vector(11 downto 0) := x"c98";
-  constant csr_hpmcounter25h_c  : std_ulogic_vector(11 downto 0) := x"c99";
-  constant csr_hpmcounter26h_c  : std_ulogic_vector(11 downto 0) := x"c9a";
-  constant csr_hpmcounter27h_c  : std_ulogic_vector(11 downto 0) := x"c9b";
-  constant csr_hpmcounter28h_c  : std_ulogic_vector(11 downto 0) := x"c9c";
-  constant csr_hpmcounter29h_c  : std_ulogic_vector(11 downto 0) := x"c9d";
-  constant csr_hpmcounter30h_c  : std_ulogic_vector(11 downto 0) := x"c9e";
-  constant csr_hpmcounter31h_c  : std_ulogic_vector(11 downto 0) := x"c9f";
   -- machine information registers --
   constant csr_mvendorid_c      : std_ulogic_vector(11 downto 0) := x"f11";
   constant csr_marchid_c        : std_ulogic_vector(11 downto 0) := x"f12";
@@ -1708,7 +1649,6 @@ package neorv32_package is
   -- -------------------------------------------------------------------------------------------
   component neorv32_wishbone
     generic (
-      WB_PIPELINED_MODE : boolean := false; -- false: classic/standard wishbone mode, true: pipelined wishbone mode
       -- Internal instruction memory --
       MEM_INT_IMEM_EN   : boolean := true;   -- implement processor-internal instruction memory
       MEM_INT_IMEM_SIZE : natural := 8*1024; -- size of processor-internal instruction memory in bytes

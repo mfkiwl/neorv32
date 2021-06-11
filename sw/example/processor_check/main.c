@@ -83,7 +83,7 @@ uint32_t atomic_access_addr;
  *
  * @note Applications has to be compiler with <USER_FLAGS+=-DRUN_CPUTEST>
  *
- * @return Irrelevant.
+ * @return 0 if execution was successful
  **************************************************************************/
 int main() {
 
@@ -103,7 +103,7 @@ int main() {
   // inform the user if you are actually executing this
   neorv32_uart_printf("ERROR! processor_check has not been compiled. Use >>make USER_FLAGS+=-DRUN_CHECK clean_all exe<< to compile it.\n");
 
-  return 0;
+  return 1;
 #endif
 
   // check if this is a simulation (using primary UART0)
@@ -166,7 +166,7 @@ int main() {
 
   if (install_err) {
     neorv32_uart_printf("RTE install error (%i)!\n", install_err);
-    return 0;
+    return 1;
   }
 
   // enable interrupt sources
@@ -186,19 +186,21 @@ int main() {
   // Test standard RISC-V performance counter [m]cycle[h]
   // ----------------------------------------------------------
   neorv32_cpu_csr_write(CSR_MCAUSE, 0);
-  neorv32_uart_printf("[%i] [m]instret[h] counter: ", cnt_test);
+  neorv32_uart_printf("[%i] [m]cycle[h] counter: ", cnt_test);
 
   cnt_test++;
 
   // make sure counter is enabled
   asm volatile ("csrci %[addr], %[imm]" : : [addr] "i" (CSR_MCOUNTINHIBIT), [imm] "i" (1<<CSR_MCOUNTINHIBIT_CY));
 
-  // get current cycle counter LOW
-  tmp_a = neorv32_cpu_csr_read(CSR_MCYCLE);
-  tmp_a = neorv32_cpu_csr_read(CSR_MCYCLE) - tmp_a;
+  // prepare overflow
+  neorv32_cpu_set_mcycle(0x00000000FFFFFFFFULL);
 
-  // make sure cycle counter has incremented and there was no exception during access
-  if ((tmp_a > 0) && (neorv32_cpu_csr_read(CSR_MCAUSE) == 0)) {
+  // get current cycle counter HIGH
+  tmp_a = neorv32_cpu_csr_read(CSR_MCYCLEH);
+
+  // make sure cycle counter high has incremented and there was no exception during access
+  if ((tmp_a == 1) && (neorv32_cpu_csr_read(CSR_MCAUSE) == 0)) {
     test_ok();
   }
   else {
@@ -210,26 +212,22 @@ int main() {
   // Test standard RISC-V performance counter [m]instret[h]
   // ----------------------------------------------------------
   neorv32_cpu_csr_write(CSR_MCAUSE, 0);
-  neorv32_uart_printf("[%i] [m]cycle[h] counter: ", cnt_test);
+  neorv32_uart_printf("[%i] [m]instret[h] counter: ", cnt_test);
 
   cnt_test++;
 
   // make sure counter is enabled
   asm volatile ("csrci %[addr], %[imm]" : : [addr] "i" (CSR_MCOUNTINHIBIT), [imm] "i" (1<<CSR_MCOUNTINHIBIT_IR));
 
-  // get instruction counter LOW
-  tmp_a = neorv32_cpu_csr_read(CSR_INSTRET);
-  tmp_a = neorv32_cpu_csr_read(CSR_INSTRET) - tmp_a;
+  // prepare overflow
+  neorv32_cpu_set_minstret(0x00000000FFFFFFFFULL);
 
-  // make sure instruction counter has incremented and there was no exception during access
-  if ((tmp_a > 0) && (neorv32_cpu_csr_read(CSR_MCAUSE) == 0)) {
-    if (tmp_a > 1) {
-      neorv32_uart_printf("INSTRET_diff > 1 (%u)!", tmp_a);
-      test_fail();
-    }
-    else {
-      test_ok();
-    }
+  // get instruction counter HIGH
+  tmp_a = neorv32_cpu_csr_read(CSR_INSTRETH);
+
+  // make sure instruction counter high has incremented and there was no exception during access
+  if ((tmp_a == 1) && (neorv32_cpu_csr_read(CSR_MCAUSE) == 0)) {
+    test_ok();
   }
   else {
     test_fail();
@@ -279,7 +277,7 @@ int main() {
   neorv32_uart_printf("[%i] mcounteren.cy CSR: ", cnt_test);
 
   // skip if U-mode is not implemented
-  if (neorv32_cpu_csr_read(CSR_MISA) & (1<<CSR_MISA_U_EXT)) {
+  if (neorv32_cpu_csr_read(CSR_MISA) & (1<<CSR_MISA_U)) {
     cnt_test++;
 
     // do not allow user-level code to access cycle[h] CSRs
@@ -519,8 +517,9 @@ int main() {
     // disable global interrupts
     neorv32_cpu_dint();
 
-    // force MTIME IRQ
-    neorv32_mtime_set_timecmp(0);
+    // prepare MTIME IRQ
+    neorv32_mtime_set_time(0x00000000FFFFFFF8ULL); // prepare overflow
+    neorv32_mtime_set_timecmp(0x0000000100000000ULL); // IRQ on overflow
 
     // wait some time for the IRQ to arrive the CPU
     asm volatile("nop");
@@ -552,7 +551,7 @@ int main() {
   neorv32_uart_printf("[%i] I_ALIGN (instr. alignment) EXC: ", cnt_test);
 
   // skip if C-mode is implemented
-  if ((neorv32_cpu_csr_read(CSR_MISA) & (1<<CSR_MISA_C_EXT)) == 0) {
+  if ((neorv32_cpu_csr_read(CSR_MISA) & (1<<CSR_MISA_C)) == 0) {
 
     cnt_test++;
 
@@ -624,7 +623,7 @@ int main() {
   neorv32_uart_printf("[%i] CI_ILLEG (illegal compr. instr.) EXC: ", cnt_test);
 
   // skip if C-mode is not implemented
-  if ((neorv32_cpu_csr_read(CSR_MISA) & (1<<CSR_MISA_C_EXT)) != 0) {
+  if ((neorv32_cpu_csr_read(CSR_MISA) & (1<<CSR_MISA_C)) != 0) {
 
     cnt_test++;
 
@@ -762,7 +761,7 @@ int main() {
   neorv32_uart_printf("[%i] ENVCALL (ecall instr.) from U-mode EXC: ", cnt_test);
 
   // skip if U-mode is not implemented
-  if (neorv32_cpu_csr_read(CSR_MISA) & (1<<CSR_MISA_U_EXT)) {
+  if (neorv32_cpu_csr_read(CSR_MISA) & (1<<CSR_MISA_U)) {
 
     cnt_test++;
 
@@ -1364,7 +1363,7 @@ int main() {
   neorv32_uart_printf("[%i] Invalid CSR access (mstatus) from user mode: ", cnt_test);
 
   // skip if U-mode is not implemented
-  if (neorv32_cpu_csr_read(CSR_MISA) & (1<<CSR_MISA_U_EXT)) {
+  if (neorv32_cpu_csr_read(CSR_MISA) & (1<<CSR_MISA_U)) {
 
     cnt_test++;
 
@@ -1560,7 +1559,7 @@ int main() {
 
 #ifdef __riscv_atomic
   // skip if A-mode is not implemented
-  if ((neorv32_cpu_csr_read(CSR_MISA) & (1<<CSR_MISA_A_EXT)) != 0) {
+  if ((neorv32_cpu_csr_read(CSR_MISA) & (1<<CSR_MISA_A)) != 0) {
 
     cnt_test++;
 
@@ -1597,7 +1596,7 @@ int main() {
 
 #ifdef __riscv_atomic
   // skip if A-mode is not implemented
-  if ((neorv32_cpu_csr_read(CSR_MISA) & (1<<CSR_MISA_A_EXT)) != 0) {
+  if ((neorv32_cpu_csr_read(CSR_MISA) & (1<<CSR_MISA_A)) != 0) {
 
     cnt_test++;
 
@@ -1633,7 +1632,7 @@ int main() {
 
 #ifdef __riscv_atomic
   // skip if A-mode is not implemented
-  if ((neorv32_cpu_csr_read(CSR_MISA) & (1<<CSR_MISA_A_EXT)) != 0) {
+  if ((neorv32_cpu_csr_read(CSR_MISA) & (1<<CSR_MISA_A)) != 0) {
 
     cnt_test++;
 
@@ -1691,12 +1690,13 @@ int main() {
   // final result
   if (cnt_fail == 0) {
     neorv32_uart_printf("%c[1m[CPU TEST COMPLETED SUCCESSFULLY!]%c[0m\n", 27, 27);
+    return 0;
   }
   else {
     neorv32_uart_printf("%c[1m[CPU TEST FAILED!]%c[0m\n", 27, 27);
+    return 1;
   }
 
-  return 0;
 }
 
 
@@ -1739,4 +1739,18 @@ void test_fail(void) {
 
   neorv32_uart_printf("%c[1m[FAILED]%c[0m\n", 27, 27);
   cnt_fail++;
+}
+
+
+/**********************************************************************//**
+ * Register "after-main" handler that is executed if the application's
+ * main function actually returns (called by crt0.S start-up code)
+ *
+ * @note The C-runtime is still available at this point.
+ *
+ * @param[in] return_code Return value of main function
+ **************************************************************************/
+void __neorv32_crt0_after_main(int32_t return_code) {
+
+  neorv32_uart_printf("Main returned with code: %i\n", return_code);
 }

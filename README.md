@@ -43,8 +43,8 @@ at [GitHub-pages](https://stnolting.github.io/neorv32/sw/files.html).
 :label: The project's change log is available in [`CHANGELOG.md`](https://github.com/stnolting/neorv32/blob/master/CHANGELOG.md).
 To see the changes between *official* releases visit the project's [release page](https://github.com/stnolting/neorv32/releases).
 
-:package: The [`boards`](https://github.com/stnolting/neorv32/tree/master/boards) folder provides exemplary EDA setups targeting
-various FPGA boards to get you started.
+:package: The [`setups`](https://github.com/stnolting/neorv32/tree/master/setups) folder provides exemplary setups targeting
+various FPGA boards and toolchains to get you started.
 
 :spiral_notepad: Check out the [project boards](https://github.com/stnolting/neorv32/projects) for a list of current **ideas**,
 **TODOs**, features being **planned** and **work-in-progress**.
@@ -107,9 +107,9 @@ cache ([iCACHE](https://stnolting.github.io/neorv32/#_processor_internal_instruc
 
 * 32-bit external bus interface, Wishbone b4 compatible
 ([WISHBONE](https://stnolting.github.io/neorv32/#_processor_external_memory_interface_wishbone_axi4_lite))
-  * [wrapper](https://github.com/stnolting/neorv32/blob/master/rtl/top_templates/neorv32_top_axi4lite.vhd) for AXI4-Lite master interface
-* alternative [top entities/wrappers](https://github.com/stnolting/neorv32/blob/master/rtl/top_templates) providing
-simplified and/or resolved top entity ports for easy system inegration
+  * [wrapper](https://github.com/stnolting/neorv32/blob/master/rtl/templates/system/neorv32_SystemTop_axi4lite.vhd) for AXI4-Lite master interface
+* alternative [top entities/wrappers](https://github.com/stnolting/neorv32/blob/master/rtl/templates) providing
+simplified and/or resolved top entity ports for easy system integration
 * custom functions subsystem ([CFS](https://stnolting.github.io/neorv32/#_custom_functions_subsystem_cfs))
 for tightly-coupled custom co-processor extensions
 
@@ -131,7 +131,7 @@ This setup also allows to further use the default bootloader and software framew
 
 ### FPGA Implementation Results - Processor
 
-:information_source: Check out the [`boards`](https://github.com/stnolting/neorv32/tree/master/boards)
+:information_source: Check out the [`setups`](https://github.com/stnolting/neorv32/tree/master/setups)
 folder for exemplary setups targeting various FPGA boards.
 
 :information_source: The hardware resources used by the processor-internal IO/peripheral modules andmemories is also available in the
@@ -145,7 +145,7 @@ no external memory interface and only internal instruction and data memories
 | Vendor  | FPGA                              | Board            | Toolchain                  | CPU Configuration                 | LUT / LE   | FF / REG   | DSP (9-bit) | Memory Bits  | BRAM / EBR | SPRAM    | Frequency     |
 |:--------|:----------------------------------|:-----------------|:---------------------------|:----------------------------------|:-----------|:-----------|:------------|:-------------|:-----------|:---------|--------------:|
 | Intel   | Cyclone IV `EP4CE22F17C6N`        | Terasic DE0-Nano | Quartus Prime Lite 20.1    | `rv32imcu_Zicsr_Zifencei`         | 3813 (17%) | 1904  (8%) | 0 (0%)      | 231424 (38%) |          - |        - |       119 MHz |
-| Lattice | iCE40 UltraPlus `iCE40UP5K-SG48I` | [`boards/UPduino_v3`](https://github.com/stnolting/neorv32/tree/master/boards/UPduino_v3) | Radiant 2.1 (LSE) | `rv32imac_Zicsr` | 5123 (97%) | 1972 (37%) | 0 (0%) | - |   12 (40%) | 4 (100%) | *c* 24 MHz |
+| Lattice | iCE40 UltraPlus `iCE40UP5K-SG48I` | [`setups\radiant\UPduino_v3`](https://github.com/stnolting/neorv32/tree/master/setups\radiant\UPduino_v3) | Radiant 2.1 (LSE) | `rv32imac_Zicsr` | 5123 (97%) | 1972 (37%) | 0 (0%) | - |   12 (40%) | 4 (100%) | *c* 24 MHz |
 | Xilinx  | Artix-7 `XC7A35TICSG324-1L`       | Arty A7-35T      | Vivado 2019.2              | `rv32imcu_Zicsr_Zifencei` + `PMP` | 2465 (12%) | 1912  (5%) | 0 (0%)      |            - |    8 (16%) |        - |   *c* 100 MHz |
 
 [[back to top](#The-NEORV32-RISC-V-Processor)]
@@ -283,7 +283,7 @@ developed and debugged with open source tooling
 ## Getting Started
 
 This overview provides some *quick links* to the most important sections of the
-[online Data Sheet](https://stnolting.github.io/neorv32) and the 
+[online Data Sheet](https://stnolting.github.io/neorv32) and the
 [online User Guide](https://stnolting.github.io/neorv32/ug).
 
 ### :electric_plug: Hardware Overview
@@ -293,7 +293,7 @@ This overview provides some *quick links* to the most important sections of the
   * [Top Entity - Generics](https://stnolting.github.io/neorv32/#_processor_top_entity_generics) - configuration options
   * [Address Space](https://stnolting.github.io/neorv32/#_address_space) - memory space and memory-mapped IO
   * [SoC Modules](https://stnolting.github.io/neorv32/#_processor_internal_modules) - available IO/peripheral modules and memories
-  * [On-Chip Debugger](https://stnolting.github.io/neorv32/#_on_chip_debugger_ocd) - online debugging of the processor via JTAG
+  * [On-Chip Debugger](https://stnolting.github.io/neorv32/#_on_chip_debugger_ocd) - online & in-system debugging of the processor via JTAG
 
 * [NEORV32 CPU](https://stnolting.github.io/neorv32/#_neorv32_central_processing_unit_cpu) - the RISC-V core
   * [RISC-V compatibility](https://stnolting.github.io/neorv32/#_risc_v_compatibility) - what is compatible to the specs. and what is not
