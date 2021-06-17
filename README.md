@@ -1,8 +1,10 @@
 [![GitHub Pages](https://img.shields.io/website.svg?label=stnolting.github.io%2Fneorv32&longCache=true&style=flat-square&url=http%3A%2F%2Fstnolting.github.io%2Fneorv32%2Findex.html&logo=GitHub)](https://stnolting.github.io/neorv32)
-[![Processor](https://img.shields.io/github/workflow/status/stnolting/neorv32/Processor/master?longCache=true&style=flat-square&label=Processor&logo=Github%20Actions&logoColor=fff)](https://github.com/stnolting/neorv32/actions?query=workflow%3AProcessor)
-[![riscv-arch-test](https://img.shields.io/github/workflow/status/stnolting/neorv32/riscv-arch-test/master?longCache=true&style=flat-square&label=riscv-arch-test&logo=Github%20Actions&logoColor=fff)](https://github.com/stnolting/neorv32/actions?query=workflow%3Ariscv-arch-test)
 [![Documentation](https://img.shields.io/github/workflow/status/stnolting/neorv32/Documentation/master?longCache=true&style=flat-square&label=Documentation&logo=Github%20Actions&logoColor=fff)](https://github.com/stnolting/neorv32/actions?query=workflow%3ADocumentation)
+
+[![riscv-arch-test](https://img.shields.io/github/workflow/status/stnolting/neorv32/riscv-arch-test/master?longCache=true&style=flat-square&label=riscv-arch-test&logo=Github%20Actions&logoColor=fff)](https://github.com/stnolting/neorv32/actions?query=workflow%3Ariscv-arch-test)
+[![Processor](https://img.shields.io/github/workflow/status/stnolting/neorv32/Processor/master?longCache=true&style=flat-square&label=Processor&logo=Github%20Actions&logoColor=fff)](https://github.com/stnolting/neorv32/actions?query=workflow%3AProcessor)
 [![Implementation](https://img.shields.io/github/workflow/status/stnolting/neorv32/Implementation/master?longCache=true&style=flat-square&label=Implementation&logo=Github%20Actions&logoColor=fff)](https://github.com/stnolting/neorv32/actions?query=workflow%3AImplementation)
+[![Windows](https://img.shields.io/github/workflow/status/stnolting/neorv32/Windows/master?longCache=true&style=flat-square&label=Windows&logo=Github%20Actions&logoColor=fff)](https://github.com/stnolting/neorv32/actions?query=workflow%3AWindows)
 
 [![NEORV32](https://raw.githubusercontent.com/stnolting/neorv32/master/docs/figures/neorv32_logo_dark.png)](https://github.com/stnolting/neorv32)
 
@@ -35,6 +37,8 @@
 The NEORV32 Processor is a customizable microcontroller-like system on chip (SoC) that is based on the RISC-V NEORV32 CPU.
 The project is intended as auxiliary processor in larger SoC designs or as *ready-to-go* stand-alone
 custom / customizable microcontroller.
+
+:information_source: Want to know more? Check out the [project's rationale](https://stnolting.github.io/neorv32/#_rationale).
 
 :books: For detailed information take a look at the [NEORV32 documentation (online at GitHub-pages)](https://stnolting.github.io/neorv32/).
 The *doxygen*-based documentation of the *software framework* is also available online
@@ -288,10 +292,12 @@ This overview provides some *quick links* to the most important sections of the
 
 ### :electric_plug: Hardware Overview
 
+* [Rationale](https://stnolting.github.io/neorv32/#_rationale) - NEORV32: why, how come, what for
+
 * [NEORV32 Processor](https://stnolting.github.io/neorv32/#_neorv32_processor_soc) - the SoC
   * [Top Entity - Signals](https://stnolting.github.io/neorv32/#_processor_top_entity_signals) - how to connect to the processor
   * [Top Entity - Generics](https://stnolting.github.io/neorv32/#_processor_top_entity_generics) - configuration options
-  * [Address Space](https://stnolting.github.io/neorv32/#_address_space) - memory space and memory-mapped IO
+  * [Address Space](https://stnolting.github.io/neorv32/#_address_space) - memory layout and boot configuration
   * [SoC Modules](https://stnolting.github.io/neorv32/#_processor_internal_modules) - available IO/peripheral modules and memories
   * [On-Chip Debugger](https://stnolting.github.io/neorv32/#_on_chip_debugger_ocd) - online & in-system debugging of the processor via JTAG
 

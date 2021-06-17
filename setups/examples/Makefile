@@ -31,6 +31,11 @@ endif
 	  NEORV32_MEM_SRC="${IMEM_SRC} ../devices/ice40/neorv32_dmem.ice40up_spram.vhd" \
 	  run
 
+iCESugar:
+	$(MAKE) \
+	  BITSTREAM=neorv32_$(BOARD)_$(DESIGN).bit \
+	  run
+
 UPduino_v3:
 	$(MAKE) \
 	  BITSTREAM=neorv32_$(BOARD)_$(DESIGN).bit \
@@ -39,7 +44,7 @@ UPduino_v3:
 Minimal:
 	$(MAKE) \
 	  DESIGN=$@ \
-	  DESIGN_SRC=$(TEMPLATES)/processor/neorv32_ProcessorTop_Minimal.vhd \
+	  DESIGN_SRC=$(TEMPLATES)/processor/neorv32_ProcessorTop_Minimal*.vhd \
 	  $(BOARD)
 
 MinimalBoot:

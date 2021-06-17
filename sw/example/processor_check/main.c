@@ -93,8 +93,10 @@ int main() {
   uint32_t is_simulation = 0;
 
 
-  // init UART at default baud rate, no parity bits, no hw flow control
-  neorv32_uart_setup(BAUD_RATE, PARITY_NONE, FLOW_CONTROL_NONE);
+  // init UARTs
+  neorv32_uart_setup(BAUD_RATE, PARITY_NONE, FLOW_CONTROL_NONE); // UART1 at default baud rate, no parity bits, no hw flow control
+  UART1_CT = UART0_CT; // init UART1 (by copying UART0 control reg)
+
 
 // Disable processor_check compilation by default
 #ifndef RUN_CHECK
@@ -424,29 +426,24 @@ int main() {
   }
 
 
-//// ----------------------------------------------------------
-//// Test FENCE.I instruction (instruction buffer / i-cache clear & reload)
-//// ----------------------------------------------------------
-//neorv32_cpu_csr_write(CSR_MCAUSE, 0);
-//neorv32_uart_printf("[%i] FENCE.I: ", cnt_test);
-//
-//// check if implemented
-//if (neorv32_cpu_csr_read(CSR_MZEXT) & (1 << CSR_MZEXT_ZIFENCEI)) {
-//  cnt_test++;
-//
-//  asm volatile ("fence.i");
-//
-//  // make sure there was no exception (and that the cpu did not crash...)
-//  if (neorv32_cpu_csr_read(CSR_MCAUSE) == 0) {
-//    test_ok();
-//  }
-//  else {
-//    test_fail();
-//  }
-//}
-//else {
-//  neorv32_uart_printf("skipped (not implemented)\n");
-//}
+  // ----------------------------------------------------------
+  // Test FENCE.I instruction (instruction buffer / i-cache clear & reload)
+  // if Zifencei is not implemented FENCE.I should execute as NOP
+  // ----------------------------------------------------------
+  neorv32_cpu_csr_write(CSR_MCAUSE, 0);
+  neorv32_uart_printf("[%i] FENCE.I: ", cnt_test);
+
+  cnt_test++;
+
+  asm volatile ("fence.i");
+
+  // make sure there was no exception (and that the cpu did not crash...)
+  if (neorv32_cpu_csr_read(CSR_MCAUSE) == 0) {
+    test_ok();
+  }
+  else {
+    test_fail();
+  }
 
 
   // ----------------------------------------------------------
@@ -971,7 +968,7 @@ int main() {
     // backup current UART0 configuration
     tmp_a = UART0_CT;
 
-    // disable UART0 sim_mode if it is enabled
+    // make sure sim mode is disabled
     UART0_CT &= ~(1 << UART_CT_SIM_MODE);
 
     // trigger UART0 RX IRQ
@@ -985,7 +982,7 @@ int main() {
     asm volatile("nop");
     asm volatile("nop");
 
-    // re-enable UART0 sim_mode if it was enabled
+    // restore original configuration
     UART0_CT = tmp_a;
 
     // disable fast interrupt
@@ -1020,7 +1017,7 @@ int main() {
   // backup current UART0 configuration
   tmp_a = UART0_CT;
 
-  // disable UART0 sim_mode if it is enabled
+  // make sure sim mode is disabled
   UART0_CT &= ~(1 << UART_CT_SIM_MODE);
 
   // trigger UART0 TX IRQ
@@ -1033,7 +1030,7 @@ int main() {
   asm volatile("nop");
   asm volatile("nop");
 
-  // re-enable UART sim_mode if it was enabled
+  // restore original configuration
   UART0_CT = tmp_a;
 
   neorv32_cpu_irq_disable(CSR_MIE_FIRQ3E);
@@ -1058,11 +1055,11 @@ int main() {
     // UART1 RX interrupt enable
     neorv32_cpu_irq_enable(CSR_MIE_FIRQ4E);
 
-    // initialize UART1
-    UART1_CT = 0;
-    tmp_a = UART0_CT; // copy configuration from UART0
-    tmp_a &= ~(1 << UART_CT_SIM_MODE); // make sure sim_mode is disabled
-    UART1_CT = tmp_a;
+    // backup current UART1 configuration
+    tmp_a = UART1_CT;
+
+    // make sure sim mode is disabled
+    UART1_CT &= ~(1 << UART_CT_SIM_MODE);
 
     // trigger UART1 RX IRQ
     UART1_DATA = 0;
@@ -1074,8 +1071,8 @@ int main() {
     asm volatile("nop");
     asm volatile("nop");
 
-    // disable UART1
-    UART1_CT = 0;
+    // restore original configuration
+    UART1_CT = tmp_a;
 
     // disable fast interrupt
     neorv32_cpu_irq_disable(CSR_MIE_FIRQ4E);
@@ -1104,11 +1101,11 @@ int main() {
     // UART1 RX interrupt enable
     neorv32_cpu_irq_enable(CSR_MIE_FIRQ5E);
 
-    // initialize UART1
-    UART1_CT = 0;
-    tmp_a = UART0_CT; // copy configuration from UART0
-    tmp_a &= ~(1 << UART_CT_SIM_MODE); // make sure sim_mode is disabled
-    UART1_CT = tmp_a;
+    // backup current UART1 configuration
+    tmp_a = UART1_CT;
+
+    // make sure sim mode is disabled
+    UART1_CT &= ~(1 << UART_CT_SIM_MODE);
 
     // trigger UART1 TX IRQ
     UART1_DATA = 0;
@@ -1120,8 +1117,8 @@ int main() {
     asm volatile("nop");
     asm volatile("nop");
 
-    // disable UART1
-    UART1_CT = 0;
+    // restore original configuration
+    UART1_CT = tmp_a;
 
     // disable fast interrupt
     neorv32_cpu_irq_disable(CSR_MIE_FIRQ5E);

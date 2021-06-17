@@ -8,7 +8,7 @@
 # Abort if any command returns != 0
 set -e
 
-cd $(dirname "$0")/../..
+cd $(dirname "$0")/..
 
 # Default simulation configuration
 SIM_CONFIG=--stop-time=8ms
@@ -18,10 +18,13 @@ ghdl -v
 
 # Simulation time define by user?
 echo ""
-[ -z ${1} ] && echo "Using default simulation config: $SIM_CONFIG" || (
+if [ -z $1 ]
+then
+  echo "Using default simulation config: $SIM_CONFIG"
+else
   SIM_CONFIG=$1;
   echo "Using user simulation config: $SIM_CONFIG";
-)
+fi
 echo ""
 
 # List files
@@ -40,7 +43,7 @@ ghdl -i --work=neorv32 rtl/core/*.vhd
 ghdl -i --work=neorv32 rtl/templates/processor/*.vhd
 ghdl -i --work=neorv32 rtl/templates/system/*.vhd
 ghdl -i --work=neorv32 sim/neorv32_tb.simple.vhd
-ghdl -i --work=neorv32 sim/uart_rx.vhd
+ghdl -i --work=neorv32 sim/uart_rx.simple.vhd
 
 # Prepare simulation output files for UART0 and UART 1
 # - Testbench receiver log file (neorv32.testbench_uart?.out)
