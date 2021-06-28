@@ -60,7 +60,6 @@ entity neorv32_ProcessorTop_stdlogic is
     -- Extension Options --
     FAST_MUL_EN                  : boolean := false;  -- use DSPs for M extension's multiplier
     FAST_SHIFT_EN                : boolean := false;  -- use barrel shifter for shift operations
-    TINY_SHIFT_EN                : boolean := false;  -- use tiny (single-bit) shifter for shift operations
     CPU_CNT_WIDTH                : natural := 64;     -- total width of CPU cycle and instret counters (0..64)
     -- Physical Memory Protection (PMP) --
     PMP_NUM_REGIONS              : natural := 0;      -- number of regions (0..64)
@@ -96,7 +95,6 @@ entity neorv32_ProcessorTop_stdlogic is
     IO_CFS_CONFIG                : std_ulogic_vector(31 downto 0); -- custom CFS configuration generic
     IO_CFS_IN_SIZE               : positive := 32;    -- size of CFS input conduit in bits
     IO_CFS_OUT_SIZE              : positive := 32;    -- size of CFS output conduit in bits
-    IO_NCO_EN                    : boolean := true;   -- implement numerically-controlled oscillator (NCO)?
     IO_NEOLED_EN                 : boolean := true    -- implement NeoPixel-compatible smart LED interface (NEOLED)?
   );
   port (
@@ -150,8 +148,6 @@ entity neorv32_ProcessorTop_stdlogic is
     -- Custom Functions Subsystem IO (available if IO_CFS_EN = true) --
     cfs_in_i    : in  std_logic_vector(IO_CFS_IN_SIZE-1  downto 0); -- custom inputs
     cfs_out_o   : out std_logic_vector(IO_CFS_OUT_SIZE-1 downto 0); -- custom outputs
-    -- NCO output (available if IO_NCO_EN = true) --
-    nco_o       : out std_logic_vector(02 downto 0); -- numerically-controlled oscillator channels
     -- NeoPixel-compatible smart LED interface (available if IO_NEOLED_EN = true) --
     neoled_o    : out std_logic; -- async serial data line
     -- System time --
@@ -159,7 +155,6 @@ entity neorv32_ProcessorTop_stdlogic is
     mtime_o     : out std_logic_vector(63 downto 0); -- current system time from int. MTIME (if IO_MTIME_EN = true)
     -- Interrupts --
     nm_irq_i    : in  std_logic := '0'; -- non-maskable interrupt
-    soc_firq_i  : in  std_logic_vector(5 downto 0) := (others => '0'); -- fast interrupt channels
     mtime_irq_i : in  std_logic := '0'; -- machine timer interrupt, available if IO_MTIME_EN = false
     msw_irq_i   : in  std_logic := '0'; -- machine software interrupt
     mext_irq_i  : in  std_logic := '0'  -- machine external interrupt
@@ -219,15 +214,12 @@ architecture neorv32_ProcessorTop_stdlogic_rtl of neorv32_ProcessorTop_stdlogic 
   signal cfs_in_i_int    : std_ulogic_vector(IO_CFS_IN_SIZE-1  downto 0);
   signal cfs_out_o_int   : std_ulogic_vector(IO_CFS_OUT_SIZE-1 downto 0);
   --
-  signal nco_o_int       : std_ulogic_vector(02 downto 0);
-  --
   signal neoled_o_int    : std_ulogic;
   --
   signal mtime_i_int     : std_ulogic_vector(63 downto 0);
   signal mtime_o_int     : std_ulogic_vector(63 downto 0);
   --
   signal nm_irq_i_int    : std_ulogic;
-  signal soc_firq_i_int  : std_ulogic_vector(05 downto 0);
   signal mtime_irq_i_int : std_ulogic;
   signal msw_irq_i_int   : std_ulogic;
   signal mext_irq_i_int  : std_ulogic;
@@ -257,7 +249,6 @@ begin
     -- Extension Options --
     FAST_MUL_EN                  => FAST_MUL_EN,        -- use DSPs for M extension's multiplier
     FAST_SHIFT_EN                => FAST_SHIFT_EN,      -- use barrel shifter for shift operations
-    TINY_SHIFT_EN                => TINY_SHIFT_EN,      -- use tiny (single-bit) shifter for shift operations
     CPU_CNT_WIDTH                => CPU_CNT_WIDTH,      -- total width of CPU cycle and instret counters (0..64)
     -- Physical Memory Protection (PMP) --
     PMP_NUM_REGIONS              => PMP_NUM_REGIONS,    -- number of regions (0..64)
@@ -293,7 +284,6 @@ begin
     IO_CFS_CONFIG                => IO_CFS_CONFIG_INT,  -- custom CFS configuration generic
     IO_CFS_IN_SIZE               => IO_CFS_IN_SIZE,     -- size of CFS input conduit in bits
     IO_CFS_OUT_SIZE              => IO_CFS_OUT_SIZE,    -- size of CFS output conduit in bits
-    IO_NCO_EN                    => IO_NCO_EN,          -- implement numerically-controlled oscillator (NCO)?
     IO_NEOLED_EN                 => IO_NEOLED_EN        -- implement NeoPixel-compatible smart LED interface (NEOLED)?
   )
   port map (
@@ -347,8 +337,6 @@ begin
     -- Custom Functions Subsystem IO (available if IO_CFS_EN = true) --
     cfs_in_i    => cfs_in_i_int,    -- custom inputs
     cfs_out_o   => cfs_out_o_int,   -- custom outputs
-    -- NCO output (available if IO_NCO_EN = true) --
-    nco_o       => nco_o_int,       -- numerically-controlled oscillator channels
     -- NeoPixel-compatible smart LED interface (available if IO_NEOLED_EN = true) --
     neoled_o    => neoled_o_int,    -- async serial data line
     -- System time --
@@ -356,7 +344,6 @@ begin
     mtime_o     => mtime_o_int,     -- current system time from int. MTIME (if IO_MTIME_EN = true)
     -- Interrupts --
     nm_irq_i    => nm_irq_i_int,    -- non-maskable interrupt
-    soc_firq_i  => soc_firq_i_int,  -- fast interrupt channels
     mtime_irq_i => mtime_irq_i_int, -- machine timer interrupt, available if IO_MTIME_EN = false
     msw_irq_i   => msw_irq_i_int,   -- machine software interrupt
     mext_irq_i  => mext_irq_i_int   -- machine external interrupt
@@ -405,15 +392,11 @@ begin
   cfs_in_i_int    <= std_ulogic_vector(cfs_in_i);
   cfs_out_o       <= std_logic_vector(cfs_out_o_int);
 
-  nco_o           <= std_logic_vector(nco_o_int);
-
   neoled_o        <= std_logic(neoled_o_int);
 
   mtime_i_int     <= std_ulogic_vector(mtime_i);
   mtime_o         <= std_logic_vector(mtime_o_int);
 
-  soc_firq_i_int  <= std_ulogic_vector(soc_firq_i);
-  mtime_irq_i_int <= std_ulogic(mtime_irq_i);
   msw_irq_i_int   <= std_ulogic(msw_irq_i);
   mext_irq_i_int  <= std_ulogic(mext_irq_i);
 

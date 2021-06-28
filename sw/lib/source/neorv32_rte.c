@@ -338,6 +338,9 @@ void neorv32_rte_print_hw_config(void) {
   if (tmp & (1<<CSR_MZEXT_ZIFENCEI)) {
     neorv32_uart0_printf("Zifencei ");
   }
+  if (tmp & (1<<CSR_MZEXT_ZMMUL)) {
+    neorv32_uart0_printf("Zmmul ");
+  }
 
   if (tmp & (1<<CSR_MZEXT_ZFINX)) {
     neorv32_uart0_printf("Zfinx ");
@@ -447,7 +450,6 @@ void neorv32_rte_print_hw_config(void) {
   neorv32_uart0_printf("WDT    - "); __neorv32_rte_print_true_false(tmp & (1 << SYSINFO_FEATURES_IO_WDT));
   neorv32_uart0_printf("TRNG   - "); __neorv32_rte_print_true_false(tmp & (1 << SYSINFO_FEATURES_IO_TRNG));
   neorv32_uart0_printf("CFS    - "); __neorv32_rte_print_true_false(tmp & (1 << SYSINFO_FEATURES_IO_CFS));
-  neorv32_uart0_printf("NCO    - "); __neorv32_rte_print_true_false(tmp & (1 << SYSINFO_FEATURES_IO_NCO));
   neorv32_uart0_printf("NEOLED - "); __neorv32_rte_print_true_false(tmp & (1 << SYSINFO_FEATURES_IO_NEOLED));
 }
 
@@ -532,10 +534,10 @@ void neorv32_rte_print_credits(void) {
     return; // cannot output anything if UART0 is not implemented
   }
 
-  neorv32_uart0_print("The NEORV32 Processor Project\n"
-                     "Copyright 2021, Stephan Nolting\n"
-                     "BSD 3-Clause License\n"
-                     "https://github.com/stnolting/neorv32\n\n");
+  neorv32_uart0_print("The NEORV32 RISC-V Processor\n"
+                      "(c) Stephan Nolting\n"
+                      "BSD 3-Clause License\n"
+                      "https://github.com/stnolting/neorv32\n\n");
 }
 
 
@@ -571,7 +573,7 @@ void neorv32_rte_print_logo(void) {
     for (v=0; v<4; v++) {
       tmp = logo_data_c[u][v];
       for (w=0; w<32; w++){
-        if (tmp & 0x80000000UL) { // check MSB
+        if (((int32_t)tmp) < 0) { // check MSB
           neorv32_uart0_putc('#');
         }
         else {

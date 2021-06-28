@@ -98,6 +98,11 @@ If you are using the NEORV32 or parts of the project in some kind of publication
 }
 ----
 
+[TIP]
+Each official release of the project (see https://github.com/stnolting/neorv32/releases[releases page]) provides
+a _digital object identifiere_ (**DOI**) provided by https://zenodo.org/.
+
+
 :sectnums!:
 === Acknowledgments
 
@@ -107,6 +112,9 @@ who helped improving this project! ❤️**
 https://riscv.org[RISC-V] - instruction sets want to be free!
 
 
+=== Impressum (Imprint)
+
+See https://github.com/stnolting/neorv32/blob/master/docs/impressum.md[`docs/impressum.md`].
 
 
 

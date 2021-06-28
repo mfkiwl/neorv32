@@ -39,6 +39,9 @@
         <Source name="../../../rtl/core/neorv32_cpu_cp_muldiv.vhd" type="VHDL" type_short="VHDL">
             <Options lib="neorv32"/>
         </Source>
+        <Source name="../../../rtl/core/neorv32_cpu_cp_shifter.vhd" type="VHDL" type_short="VHDL">
+            <Options lib="neorv32"/>
+        </Source>
         <Source name="../../../rtl/core/neorv32_cpu_decompressor.vhd" type="VHDL" type_short="VHDL">
             <Options lib="neorv32"/>
         </Source>
@@ -51,6 +54,9 @@
         <Source name="../../../rtl/core/neorv32_debug_dtm.vhd" type="VHDL" type_short="VHDL">
             <Options lib="neorv32"/>
         </Source>
+        <Source name="../../../rtl/core/neorv32_fifo.vhd" type="VHDL" type_short="VHDL">
+            <Options lib="neorv32"/>
+        </Source>
         <Source name="../../../rtl/core/neorv32_gpio.vhd" type="VHDL" type_short="VHDL">
             <Options lib="neorv32"/>
         </Source>
@@ -58,9 +64,6 @@
             <Options lib="neorv32"/>
         </Source>
         <Source name="../../../rtl/core/neorv32_mtime.vhd" type="VHDL" type_short="VHDL">
-            <Options lib="neorv32"/>
-        </Source>
-        <Source name="../../../rtl/core/neorv32_nco.vhd" type="VHDL" type_short="VHDL">
             <Options lib="neorv32"/>
         </Source>
         <Source name="../../../rtl/core/neorv32_neoled.vhd" type="VHDL" type_short="VHDL">

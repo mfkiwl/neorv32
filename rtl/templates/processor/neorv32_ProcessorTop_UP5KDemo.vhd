@@ -60,7 +60,6 @@ entity neorv32_ProcessorTop_UP5KDemo is
     -- Extension Options --
     FAST_MUL_EN                  : boolean := false;  -- use DSPs for M extension's multiplier
     FAST_SHIFT_EN                : boolean := false;  -- use barrel shifter for shift operations
-    TINY_SHIFT_EN                : boolean := false;  -- use tiny (single-bit) shifter for shift operations
     CPU_CNT_WIDTH                : natural := 34;     -- total width of CPU cycle and instret counters (0..64)
 
     -- Physical Memory Protection (PMP) --
@@ -186,7 +185,6 @@ begin
     -- Extension Options --
     FAST_MUL_EN                  => FAST_MUL_EN,    -- use DSPs for M extension's multiplier
     FAST_SHIFT_EN                => FAST_SHIFT_EN,  -- use barrel shifter for shift operations
-    TINY_SHIFT_EN                => TINY_SHIFT_EN,  -- use tiny (single-bit) shifter for shift operations
     CPU_CNT_WIDTH                => CPU_CNT_WIDTH,  -- total width of CPU cycle and instret counters (0..64)
 
     -- Physical Memory Protection (PMP) --
@@ -229,7 +227,6 @@ begin
     IO_CFS_CONFIG                => x"00000000",    -- custom CFS configuration generic
     IO_CFS_IN_SIZE               => 32,             -- size of CFS input conduit in bits
     IO_CFS_OUT_SIZE              => 32,             -- size of CFS output conduit in bits
-    IO_NCO_EN                    => false,          -- implement numerically-controlled oscillator (NCO)?
     IO_NEOLED_EN                 => false           -- implement NeoPixel-compatible smart LED interface (NEOLED)?
   )
   port map (
@@ -294,9 +291,6 @@ begin
     cfs_in_i    => (others => '0'),              -- custom CFS inputs conduit
     cfs_out_o   => open,                         -- custom CFS outputs conduit
 
-    -- NCO output (available if IO_NCO_EN = true) --
-    nco_o       => open,                         -- numerically-controlled oscillator channels
-
     -- NeoPixel-compatible smart LED interface (available if IO_NEOLED_EN = true) --
     neoled_o    => open,                         -- async serial data line
 
@@ -306,7 +300,6 @@ begin
 
     -- Interrupts --
     nm_irq_i    => '0',                          -- non-maskable interrupt
-    soc_firq_i  => (others => '0'),              -- fast interrupt channels
     mtime_irq_i => '0',                          -- machine timer interrupt, available if IO_MTIME_EN = false
     msw_irq_i   => '0',                          -- machine software interrupt
     mext_irq_i  => '0'                           -- machine external interrupt

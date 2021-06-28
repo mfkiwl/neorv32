@@ -107,7 +107,6 @@ architecture neorv32_tb_simple_rtl of neorv32_tb_simple is
 
   -- irq --
   signal msi_ring, mei_ring, nmi_ring : std_ulogic;
-  signal soc_firq_ring : std_ulogic_vector(5 downto 0);
 
   -- Wishbone bus --
   type wishbone_t is record
@@ -171,10 +170,10 @@ begin
     CPU_EXTENSION_RISCV_Zfinx    => true,          -- implement 32-bit floating-point extension (using INT reg!)
     CPU_EXTENSION_RISCV_Zicsr    => true,          -- implement CSR system?
     CPU_EXTENSION_RISCV_Zifencei => true,          -- implement instruction stream sync.?
+    CPU_EXTENSION_RISCV_Zmmul    => false,         -- implement multiply-only M sub-extension?
     -- Extension Options --
     FAST_MUL_EN                  => false,         -- use DSPs for M extension's multiplier
     FAST_SHIFT_EN                => false,         -- use barrel shifter for shift operations
-    TINY_SHIFT_EN                => false,         -- use tiny (single-bit) shifter for shift operations
     CPU_CNT_WIDTH                => 64,            -- total width of CPU cycle and instret counters (0..64)
     -- Physical Memory Protection (PMP) --
     PMP_NUM_REGIONS              => 5,             -- number of regions (0..64)
@@ -210,7 +209,6 @@ begin
     IO_CFS_CONFIG                => (others => '0'), -- custom CFS configuration generic
     IO_CFS_IN_SIZE               => 32,            -- size of CFS input conduit in bits
     IO_CFS_OUT_SIZE              => 32,            -- size of CFS output conduit in bits
-    IO_NCO_EN                    => true,          -- implement numerically-controlled oscillator (NCO)?
     IO_NEOLED_EN                 => true           -- implement NeoPixel-compatible smart LED interface (NEOLED)?
   )
   port map (
@@ -264,8 +262,6 @@ begin
     -- Custom Functions Subsystem IO --
     cfs_in_i    => (others => '0'), -- custom CFS inputs
     cfs_out_o   => open,            -- custom CFS outputs
-    -- NCO output (available if IO_NCO_EN = true) --
-    nco_o       => open,            -- numerically-controlled oscillator channels
     -- NeoPixel-compatible smart LED interface (available if IO_NEOLED_EN = true) --
     neoled_o    => open,            -- async serial data line
     -- System time --
@@ -273,7 +269,6 @@ begin
     mtime_o     => open,            -- current system time from int. MTIME (if IO_MTIME_EN = true)
     -- Interrupts --
     nm_irq_i    => nmi_ring,        -- non-maskable interrupt
-    soc_firq_i  => soc_firq_ring,   -- fast interrupt channels
     mtime_irq_i => '0',             -- machine software interrupt, available if IO_MTIME_EN = false
     msw_irq_i   => msi_ring,        -- machine software interrupt
     mext_irq_i  => mei_ring         -- machine external interrupt
@@ -283,13 +278,28 @@ begin
   twi_scl <= 'H';
   twi_sda <= 'H';
 
+
+  -- UART Simulation Receiver ---------------------------------------------------------------
+  -- -------------------------------------------------------------------------------------------
   uart0_checker: entity work.uart_rx_simple
-    generic map (
-      name => "uart0",
-      uart_baud_val_c => uart0_baud_val_c)
-    port map (
-      clk => clk_gen,
-      uart_txd => uart0_txd);
+  generic map (
+    name => "uart0",
+    uart_baud_val_c => uart0_baud_val_c
+  )
+  port map (
+    clk => clk_gen,
+    uart_txd => uart0_txd
+  );
+
+  uart1_checker: entity work.uart_rx_simple
+  generic map (
+    name => "uart1",
+    uart_baud_val_c => uart1_baud_val_c
+  )
+  port map (
+    clk => clk_gen,
+    uart_txd => uart1_txd
+  );
 
 
   -- Wishbone Fabric ------------------------------------------------------------------------
@@ -486,21 +496,13 @@ begin
       wb_irq.ack   <= wb_irq.cyc and wb_irq.stb and wb_irq.we and and_reduce_f(wb_irq.sel);
       wb_irq.err   <= '0';
       -- trigger IRQ using CSR.MIE bit layout --
-      nmi_ring      <= '0';
-      msi_ring      <= '0';
-      mei_ring      <= '0';
-      soc_firq_ring <= (others => '0');
+      nmi_ring <= '0';
+      msi_ring <= '0';
+      mei_ring <= '0';
       if ((wb_irq.cyc and wb_irq.stb and wb_irq.we and and_reduce_f(wb_irq.sel)) = '1') then
-        nmi_ring         <= wb_irq.wdata(00); -- non-maskable interrupt
-        msi_ring         <= wb_irq.wdata(03); -- machine software interrupt
-        mei_ring         <= wb_irq.wdata(11); -- machine software interrupt
-        --
-        soc_firq_ring(0) <= wb_irq.wdata(26); -- fast interrupt SoC channel 0 (-> FIRQ channel 10)
-        soc_firq_ring(1) <= wb_irq.wdata(27); -- fast interrupt SoC channel 1 (-> FIRQ channel 11)
-        soc_firq_ring(2) <= wb_irq.wdata(28); -- fast interrupt SoC channel 2 (-> FIRQ channel 12)
-        soc_firq_ring(3) <= wb_irq.wdata(29); -- fast interrupt SoC channel 3 (-> FIRQ channel 13)
-        soc_firq_ring(4) <= wb_irq.wdata(30); -- fast interrupt SoC channel 4 (-> FIRQ channel 14)
-        soc_firq_ring(5) <= wb_irq.wdata(31); -- fast interrupt SoC channel 5 (-> FIRQ channel 15)
+        nmi_ring <= wb_irq.wdata(00); -- non-maskable interrupt
+        msi_ring <= wb_irq.wdata(03); -- machine software interrupt
+        mei_ring <= wb_irq.wdata(11); -- machine software interrupt
       end if;
     end if;
   end process irq_trigger;

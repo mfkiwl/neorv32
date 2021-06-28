@@ -22,7 +22,6 @@ image::neorv32_processor.png[align=center]
 * _optional_ PWM controller with up to 60 channels & 8-bit duty cycle resolution (<<_pulse_width_modulation_controller_pwm,**PWM**>>)
 * _optional_ ring-oscillator-based true random number generator (<<_true_random_number_generator_trng,**TRNG**>>)
 * _optional_ custom functions subsystem for custom co-processor extensions (<<_custom_functions_subsystem_cfs,**CFS**>>)
-* _optional_ numerically-controlled oscillator (<<_numerically_controlled_oscillator_nco,**NCO**>>) with 3 independent channels
 * _optional_ NeoPixel(TM)/WS2812-compatible smart LED interface (<<_smart_led_interface_neoled,**NEOLED**>>)
 * _optional_ on-chip debugger with JTAG TAP (<<_on_chip_debugger_ocd,**OCD**>>)
 * system configuration information memory to check HW configuration via software (<<_system_configuration_information_memory_sysinfo,**SYSINFO**>>)
@@ -94,8 +93,6 @@ A wrapper for the NEORV32 Processor setup providing resolved port signals can be
 | `cfs_out_o` | 32 | out | custom CFS output signal conduit
 4+^| **Pulse-Width Modulation Channels (<<_pulse_width_modulation_controller_pwm,PWM>>)**
 | `pwm_o` | 4 | out | pulse-width modulated channels
-4+^| **Numerically-Controller Oscillator (<<_numerically_controlled_oscillator_nco,NCO>>)**
-| `nco_o` | 3 | out | NCO output channels
 4+^| **Smart LED Interface - NeoPixel(TM) compatible (<<_smart_led_interface_neoled,NEOLED>>)**
 | `neoled_o` | 1 | out | asynchronous serial data output
 4+^| **System time (<<_machine_system_timer_mtime,MTIME>>)**
@@ -103,7 +100,6 @@ A wrapper for the NEORV32 Processor setup providing resolved port signals can be
 | `mtime_o` | 64 | out | machine timer time from _internal MTIME_ unit if processor-internal _MTIME_ unit IS implemented
 4+^| **<<_processor_interrupts>>**
 | `nm_irq_i`    | 1 | in | non-maskable interrupt
-| `soc_firq_i`  | 6 | in | platform fast interrupt channels (custom)
 | `mtime_irq_i` | 1 | in | machine timer interrupt13 (RISC-V)
 | `msw_irq_i`   | 1 | in | machine software interrupt (RISC-V)
 | `mext_irq_i`  | 1 | in | machine external interrupt (RISC-V)
@@ -228,6 +224,7 @@ See section <<_instruction_sets_and_extensions>> for more information.
 |======
 | **CPU_EXTENSION_RISCV_A** | _boolean_ | false
 3+| Implement atomic memory access operations when _true_.
+See section <<_a_atomic_memory_access>>.
 |======
 
 
@@ -239,6 +236,7 @@ See section <<_instruction_sets_and_extensions>> for more information.
 |======
 | **CPU_EXTENSION_RISCV_C** | _boolean_ | false
 3+| Implement compressed instructions (16-bit) when _true_.
+See section <<_c_compressed_instructions>>.
 |======
 
 
@@ -250,6 +248,7 @@ See section <<_instruction_sets_and_extensions>> for more information.
 |======
 | **CPU_EXTENSION_RISCV_E** | _boolean_ | false
 3+| Implement the embedded CPU extension (only implement the first 16 data registers) when _true_.
+See section <<_e_embedded_cpu>>.
 |======
 
 
@@ -261,6 +260,7 @@ See section <<_instruction_sets_and_extensions>> for more information.
 |======
 | **CPU_EXTENSION_RISCV_M** | _boolean_ | false
 3+| Implement integer multiplication and division instructions when _true_.
+See section <<_m_integer_multiplication_and_division>>.
 |======
 
 
@@ -272,6 +272,7 @@ See section <<_instruction_sets_and_extensions>> for more information.
 |======
 | **CPU_EXTENSION_RISCV_U** | _boolean_ | false
 3+| Implement less-privileged user mode when _true_.
+See section <<_u_less_privileged_user_mode>>.
 |======
 
 
@@ -282,8 +283,8 @@ See section <<_instruction_sets_and_extensions>> for more information.
 [frame="all",grid="none"]
 |======
 | **CPU_EXTENSION_RISCV_Zfinx** | _boolean_ | false
-3+| Implement the 32-bit single-precision floating-point extension (using integer registers) when _true_. For
-more information see section <<_zfinx_single_precision_floating_point_operations>>.
+3+| Implement the 32-bit single-precision floating-point extension (using integer registers) when _true_.
+See section <<_zfinx_single_precision_floating_point_operations>>.
 |======
 
 
@@ -297,6 +298,7 @@ more information see section <<_zfinx_single_precision_floating_point_operations
 3+| Implement the control and status register (CSR) access instructions when true. Note: When this option is
 disabled, the complete privileged architecture / trap system will be excluded from synthesis. Hence, no interrupts, no exceptions and
 no machine information will be available.
+See section <<_zicsr_control_and_status_register_access_privileged_architecture>>.
 |======
 
 
@@ -307,8 +309,21 @@ no machine information will be available.
 [frame="all",grid="none"]
 |======
 | **CPU_EXTENSION_RISCV_Zifencei** | _boolean_ | false
-3+| Implement the instruction fetch synchronization instruction _fence.i_. For example, this option is required
+3+| Implement the instruction fetch synchronization instruction `fence.i`. For example, this option is required
 for self-modifying code (and/or for i-cache flushes).
+See section <<_zifencei_instruction_stream_synchronization>>.
+|======
+
+
+:sectnums!:
+===== _CPU_EXTENSION_RISCV_Zmmul_
+
+[cols="4,4,2"]
+[frame="all",grid="none"]
+|======
+| **CPU_EXTENSION_RISCV_Zmmul** | _boolean_ | false
+3+| Implement integer multiplication-only instructions when _true_. This is a sub-extensions of the `M` extension.
+See section <<_zmmul_integer_multiplication>>.
 |======
 
 
@@ -339,21 +354,9 @@ enabled (<<_cpu_extension_riscv_m>> is _true_).
 [frame="all",grid="none"]
 |======
 | **FAST_SHIFT_EN** | _boolean_ | false
-3+| When this generic is enabled the shifter unit of the CPU's ALU is implement as fast barrel shifter (requiring
-more hardware resources).
-|======
-
-
-:sectnums!:
-===== _TINY_SHIFT_EN_
-
-[cols="4,4,2"]
-[frame="all",grid="none"]
-|======
-| **TINY_SHIFT_EN** | _boolean_ | false
-3+| If this generic is enabled the shifter unit of the CPU's ALU is implemented as (slow but tiny) single-bit iterative shifter
-(requires up to 32 clock cycles for a shift operations, but reducing hardware footprint). The configuration of
-this generic is ignored if <<_fast_shift_en>> is _true_.
+3+| When this generic is set _true_ the shifter unit of the CPU's ALU is implemented as fast barrel shifter (requiring
+more hardware resources). If it is set _false_ the CPU uses a serial shifter that only performs a single bit shift per cycle
+(small but slow).
 |======
 
 
@@ -738,18 +741,6 @@ functions subsystem entity. See section <<_custom_functions_subsystem_cfs>> for 
 
 
 :sectnums!:
-===== _IO_NCO_EN_
-
-[cols="4,4,2"]
-[frame="all",grid="none"]
-|======
-| **IO_NCO_EN** | _boolean_ | true
-3+| Implement numerically-controlled oscillator (NCO) when _true_.
-See section <<_numerically_controlled_oscillator_nco>> for more information.
-|======
-
-
-:sectnums!:
 ===== _IO_NEOLED_EN_
 
 [cols="4,4,2"]
@@ -782,11 +773,8 @@ synthesis, the machine timer interrupt is also available via the processor's top
 **NEORV32-Specific Fast Interrupt Requests**
 
 As part of the custom/NEORV32-specific CPU extensions, the CPU features 16 fast interrupt request signals
-(`FIRQ0` – `FIRQ15`).
-
-The fast interrupt request signals are divided into two groups. The FIRQs with higher priority (FIRQ0 –
-FIRQ9) are dedicated for processor-internal usage. The FIRQs with lower priority (FIRQ10 – FIRQ15) are
-available for custom usage via the processor's top entity signal `soc_firq_i`.
+(`FIRQ0` – `FIRQ15`). These are used for _processor-internal_ modules only (for example for the communication
+interfaces to signal "available incoming data" or "ready to send new data").
 
 The mapping of the 16 FIRQ channels is shown in the following table (the channel number corresponds to the FIRQ priority):
 
@@ -805,7 +793,7 @@ The mapping of the 16 FIRQ channels is shown in the following table (the channel
 | 7       | _TWI_ | TWI transmission done interrupt
 | 8       | _GPIO_ | GPIO input pin-change interrupt
 | 9       | _NEOLED_ | NEOLED buffer TX empty / not full interrupt
-| 10:15   | `soc_firq_i(5:0)` | Custom platform use; available via processor's top signal
+| 10:15   | - | _reserved_
 |=======================
 
 **Non-Maskable Interrupt**
@@ -1164,8 +1152,6 @@ include::soc_pwm.adoc[]
 include::soc_trng.adoc[]
 
 include::soc_cfs.adoc[]
-
-include::soc_nco.adoc[]
 
 include::soc_neoled.adoc[]
 

@@ -65,11 +65,11 @@ entity neorv32_top is
     CPU_EXTENSION_RISCV_Zfinx    : boolean := false;  -- implement 32-bit floating-point extension (using INT regs!)
     CPU_EXTENSION_RISCV_Zicsr    : boolean := true;   -- implement CSR system?
     CPU_EXTENSION_RISCV_Zifencei : boolean := false;  -- implement instruction stream sync.?
+    CPU_EXTENSION_RISCV_Zmmul    : boolean := false;  -- implement multiply-only M sub-extension?
 
     -- Extension Options --
     FAST_MUL_EN                  : boolean := false;  -- use DSPs for M extension's multiplier
     FAST_SHIFT_EN                : boolean := false;  -- use barrel shifter for shift operations
-    TINY_SHIFT_EN                : boolean := false;  -- use tiny (single-bit) shifter for shift operations
     CPU_CNT_WIDTH                : natural := 64;     -- total width of CPU cycle and instret counters (0..64)
 
     -- Physical Memory Protection (PMP) --
@@ -112,7 +112,6 @@ entity neorv32_top is
     IO_CFS_CONFIG                : std_ulogic_vector(31 downto 0) := x"00000000"; -- custom CFS configuration generic
     IO_CFS_IN_SIZE               : positive := 32;    -- size of CFS input conduit in bits
     IO_CFS_OUT_SIZE              : positive := 32;    -- size of CFS output conduit in bits
-    IO_NCO_EN                    : boolean := true;   -- implement numerically-controlled oscillator (NCO)?
     IO_NEOLED_EN                 : boolean := true    -- implement NeoPixel-compatible smart LED interface (NEOLED)?
   );
   port (
@@ -177,9 +176,6 @@ entity neorv32_top is
     cfs_in_i    : in  std_ulogic_vector(IO_CFS_IN_SIZE-1  downto 0); -- custom CFS inputs conduit
     cfs_out_o   : out std_ulogic_vector(IO_CFS_OUT_SIZE-1 downto 0); -- custom CFS outputs conduit
 
-    -- NCO output (available if IO_NCO_EN = true) --
-    nco_o       : out std_ulogic_vector(02 downto 0); -- numerically-controlled oscillator channels
-
     -- NeoPixel-compatible smart LED interface (available if IO_NEOLED_EN = true) --
     neoled_o    : out std_ulogic; -- async serial data line
 
@@ -189,7 +185,6 @@ entity neorv32_top is
 
     -- Interrupts --
     nm_irq_i    : in  std_ulogic := '0'; -- non-maskable interrupt
-    soc_firq_i  : in  std_ulogic_vector(5 downto 0) := (others => '0'); -- fast interrupt channels
     mtime_irq_i : in  std_ulogic := '0'; -- machine timer interrupt, available if IO_MTIME_EN = false
     msw_irq_i   : in  std_ulogic := '0'; -- machine software interrupt
     mext_irq_i  : in  std_ulogic := '0'  -- machine external interrupt
@@ -215,7 +210,7 @@ architecture neorv32_top_rtl of neorv32_top is
   signal clk_div    : std_ulogic_vector(11 downto 0);
   signal clk_div_ff : std_ulogic_vector(11 downto 0);
   signal clk_gen    : std_ulogic_vector(07 downto 0);
-  signal clk_gen_en : std_ulogic_vector(08 downto 0);
+  signal clk_gen_en : std_ulogic_vector(07 downto 0);
   --
   signal wdt_cg_en    : std_ulogic;
   signal uart0_cg_en  : std_ulogic;
@@ -224,7 +219,6 @@ architecture neorv32_top_rtl of neorv32_top is
   signal twi_cg_en    : std_ulogic;
   signal pwm_cg_en    : std_ulogic;
   signal cfs_cg_en    : std_ulogic;
-  signal nco_cg_en    : std_ulogic;
   signal neoled_cg_en : std_ulogic;
 
   -- bus interface --
@@ -278,7 +272,7 @@ architecture neorv32_top_rtl of neorv32_top is
 
   -- module response bus - device ID --
   type resp_bus_id_t is (RESP_IMEM, RESP_DMEM, RESP_BOOTROM, RESP_WISHBONE, RESP_GPIO, RESP_MTIME, RESP_UART0, RESP_UART1, RESP_SPI,
-                         RESP_TWI, RESP_PWM, RESP_WDT, RESP_TRNG, RESP_CFS, RESP_NCO, RESP_NEOLED, RESP_SYSINFO, RESP_OCD);
+                         RESP_TWI, RESP_PWM, RESP_WDT, RESP_TRNG, RESP_CFS, RESP_NEOLED, RESP_SYSINFO, RESP_OCD);
 
   -- module response bus --
   type resp_bus_t is array (resp_bus_id_t) of resp_bus_entry_t;
@@ -306,6 +300,25 @@ architecture neorv32_top_rtl of neorv32_top is
   signal bus_keeper_err : std_ulogic; -- bus keeper: bus access timeout
 
 begin
+
+  -- Processor IO/Peripherals Configuration -------------------------------------------------
+  -- -------------------------------------------------------------------------------------------
+  assert false report
+  "NEORV32 PROCESSOR IO Configuration: " &
+  cond_sel_string_f(IO_GPIO_EN, "GPIO ", "") &
+  cond_sel_string_f(IO_MTIME_EN, "MTIME ", "") &
+  cond_sel_string_f(IO_UART0_EN, "UART0 ", "") &
+  cond_sel_string_f(IO_UART1_EN, "UART1 ", "") &
+  cond_sel_string_f(IO_SPI_EN, "SPI ", "") &
+  cond_sel_string_f(IO_TWI_EN, "TWI ", "") &
+  cond_sel_string_f(boolean(IO_PWM_NUM_CH > 0), "PWM ", "") &
+  cond_sel_string_f(IO_WDT_EN, "WDT ", "") &
+  cond_sel_string_f(IO_TRNG_EN, "TRNG ", "") &
+  cond_sel_string_f(IO_CFS_EN, "CFS ", "") &
+  cond_sel_string_f(IO_NEOLED_EN, "NEOLED ", "") &
+  ""
+  severity note;
+
 
   -- Sanity Checks --------------------------------------------------------------------------
   -- -------------------------------------------------------------------------------------------
@@ -378,8 +391,7 @@ begin
       clk_gen_en(4) <= twi_cg_en;
       clk_gen_en(5) <= pwm_cg_en;
       clk_gen_en(6) <= cfs_cg_en;
-      clk_gen_en(7) <= nco_cg_en;
-      clk_gen_en(8) <= neoled_cg_en;
+      clk_gen_en(7) <= neoled_cg_en;
       -- actual clock generator --
       if (or_reduce_f(clk_gen_en) = '1') then
         clk_div <= std_ulogic_vector(unsigned(clk_div) + 1);
@@ -415,6 +427,7 @@ begin
     CPU_EXTENSION_RISCV_Zfinx    => CPU_EXTENSION_RISCV_Zfinx,    -- implement 32-bit floating-point extension (using INT reg!)
     CPU_EXTENSION_RISCV_Zicsr    => CPU_EXTENSION_RISCV_Zicsr,    -- implement CSR system?
     CPU_EXTENSION_RISCV_Zifencei => CPU_EXTENSION_RISCV_Zifencei, -- implement instruction stream sync.?
+    CPU_EXTENSION_RISCV_Zmmul    => CPU_EXTENSION_RISCV_Zmmul,    -- implement multiply-only M sub-extension?
     CPU_EXTENSION_RISCV_DEBUG    => ON_CHIP_DEBUGGER_EN,          -- implement CPU debug mode?
     -- Extension Options --
     FAST_MUL_EN                  => FAST_MUL_EN,         -- use DSPs for M extension's multiplier
@@ -479,7 +492,7 @@ begin
   fence_o  <= cpu_d.fence; -- indicates an executed FENCE operation
   fencei_o <= cpu_i.fence; -- indicates an executed FENCEI operation
 
-  -- fast interrupts - processor-internal --
+  -- fast interrupts --
   fast_irq(00) <= wdt_irq;       -- HIGHEST PRIORITY - watchdog timeout
   fast_irq(01) <= cfs_irq;       -- custom functions subsystem
   fast_irq(02) <= uart0_rxd_irq; -- primary UART (UART0) data received
@@ -491,18 +504,7 @@ begin
   fast_irq(08) <= gpio_irq;      -- GPIO pin-change
   fast_irq(09) <= neoled_irq;    -- NEOLED buffer free
 
-  -- fast interrupts - platform level (for custom use) --
-  soc_firq_sync: process(clk_i)
-  begin
-    if rising_edge(clk_i) then -- make sure they are sync
-      fast_irq(10) <= soc_firq_i(0);
-      fast_irq(11) <= soc_firq_i(1);
-      fast_irq(12) <= soc_firq_i(2);
-      fast_irq(13) <= soc_firq_i(3);
-      fast_irq(14) <= soc_firq_i(4);
-      fast_irq(15) <= soc_firq_i(5);
-    end if;
-  end process soc_firq_sync;
+  fast_irq(15 downto 10) <= (others => '0'); -- reserved
 
   -- CFS IRQ acknowledge --
   cfs_irq_ack <= fast_irq_ack(1);
@@ -1162,37 +1164,6 @@ begin
   end generate;
 
 
-  -- Numerically-Controlled Oscillator (NCO) ------------------------------------------------
-  -- -------------------------------------------------------------------------------------------
-  neorv32_nco_inst_true:
-  if (IO_NCO_EN = true) generate
-    neorv32_nco_inst: neorv32_nco
-    port map (
-      -- host access --
-      clk_i       => clk_i,                    -- global clock line
-      addr_i      => p_bus.addr,               -- address
-      rden_i      => io_rden,                  -- read enable
-      wren_i      => io_wren,                  -- write enable
-      data_i      => p_bus.wdata,              -- data in
-      data_o      => resp_bus(RESP_NCO).rdata, -- data out
-      ack_o       => resp_bus(RESP_NCO).ack,   -- transfer acknowledge
-      -- clock generator --
-      clkgen_en_o => nco_cg_en,                -- enable clock generator
-      clkgen_i    => clk_gen,
-      -- NCO output --
-      nco_o       => nco_o
-    );
-    resp_bus(RESP_NCO).err <= '0'; -- no access error possible
-  end generate;
-
-  neorv32_nco_inst_false:
-  if (IO_NCO_EN = false) generate
-    resp_bus(RESP_NCO) <= resp_bus_entry_terminate_c;
-    nco_cg_en <= '0';
-    nco_o     <= (others => '0');
-  end generate;
-
-
   -- True Random Number Generator (TRNG) ----------------------------------------------------
   -- -------------------------------------------------------------------------------------------
   neorv32_trng_inst_true:
@@ -1285,7 +1256,6 @@ begin
     IO_WDT_EN            => IO_WDT_EN,            -- implement watch dog timer (WDT)?
     IO_TRNG_EN           => IO_TRNG_EN,           -- implement true random number generator (TRNG)?
     IO_CFS_EN            => IO_CFS_EN,            -- implement custom functions subsystem (CFS)?
-    IO_NCO_EN            => IO_NCO_EN,            -- implement numerically-controlled oscillator (NCO)?
     IO_NEOLED_EN         => IO_NEOLED_EN          -- implement NeoPixel-compatible smart LED interface (NEOLED)?
   )
   port map (

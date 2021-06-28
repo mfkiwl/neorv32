@@ -11,7 +11,9 @@
 # The NEORV32 RISC-V Processor
 
 [![license](https://img.shields.io/github/license/stnolting/neorv32?longCache=true&style=flat-square)](https://github.com/stnolting/neorv32/blob/master/LICENSE)
+[![DOI](https://zenodo.org/badge/274442284.svg)](https://zenodo.org/badge/latestdoi/274442284)
 [![release](https://img.shields.io/github/v/release/stnolting/neorv32?longCache=true&style=flat-square&logo=GitHub)](https://github.com/stnolting/neorv32/releases)
+
 [![datasheet (pdf)](https://img.shields.io/badge/data%20sheet-PDF-ffbd00?longCache=true&style=flat-square&logo=asciidoctor)](https://github.com/stnolting/neorv32/releases/tag/nightly)
 [![datasheet (html)](https://img.shields.io/badge/-HTML-ffbd00?longCache=true&style=flat-square)](https://stnolting.github.io/neorv32)
 [![userguide (pdf)](https://img.shields.io/badge/user%20guide-PDF-ffbd00?longCache=true&style=flat-square&logo=asciidoctor)](https://github.com/stnolting/neorv32/releases/tag/nightly)
@@ -120,7 +122,6 @@ for tightly-coupled custom co-processor extensions
 **Advanced**
 
 * _true random_ number generator ([TRNG](https://stnolting.github.io/neorv32/#_true_random_number_generator_trng))
-* numerically-controlled oscillator ([NCO](https://stnolting.github.io/neorv32/#_numerically_controlled_oscillator_nco))
 * on-chip debugger ([OCD](https://stnolting.github.io/neorv32/#_on_chip_debugger_ocd)) via JTGA - implementing
 the [*Minimal RISC-V Debug Specification Version 0.13.2*](https://github.com/riscv/riscv-debug-spec)
 and compatible with the *OpenOCD* and *gdb*
@@ -195,6 +196,7 @@ documentation section). Note that the `X` extension is always enabled.
 [[`Zfinx`](https://stnolting.github.io/neorv32/#_zfinx_single_precision_floating_point_operations)]
 [[`Zicsr`](https://stnolting.github.io/neorv32/#_zicsr_control_and_status_register_access_privileged_architecture)]
 [[`Zifencei`](https://stnolting.github.io/neorv32/#_zifencei_instruction_stream_synchronization)]
+[[`Zmmul`](https://stnolting.github.io/neorv32/#_zmmul_integer_multiplication)]
 [[`PMP`](https://stnolting.github.io/neorv32/#_pmp_physical_memory_protection)]
 [[`HPM`](https://stnolting.github.io/neorv32/#_hpm_hardware_performance_monitors)]**
 
@@ -326,7 +328,8 @@ This overview provides some *quick links* to the most important sections of the
 ### :copyright: Legal
 
 * [Overview](https://stnolting.github.io/neorv32/#_legal) - license, disclaimer, proprietary notice, ...
-* [Citing](https://stnolting.github.io/neorv32/#_citing) - citing information
+* [Citing](https://stnolting.github.io/neorv32/#_citing) - citing information (_DOI_)
+* [Impressum](https://github.com/stnolting/neorv32/blob/master/docs/impressum.md) - imprint (:de:)
 
 [[back to top](#The-NEORV32-RISC-V-Processor)]
 

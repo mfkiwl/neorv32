@@ -87,7 +87,6 @@ begin
     -- Extension Options --
     FAST_MUL_EN                  => false,       -- use DSPs for M extension's multiplier
     FAST_SHIFT_EN                => false,       -- use barrel shifter for shift operations
-    TINY_SHIFT_EN                => false,       -- use tiny (single-bit) shifter for shift operations
     CPU_CNT_WIDTH                => 64,          -- total width of CPU cycle and instret counters (0..64)
     -- Physical Memory Protection (PMP) --
     PMP_NUM_REGIONS              => 0,           -- number of regions (0..64)
@@ -123,7 +122,6 @@ begin
     IO_CFS_CONFIG                => x"00000000", -- custom CFS configuration generic
     IO_CFS_IN_SIZE               => 32,          -- size of CFS input conduit in bits
     IO_CFS_OUT_SIZE              => 32,          -- size of CFS output conduit in bits
-    IO_NCO_EN                    => false,       -- implement numerically-controlled oscillator (NCO)?
     IO_NEOLED_EN                 => false        -- implement NeoPixel-compatible smart LED interface (NEOLED)?
   )
   port map (
@@ -177,8 +175,6 @@ begin
     -- Custom Functions Subsystem IO --
     cfs_in_i    => (others => '0'), -- custom inputs
     cfs_out_o   => open,            -- custom outputs
-    -- NCO output (available if IO_NCO_EN = true) --
-    nco_o       => open,            -- numerically-controlled oscillator channels
     -- NeoPixel-compatible smart LED interface (available if IO_NEOLED_EN = true) --
     neoled_o    => open,            -- async serial data line
     -- System time --
@@ -186,7 +182,6 @@ begin
     mtime_o     => open,            -- current system time from int. MTIME (if IO_MTIME_EN = true)
     -- Interrupts --
     nm_irq_i    => '0',             -- non-maskable interrupt
-    soc_firq_i  => (others => '0'), -- fast interrupt channels
     mtime_irq_i => '0',             -- machine timer interrupt, available if IO_MTIME_EN = false
     msw_irq_i   => '0',             -- machine software interrupt
     mext_irq_i  => '0'              -- machine external interrupt
