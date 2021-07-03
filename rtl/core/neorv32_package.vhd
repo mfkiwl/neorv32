@@ -70,13 +70,14 @@ package neorv32_package is
   -- Architecture Constants (do not modify!) ------------------------------------------------
   -- -------------------------------------------------------------------------------------------
   constant data_width_c   : natural := 32; -- native data path width - do not change!
-  constant hw_version_c   : std_ulogic_vector(31 downto 0) := x"01050708"; -- no touchy!
+  constant hw_version_c   : std_ulogic_vector(31 downto 0) := x"01050710"; -- no touchy!
   constant archid_c       : natural := 19; -- official NEORV32 architecture ID - hands off!
   constant rf_r0_is_reg_c : boolean := true; -- x0 is a *physical register* that has to be initialized to zero by the CPU
 
   -- External Interface Types ---------------------------------------------------------------
   -- -------------------------------------------------------------------------------------------
-  type sdata_8x32_t is array (0 to 7)  of std_ulogic_vector(31 downto 0);
+  type sdata_8x32_t  is array (0 to 7)  of std_ulogic_vector(31 downto 0);
+  type sdata_8x32r_t is array (0 to 7)  of std_logic_vector(31 downto 0); -- resolved type
 
   -- Internal Interface Types ---------------------------------------------------------------
   -- -------------------------------------------------------------------------------------------
@@ -203,19 +204,13 @@ package neorv32_package is
 --constant reserved_base_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff00"; -- base address
 --constant reserved_size_c      : natural := 32*4; -- module's address space size in bytes
 
-  -- reserved --
---constant reserved_base_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff80"; -- base address
---constant reserved_size_c      : natural := 2*4; -- module's address space size in bytes
-
-  -- True Random Number Generator (TRNG) --
-  constant trng_base_c          : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff88"; -- base address
-  constant trng_size_c          : natural := 1*4; -- module's address space size in bytes
-  constant trng_ctrl_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff88";
-
-  -- Watch Dog Timer (WDT) --
-  constant wdt_base_c           : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff8c"; -- base address
-  constant wdt_size_c           : natural := 1*4; -- module's address space size in bytes
-  constant wdt_ctrl_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff8c";
+  -- External Interrupt Controller (XIRQ) --
+  constant xirq_base_c          : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff80"; -- base address
+  constant xirq_size_c          : natural := 4*4; -- module's address space size in bytes
+  constant xirq_enable_addr_c   : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff80";
+  constant xirq_pending_addr_c  : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff84";
+  constant xirq_source_addr_c   : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff88";
+--constant xirq_res_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff8c";
 
   -- Machine System Timer (MTIME) --
   constant mtime_base_c         : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff90"; -- base address
@@ -243,9 +238,15 @@ package neorv32_package is
   constant twi_ctrl_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffffb0";
   constant twi_rtx_addr_c       : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffffb4";
 
-  -- reserved --
---constant reserved_base_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffffb8"; -- base address
---constant reserved_size_c      : natural := 2*4; -- module's address space size in bytes
+  -- True Random Number Generator (TRNG) --
+  constant trng_base_c          : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffffb8"; -- base address
+  constant trng_size_c          : natural := 1*4; -- module's address space size in bytes
+  constant trng_ctrl_addr_c     : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffffb8";
+
+  -- Watch Dog Timer (WDT) --
+  constant wdt_base_c           : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffffbc"; -- base address
+  constant wdt_size_c           : natural := 1*4; -- module's address space size in bytes
+  constant wdt_ctrl_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffffbc";
 
   -- reserved --
   constant gpio_base_c          : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffffc0"; -- base address
@@ -901,25 +902,29 @@ package neorv32_package is
       -- Hardware Performance Monitors (HPM) --
       HPM_NUM_CNTS                 : natural := 0;      -- number of implemented HPM counters (0..29)
       HPM_CNT_WIDTH                : natural := 40;     -- total size of HPM counters (0..64)
-      -- Internal Instruction memory --
+      -- Internal Instruction memory (IMEM) --
       MEM_INT_IMEM_EN              : boolean := true;   -- implement processor-internal instruction memory
       MEM_INT_IMEM_SIZE            : natural := 16*1024; -- size of processor-internal instruction memory in bytes
-      -- Internal Data memory --
+      -- Internal Data memory (DMEM) --
       MEM_INT_DMEM_EN              : boolean := true;   -- implement processor-internal data memory
       MEM_INT_DMEM_SIZE            : natural := 8*1024; -- size of processor-internal data memory in bytes
-      -- Internal Cache memory --
+      -- Internal Cache memory (iCACHE) --
       ICACHE_EN                    : boolean := false;  -- implement instruction cache
       ICACHE_NUM_BLOCKS            : natural := 4;      -- i-cache: number of blocks (min 1), has to be a power of 2
       ICACHE_BLOCK_SIZE            : natural := 64;     -- i-cache: block size in bytes (min 4), has to be a power of 2
       ICACHE_ASSOCIATIVITY         : natural := 1;      -- i-cache: associativity / number of sets (1=direct_mapped), has to be a power of 2
-      -- External memory interface --
+      -- External memory interface (WISHBONE) --
       MEM_EXT_EN                   : boolean := false;  -- implement external memory bus interface?
       MEM_EXT_TIMEOUT              : natural := 255;    -- cycles after a pending bus access auto-terminates (0 = disabled)
-      -- Stream link interface --
+      -- Stream link interface (SLINK) --
       SLINK_NUM_TX                 : natural := 0;      -- number of TX links (0..8)
       SLINK_NUM_RX                 : natural := 0;      -- number of TX links (0..8)
       SLINK_TX_FIFO                : natural := 1;      -- TX fifo depth, has to be a power of two
       SLINK_RX_FIFO                : natural := 1;      -- RX fifo depth, has to be a power of two
+      -- External Interrupts Controller (XIRQ) --
+      XIRQ_NUM_CH                  : natural := 0;      -- number of external IRQ channels (0..32)
+      XIRQ_TRIGGER_TYPE            : std_ulogic_vector(31 downto 0) := (others => '1'); -- trigger type: 0=level, 1=edge
+      XIRQ_TRIGGER_POLARITY        : std_ulogic_vector(31 downto 0) := (others => '1'); -- trigger polarity: 0=low-level/falling-edge, 1=high-level/rising-edge
       -- Processor peripherals --
       IO_GPIO_EN                   : boolean := true;   -- implement general purpose input/output port unit (GPIO)?
       IO_MTIME_EN                  : boolean := true;   -- implement machine system timer (MTIME)?
@@ -1000,7 +1005,9 @@ package neorv32_package is
       -- System time --
       mtime_i        : in  std_ulogic_vector(63 downto 0) := (others => '0'); -- current system time from ext. MTIME (if IO_MTIME_EN = false)
       mtime_o        : out std_ulogic_vector(63 downto 0); -- current system time from int. MTIME (if IO_MTIME_EN = true)
-      -- Interrupts --
+      -- External platform interrupts (available if XIRQ_NUM_CH > 0) --
+      xirq_i         : in  std_ulogic_vector(XIRQ_NUM_CH-1 downto 0) := (others => '0'); -- IRQ channels
+      -- CPU Interrupts --
       nm_irq_i       : in  std_ulogic := '0'; -- non-maskable interrupt
       mtime_irq_i    : in  std_ulogic := '0'; -- machine timer interrupt, available if IO_MTIME_EN = false
       msw_irq_i      : in  std_ulogic := '0'; -- machine software interrupt
@@ -1077,7 +1084,6 @@ package neorv32_package is
       mtime_irq_i    : in  std_ulogic := '0'; -- machine timer interrupt
       -- fast interrupts (custom) --
       firq_i         : in  std_ulogic_vector(15 downto 0) := (others => '0');
-      firq_ack_o     : out std_ulogic_vector(15 downto 0);
       -- debug mode (halt) request --
       db_halt_req_i  : in  std_ulogic := '0'
     );
@@ -1143,7 +1149,6 @@ package neorv32_package is
       mtime_irq_i   : in  std_ulogic; -- machine timer interrupt
       -- fast interrupts (custom) --
       firq_i        : in  std_ulogic_vector(15 downto 0);
-      firq_ack_o    : out std_ulogic_vector(15 downto 0);
       -- system time input from MTIME --
       time_i        : in  std_ulogic_vector(63 downto 0); -- current system time
       -- physical memory protection --
@@ -1754,7 +1759,6 @@ package neorv32_package is
       sleep_i     : in  std_ulogic; -- set if cpu is in sleep mode
       -- interrupt --
       irq_o       : out std_ulogic; -- interrupt request
-      irq_ack_i   : in  std_ulogic; -- interrupt acknowledge
       -- custom io (conduit) --
       cfs_in_i    : in  std_ulogic_vector(CFS_IN_SIZE-1 downto 0);  -- custom inputs
       cfs_out_o   : out std_ulogic_vector(CFS_OUT_SIZE-1 downto 0)  -- custom outputs
@@ -1815,6 +1819,30 @@ package neorv32_package is
     );
   end component;
 
+  -- Component: External Interrupt Controller (XIRQ) ----------------------------------------
+  -- -------------------------------------------------------------------------------------------
+  component neorv32_xirq
+    generic (
+      XIRQ_NUM_CH           : natural := 32; -- number of external IRQ channels (0..32)
+      XIRQ_TRIGGER_TYPE     : std_ulogic_vector(31 downto 0) := (others => '1'); -- trigger type: 0=level, 1=edge
+      XIRQ_TRIGGER_POLARITY : std_ulogic_vector(31 downto 0) := (others => '1')  -- trigger polarity: 0=low-level/falling-edge, 1=high-level/rising-edge
+    );
+    port (
+      -- host access --
+      clk_i     : in  std_ulogic; -- global clock line
+      addr_i    : in  std_ulogic_vector(31 downto 0); -- address
+      rden_i    : in  std_ulogic; -- read enable
+      wren_i    : in  std_ulogic; -- write enable
+      data_i    : in  std_ulogic_vector(31 downto 0); -- data in
+      data_o    : out std_ulogic_vector(31 downto 0); -- data out
+      ack_o     : out std_ulogic; -- transfer acknowledge
+      -- external interrupt lines --
+      xirq_i    : in  std_ulogic_vector(XIRQ_NUM_CH-1 downto 0);
+      -- CPU interrupt --
+      cpu_irq_o : out std_ulogic
+    );
+  end component;
+
   -- Component: System Configuration Information Memory (SYSINFO) ---------------------------
   -- -------------------------------------------------------------------------------------------
   component neorv32_sysinfo
@@ -1850,7 +1878,8 @@ package neorv32_package is
       IO_TRNG_EN           : boolean := true;   -- implement true random number generator (TRNG)?
       IO_CFS_EN            : boolean := true;   -- implement custom functions subsystem (CFS)?
       IO_SLINK_EN          : boolean := true;   -- implement stream link interface?
-      IO_NEOLED_EN         : boolean := true    -- implement NeoPixel-compatible smart LED interface (NEOLED)?
+      IO_NEOLED_EN         : boolean := true;   -- implement NeoPixel-compatible smart LED interface (NEOLED)?
+      IO_XIRQ_NUM_CH       : natural := 32      -- number of external interrupt (XIRQ) channels to implement
     );
     port (
       -- host access --

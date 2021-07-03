@@ -132,7 +132,7 @@ static void __attribute__((__interrupt__)) __attribute__((aligned(16)))  __neorv
   register uint32_t rte_mcause = neorv32_cpu_csr_read(CSR_MCAUSE);
 
   // compute return address
-  if ((rte_mcause & 0x80000000) == 0) { // modify pc only if exception
+  if (((int32_t)rte_mcause) >= 0) { // modify pc only if exception (MSB cleared)
 
     // get low half word of faulting instruction
     register uint32_t rte_trap_inst;
@@ -452,6 +452,7 @@ void neorv32_rte_print_hw_config(void) {
   neorv32_uart0_printf("CFS    - "); __neorv32_rte_print_true_false(tmp & (1 << SYSINFO_FEATURES_IO_CFS));
   neorv32_uart0_printf("SLINK  - "); __neorv32_rte_print_true_false(tmp & (1 << SYSINFO_FEATURES_IO_SLINK));
   neorv32_uart0_printf("NEOLED - "); __neorv32_rte_print_true_false(tmp & (1 << SYSINFO_FEATURES_IO_NEOLED));
+  neorv32_uart0_printf("XIRQ   - "); __neorv32_rte_print_true_false(tmp & (1 << SYSINFO_FEATURES_IO_XIRQ));
 }
 
 

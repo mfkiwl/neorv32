@@ -747,52 +747,22 @@ enum NEORV32_SLINK_CT_enum {
 
 
 /**********************************************************************//**
- * @name IO Device: True Random Number Generator (TRNG)
+ * @name IO Device: External Interrupt Controller (XIRQ)
  **************************************************************************/
 /**@{*/
-/** TRNG base address */
-#define TRNG_BASE (0xFFFFFF88UL) // /**< TRNG base address */
-/** TRNG address space size in bytes */
-#define TRNG_SIZE (1*4) // /**< TRNG address space size in bytes */
+/** XIRQ base address */
+#define XIRQ_BASE (0xFFFFFF80UL) // /**< XIRQ base address */
+/** XIRQ address space size in bytes */
+#define XIRQ_SIZE (4*4) // /**< XIRQ address space size in bytes */
 
-/** TRNG control/data register (r/w) */
-#define TRNG_CT (*(IO_REG32 (TRNG_BASE + 0)))
-
-/** TRNG control/data register bits */
-enum NEORV32_TRNG_CT_enum {
-  TRNG_CT_DATA_LSB =  0, /**< TRNG data/control register(0)  (r/-): Random data byte LSB */
-  TRNG_CT_DATA_MSB =  7, /**< TRNG data/control register(7)  (r/-): Random data byte MSB */
-
-  TRNG_CT_EN       = 30, /**< TRNG data/control register(30) (r/w): TRNG enable */
-  TRNG_CT_VALID    = 31  /**< TRNG data/control register(31) (r/-): Random data output valid */
-};
-/**@}*/
-
-
-/**********************************************************************//**
- * @name IO Device: Watchdog Timer (WDT)
- **************************************************************************/
-/**@{*/
-/** WDT base address */
-#define WDT_BASE (0xFFFFFF8CUL) // /**< WDT base address */
-/** WDT address space size in bytes */
-#define WDT_SIZE (1*4) // /**< WDT address space size in bytes */
-
-/** Watchdog control register (r/w) */
-#define WDT_CT (*(IO_REG32 (WDT_BASE + 0)))
-
-/** WTD control register bits */
-enum NEORV32_WDT_CT_enum {
-  WDT_CT_EN       = 0, /**< WDT control register(0) (r/w): Watchdog enable */
-  WDT_CT_CLK_SEL0 = 1, /**< WDT control register(1) (r/w): Clock prescaler select bit 0 */
-  WDT_CT_CLK_SEL1 = 2, /**< WDT control register(2) (r/w): Clock prescaler select bit 1 */
-  WDT_CT_CLK_SEL2 = 3, /**< WDT control register(3) (r/w): Clock prescaler select bit 2 */
-  WDT_CT_MODE     = 4, /**< WDT control register(4) (r/w): Watchdog mode: 0=timeout causes interrupt, 1=timeout causes processor reset */
-  WDT_CT_RCAUSE   = 5, /**< WDT control register(5) (r/-): Cause of last system reset: 0=external reset, 1=watchdog */
-  WDT_CT_RESET    = 6, /**< WDT control register(6) (-/w): Reset WDT counter when set, auto-clears */
-  WDT_CT_FORCE    = 7, /**< WDT control register(7) (-/w): Force WDT action, auto-clears */
-  WDT_CT_LOCK     = 8  /**< WDT control register(8) (r/w): Lock write access to control register, clears on reset (HW or WDT) only */
-};
+/** XIRQ IRQ input enable register (r/w) */
+#define XIRQ_IER (*(IO_REG32 (XIRQ_BASE + 0)))
+/** XIRQ pending IRQ register /ack/clear (r/w) */
+#define XIRQ_IPR (*(IO_REG32 (XIRQ_BASE + 4)))
+/** EXTIRW  (time compare register) low word (r/w) */
+#define XIRQ_SCR (*(IO_REG32 (XIRQ_BASE + 8)))
+// reserved
+//#define XIRQ_reserved (*(IO_REG32 (XIRQ_BASE + 12)))
 /**@}*/
 
 
@@ -978,6 +948,56 @@ enum NEORV32_TWI_DATA_enum {
 
 
 /**********************************************************************//**
+ * @name IO Device: True Random Number Generator (TRNG)
+ **************************************************************************/
+/**@{*/
+/** TRNG base address */
+#define TRNG_BASE (0xFFFFFFB8UL) // /**< TRNG base address */
+/** TRNG address space size in bytes */
+#define TRNG_SIZE (1*4) // /**< TRNG address space size in bytes */
+
+/** TRNG control/data register (r/w) */
+#define TRNG_CT (*(IO_REG32 (TRNG_BASE + 0)))
+
+/** TRNG control/data register bits */
+enum NEORV32_TRNG_CT_enum {
+  TRNG_CT_DATA_LSB =  0, /**< TRNG data/control register(0)  (r/-): Random data byte LSB */
+  TRNG_CT_DATA_MSB =  7, /**< TRNG data/control register(7)  (r/-): Random data byte MSB */
+
+  TRNG_CT_EN       = 30, /**< TRNG data/control register(30) (r/w): TRNG enable */
+  TRNG_CT_VALID    = 31  /**< TRNG data/control register(31) (r/-): Random data output valid */
+};
+/**@}*/
+
+
+/**********************************************************************//**
+ * @name IO Device: Watchdog Timer (WDT)
+ **************************************************************************/
+/**@{*/
+/** WDT base address */
+#define WDT_BASE (0xFFFFFFBCUL) // /**< WDT base address */
+/** WDT address space size in bytes */
+#define WDT_SIZE (1*4) // /**< WDT address space size in bytes */
+
+/** Watchdog control register (r/w) */
+#define WDT_CT (*(IO_REG32 (WDT_BASE + 0)))
+
+/** WTD control register bits */
+enum NEORV32_WDT_CT_enum {
+  WDT_CT_EN       = 0, /**< WDT control register(0) (r/w): Watchdog enable */
+  WDT_CT_CLK_SEL0 = 1, /**< WDT control register(1) (r/w): Clock prescaler select bit 0 */
+  WDT_CT_CLK_SEL1 = 2, /**< WDT control register(2) (r/w): Clock prescaler select bit 1 */
+  WDT_CT_CLK_SEL2 = 3, /**< WDT control register(3) (r/w): Clock prescaler select bit 2 */
+  WDT_CT_MODE     = 4, /**< WDT control register(4) (r/w): Watchdog mode: 0=timeout causes interrupt, 1=timeout causes processor reset */
+  WDT_CT_RCAUSE   = 5, /**< WDT control register(5) (r/-): Cause of last system reset: 0=external reset, 1=watchdog */
+  WDT_CT_RESET    = 6, /**< WDT control register(6) (-/w): Reset WDT counter when set, auto-clears */
+  WDT_CT_FORCE    = 7, /**< WDT control register(7) (-/w): Force WDT action, auto-clears */
+  WDT_CT_LOCK     = 8  /**< WDT control register(8) (r/w): Lock write access to control register, clears on reset (HW or WDT) only */
+};
+/**@}*/
+
+
+/**********************************************************************//**
  * @name IO Device: General Purpose Input/Output Port Unit (GPIO)
  **************************************************************************/
 /**@{*/
@@ -1104,9 +1124,10 @@ enum NEORV32_NEOLED_CT_enum {
   SYSINFO_FEATURES_IO_WDT           = 22, /**< SYSINFO_FEATURES (22) (r/-): Watchdog timer implemented when 1 (via IO_WDT_EN generic) */
   SYSINFO_FEATURES_IO_CFS           = 23, /**< SYSINFO_FEATURES (23) (r/-): Custom functions subsystem implemented when 1 (via IO_CFS_EN generic) */
   SYSINFO_FEATURES_IO_TRNG          = 24, /**< SYSINFO_FEATURES (24) (r/-): True random number generator implemented when 1 (via IO_TRNG_EN generic) */
-  SYSINFO_FEATURES_IO_SLINK         = 25, /**< SYSINFO_FEATURES (24) (r/-): Stream link interface implemented when 1 (via SLINK_NUM_RX & SLINK_NUM_TX generics) */
+  SYSINFO_FEATURES_IO_SLINK         = 25, /**< SYSINFO_FEATURES (25) (r/-): Stream link interface implemented when 1 (via SLINK_NUM_RX & SLINK_NUM_TX generics) */
   SYSINFO_FEATURES_IO_UART1         = 26, /**< SYSINFO_FEATURES (26) (r/-): Secondary universal asynchronous receiver/transmitter 1 implemented when 1 (via IO_UART1_EN generic) */
-  SYSINFO_FEATURES_IO_NEOLED        = 27  /**< SYSINFO_FEATURES (27) (r/-): NeoPixel-compatible smart LED interface implemented when 1 (via IO_NEOLED_EN generic) */
+  SYSINFO_FEATURES_IO_NEOLED        = 27, /**< SYSINFO_FEATURES (27) (r/-): NeoPixel-compatible smart LED interface implemented when 1 (via IO_NEOLED_EN generic) */
+  SYSINFO_FEATURES_IO_XIRQ          = 28  /**< SYSINFO_FEATURES (28) (r/-): External interrupt controller implemented when 1 (via XIRQ_NUM_IO generic) */
 };
 
 /**********************************************************************//**
@@ -1159,6 +1180,7 @@ enum NEORV32_NEOLED_CT_enum {
 #include "neorv32_twi.h"
 #include "neorv32_uart.h"
 #include "neorv32_wdt.h"
+#include "neorv32_xirq.h"
 
 
 #ifdef __cplusplus
