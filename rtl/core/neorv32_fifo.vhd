@@ -44,13 +44,14 @@ entity neorv32_fifo is
     FIFO_DEPTH : natural := 4;     -- number of fifo entries; has to be a power of two; min 1
     FIFO_WIDTH : natural := 32;    -- size of data elements in fifo
     FIFO_RSYNC : boolean := false; -- false = async read; true = sync read
-    FIFO_SAFE  : boolean := false  -- true = allow read/write only if data available
+    FIFO_SAFE  : boolean := false  -- true = allow read/write only if entry available
   );
   port (
     -- control --
     clk_i   : in  std_ulogic; -- clock, rising edge
     rstn_i  : in  std_ulogic; -- async reset, low-active
     clear_i : in  std_ulogic; -- sync reset, high-active
+    level_o : out std_ulogic_vector(index_size_f(FIFO_DEPTH) downto 0); -- fill level
     -- write port --
     wdata_i : in  std_ulogic_vector(FIFO_WIDTH-1 downto 0); -- write data
     we_i    : in  std_ulogic; -- write enable
@@ -71,7 +72,9 @@ architecture neorv32_fifo_rtl of neorv32_fifo is
     re    : std_ulogic; -- read enable
     w_pnt : std_ulogic_vector(index_size_f(FIFO_DEPTH) downto 0); -- write pointer
     r_pnt : std_ulogic_vector(index_size_f(FIFO_DEPTH) downto 0); -- read pointer
+    level : std_ulogic_vector(index_size_f(FIFO_DEPTH) downto 0); -- fill count
     data  : fifo_data_t; -- fifo memory
+    datas : std_ulogic_vector(FIFO_WIDTH-1 downto 0);
     match : std_ulogic;
     empty : std_ulogic;
     full  : std_ulogic;
@@ -118,13 +121,15 @@ begin
   end process fifo_control;
 
   -- status --
-  fifo.match <= '1' when (fifo.r_pnt(fifo.r_pnt'left-1 downto 0) = fifo.w_pnt(fifo.w_pnt'left-1 downto 0))  else '0';
+  fifo.match <= '1' when (fifo.r_pnt(fifo.r_pnt'left-1 downto 0) = fifo.w_pnt(fifo.w_pnt'left-1 downto 0)) or (FIFO_DEPTH = 1) else '0';
   fifo.full  <= '1' when (fifo.r_pnt(fifo.r_pnt'left) /= fifo.w_pnt(fifo.w_pnt'left)) and (fifo.match = '1') else '0';
   fifo.empty <= '1' when (fifo.r_pnt(fifo.r_pnt'left)  = fifo.w_pnt(fifo.w_pnt'left)) and (fifo.match = '1') else '0';
   fifo.free  <= not fifo.full;
   fifo.avail <= not fifo.empty;
+  fifo.level <= std_ulogic_vector(to_unsigned(FIFO_DEPTH, fifo.level'length)) when (fifo.full = '1') else std_ulogic_vector(unsigned(fifo.w_pnt) - unsigned(fifo.r_pnt));
 
   -- status output --
+  level_o <= fifo.level;
   free_o  <= fifo.free;
   avail_o <= fifo.avail;
 
@@ -135,7 +140,11 @@ begin
   begin
     if rising_edge(clk_i) then
       if (fifo.we = '1') then
-        fifo.data(to_integer(unsigned(fifo.w_pnt(fifo.w_pnt'left-1 downto 0)))) <= wdata_i;
+        if (FIFO_DEPTH = 1) then
+          fifo.datas <= wdata_i;
+        else
+          fifo.data(to_integer(unsigned(fifo.w_pnt(fifo.w_pnt'left-1 downto 0)))) <= wdata_i;
+        end if;
       end if;
     end if;
   end process fifo_memory_write;
@@ -143,7 +152,7 @@ begin
   -- asynchronous read --
   fifo_read_async:
   if (FIFO_RSYNC = false) generate
-    rdata_o <= fifo.data(to_integer(unsigned(fifo.r_pnt(fifo.r_pnt'left-1 downto 0))));
+    rdata_o <= fifo.datas when (FIFO_DEPTH = 1) else fifo.data(to_integer(unsigned(fifo.r_pnt(fifo.r_pnt'left-1 downto 0))));
   end generate;
 
   -- synchronous read --
@@ -153,7 +162,11 @@ begin
     begin
       if rising_edge(clk_i) then
         if (fifo.re = '1') then
-          rdata_o <= fifo.data(to_integer(unsigned(fifo.r_pnt(fifo.r_pnt'left-1 downto 0))));
+          if (FIFO_DEPTH = 1) then
+            rdata_o <= fifo.datas;
+          else
+            rdata_o <= fifo.data(to_integer(unsigned(fifo.r_pnt(fifo.r_pnt'left-1 downto 0))));
+          end if;
         end if;
       end if;
     end process fifo_memory_read;

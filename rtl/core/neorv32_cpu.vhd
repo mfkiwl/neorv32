@@ -74,6 +74,7 @@ entity neorv32_cpu is
     FAST_MUL_EN                  : boolean := false; -- use DSPs for M extension's multiplier
     FAST_SHIFT_EN                : boolean := false; -- use barrel shifter for shift operations
     CPU_CNT_WIDTH                : natural := 64;    -- total width of CPU cycle and instret counters (0..64)
+    CPU_IPB_ENTRIES              : natural := 2;     -- entries is instruction prefetch buffer, has to be a power of 2
     -- Physical Memory Protection (PMP) --
     PMP_NUM_REGIONS              : natural := 0;     -- number of regions (0..64)
     PMP_MIN_GRANULARITY          : natural := 64*1024; -- minimal region granularity in bytes, has to be a power of 2, min 8 bytes
@@ -83,45 +84,45 @@ entity neorv32_cpu is
   );
   port (
     -- global control --
-    clk_i          : in  std_ulogic := '0'; -- global clock, rising edge
-    rstn_i         : in  std_ulogic := '0'; -- global reset, low-active, async
+    clk_i          : in  std_ulogic; -- global clock, rising edge
+    rstn_i         : in  std_ulogic; -- global reset, low-active, async
     sleep_o        : out std_ulogic; -- cpu is in sleep mode when set
     -- instruction bus interface --
     i_bus_addr_o   : out std_ulogic_vector(data_width_c-1 downto 0); -- bus access address
-    i_bus_rdata_i  : in  std_ulogic_vector(data_width_c-1 downto 0) := (others => '0'); -- bus read data
+    i_bus_rdata_i  : in  std_ulogic_vector(data_width_c-1 downto 0); -- bus read data
     i_bus_wdata_o  : out std_ulogic_vector(data_width_c-1 downto 0); -- bus write data
     i_bus_ben_o    : out std_ulogic_vector(03 downto 0); -- byte enable
     i_bus_we_o     : out std_ulogic; -- write enable
     i_bus_re_o     : out std_ulogic; -- read enable
     i_bus_lock_o   : out std_ulogic; -- exclusive access request
-    i_bus_ack_i    : in  std_ulogic := '0'; -- bus transfer acknowledge
-    i_bus_err_i    : in  std_ulogic := '0'; -- bus transfer error
+    i_bus_ack_i    : in  std_ulogic; -- bus transfer acknowledge
+    i_bus_err_i    : in  std_ulogic; -- bus transfer error
     i_bus_fence_o  : out std_ulogic; -- executed FENCEI operation
     i_bus_priv_o   : out std_ulogic_vector(1 downto 0); -- privilege level
     -- data bus interface --
     d_bus_addr_o   : out std_ulogic_vector(data_width_c-1 downto 0); -- bus access address
-    d_bus_rdata_i  : in  std_ulogic_vector(data_width_c-1 downto 0) := (others => '0'); -- bus read data
+    d_bus_rdata_i  : in  std_ulogic_vector(data_width_c-1 downto 0); -- bus read data
     d_bus_wdata_o  : out std_ulogic_vector(data_width_c-1 downto 0); -- bus write data
     d_bus_ben_o    : out std_ulogic_vector(03 downto 0); -- byte enable
     d_bus_we_o     : out std_ulogic; -- write enable
     d_bus_re_o     : out std_ulogic; -- read enable
     d_bus_lock_o   : out std_ulogic; -- exclusive access request
-    d_bus_ack_i    : in  std_ulogic := '0'; -- bus transfer acknowledge
-    d_bus_err_i    : in  std_ulogic := '0'; -- bus transfer error
+    d_bus_ack_i    : in  std_ulogic; -- bus transfer acknowledge
+    d_bus_err_i    : in  std_ulogic; -- bus transfer error
     d_bus_fence_o  : out std_ulogic; -- executed FENCE operation
     d_bus_priv_o   : out std_ulogic_vector(1 downto 0); -- privilege level
     -- system time input from MTIME --
-    time_i         : in  std_ulogic_vector(63 downto 0) := (others => '0'); -- current system time
+    time_i         : in  std_ulogic_vector(63 downto 0); -- current system time
     -- non-maskable interrupt --
-    nm_irq_i       : in  std_ulogic := '0'; -- NMI
+    nm_irq_i       : in  std_ulogic; -- NMI
     -- interrupts (risc-v compliant) --
-    msw_irq_i      : in  std_ulogic := '0'; -- machine software interrupt
-    mext_irq_i     : in  std_ulogic := '0'; -- machine external interrupt
-    mtime_irq_i    : in  std_ulogic := '0'; -- machine timer interrupt
+    msw_irq_i      : in  std_ulogic;-- machine software interrupt
+    mext_irq_i     : in  std_ulogic;-- machine external interrupt
+    mtime_irq_i    : in  std_ulogic;-- machine timer interrupt
     -- fast interrupts (custom) --
-    firq_i         : in  std_ulogic_vector(15 downto 0) := (others => '0');
+    firq_i         : in  std_ulogic_vector(15 downto 0);
     -- debug mode (halt) request --
-    db_halt_req_i  : in  std_ulogic := '0'
+    db_halt_req_i  : in  std_ulogic
   );
 end neorv32_cpu;
 
@@ -194,7 +195,7 @@ begin
   assert not ((CPU_EXTENSION_RISCV_Zicsr = false) and (CPU_EXTENSION_RISCV_U = true)) report "NEORV32 CPU CONFIG ERROR! User mode requires <CPU_EXTENSION_RISCV_Zicsr> extension to be enabled." severity error;
 
   -- Instruction prefetch buffer size --
-  assert not (is_power_of_two_f(ipb_entries_c) = false) report "NEORV32 CPU CONFIG ERROR! Number of entries in instruction prefetch buffer <ipb_entries_c> has to be a power of two." severity error;
+  assert not (is_power_of_two_f(CPU_IPB_ENTRIES) = false) report "NEORV32 CPU CONFIG ERROR! Number of entries in instruction prefetch buffer <CPU_IPB_ENTRIES> has to be a power of two." severity error;
 
   -- Co-processor timeout counter (for debugging only) --
   assert not (cp_timeout_en_c = true) report "NEORV32 CPU CONFIG WARNING! Co-processor timeout counter enabled. This should be used for debugging/simulation only." severity warning;
@@ -240,6 +241,7 @@ begin
     CPU_EXTENSION_RISCV_DEBUG    => CPU_EXTENSION_RISCV_DEBUG,    -- implement CPU debug mode?
     -- Extension Options --
     CPU_CNT_WIDTH                => CPU_CNT_WIDTH,                -- total width of CPU cycle and instret counters (0..64)
+    CPU_IPB_ENTRIES              => CPU_IPB_ENTRIES,              -- entries is instruction prefetch buffer, has to be a power of 2
     -- Physical memory protection (PMP) --
     PMP_NUM_REGIONS              => PMP_NUM_REGIONS,              -- number of regions (0..64)
     PMP_MIN_GRANULARITY          => PMP_MIN_GRANULARITY,          -- minimal region granularity in bytes, has to be a power of 2, min 8 bytes

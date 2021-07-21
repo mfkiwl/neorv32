@@ -50,7 +50,6 @@ package neorv32_package is
   constant wb_rx_buffer_c  : boolean := true;  -- use register buffer for RX data when true (default)
 
   -- CPU core --
-  constant ipb_entries_c     : natural := 4; -- entries in CPU instruction prefetch buffer, has to be a power of 2, default=2
   constant cp_timeout_en_c   : boolean := false; -- auto-terminate pending co-processor operations after 256 cycles (for debugging only), default = false
   constant dedicated_reset_c : boolean := false; -- use dedicated hardware reset value for UNCRITICAL registers (FALSE=reset value is irrelevant (might simplify HW), default; TRUE=defined LOW reset value)
 
@@ -70,7 +69,7 @@ package neorv32_package is
   -- Architecture Constants (do not modify!) ------------------------------------------------
   -- -------------------------------------------------------------------------------------------
   constant data_width_c   : natural := 32; -- native data path width - do not change!
-  constant hw_version_c   : std_ulogic_vector(31 downto 0) := x"01050710"; -- no touchy!
+  constant hw_version_c   : std_ulogic_vector(31 downto 0) := x"01050715"; -- no touchy!
   constant archid_c       : natural := 19; -- official NEORV32 architecture ID - hands off!
   constant rf_r0_is_reg_c : boolean := true; -- x0 is a *physical register* that has to be initialized to zero by the CPU
 
@@ -876,10 +875,10 @@ package neorv32_package is
   component neorv32_top
     generic (
       -- General --
-      CLOCK_FREQUENCY              : natural := 0;      -- clock frequency of clk_i in Hz
+      CLOCK_FREQUENCY              : natural;           -- clock frequency of clk_i in Hz
       USER_CODE                    : std_ulogic_vector(31 downto 0) := x"00000000"; -- custom user code
       HW_THREAD_ID                 : natural := 0;      -- hardware thread id (32-bit)
-      INT_BOOTLOADER_EN            : boolean := true;   -- boot configuration: true = boot explicit bootloader; false = boot from int/ext (I)MEM
+      INT_BOOTLOADER_EN            : boolean := false;  -- boot configuration: true = boot explicit bootloader; false = boot from int/ext (I)MEM
       -- On-Chip Debugger (OCD) --
       ON_CHIP_DEBUGGER_EN          : boolean := false;  -- implement on-chip debugger
       -- RISC-V CPU Extensions --
@@ -891,11 +890,12 @@ package neorv32_package is
       CPU_EXTENSION_RISCV_Zfinx    : boolean := false;  -- implement 32-bit floating-point extension (using INT regs!)
       CPU_EXTENSION_RISCV_Zicsr    : boolean := true;   -- implement CSR system?
       CPU_EXTENSION_RISCV_Zifencei : boolean := false;  -- implement instruction stream sync.?
-      CPU_EXTENSION_RISCV_Zmmul    : boolean := false; -- implement multiply-only M sub-extension?
+      CPU_EXTENSION_RISCV_Zmmul    : boolean := false;  -- implement multiply-only M sub-extension?
       -- Extension Options --
       FAST_MUL_EN                  : boolean := false;  -- use DSPs for M extension's multiplier
       FAST_SHIFT_EN                : boolean := false;  -- use barrel shifter for shift operations
       CPU_CNT_WIDTH                : natural := 64;     -- total width of CPU cycle and instret counters (0..64)
+      CPU_IPB_ENTRIES              : natural := 2;      -- entries is instruction prefetch buffer, has to be a power of 2
       -- Physical Memory Protection (PMP) --
       PMP_NUM_REGIONS              : natural := 0;      -- number of regions (0..64)
       PMP_MIN_GRANULARITY          : natural := 64*1024; -- minimal region granularity in bytes, has to be a power of 2, min 8 bytes
@@ -903,10 +903,10 @@ package neorv32_package is
       HPM_NUM_CNTS                 : natural := 0;      -- number of implemented HPM counters (0..29)
       HPM_CNT_WIDTH                : natural := 40;     -- total size of HPM counters (0..64)
       -- Internal Instruction memory (IMEM) --
-      MEM_INT_IMEM_EN              : boolean := true;   -- implement processor-internal instruction memory
+      MEM_INT_IMEM_EN              : boolean := false;  -- implement processor-internal instruction memory
       MEM_INT_IMEM_SIZE            : natural := 16*1024; -- size of processor-internal instruction memory in bytes
       -- Internal Data memory (DMEM) --
-      MEM_INT_DMEM_EN              : boolean := true;   -- implement processor-internal data memory
+      MEM_INT_DMEM_EN              : boolean := false;  -- implement processor-internal data memory
       MEM_INT_DMEM_SIZE            : natural := 8*1024; -- size of processor-internal data memory in bytes
       -- Internal Cache memory (iCACHE) --
       ICACHE_EN                    : boolean := false;  -- implement instruction cache
@@ -926,92 +926,93 @@ package neorv32_package is
       XIRQ_TRIGGER_TYPE            : std_ulogic_vector(31 downto 0) := (others => '1'); -- trigger type: 0=level, 1=edge
       XIRQ_TRIGGER_POLARITY        : std_ulogic_vector(31 downto 0) := (others => '1'); -- trigger polarity: 0=low-level/falling-edge, 1=high-level/rising-edge
       -- Processor peripherals --
-      IO_GPIO_EN                   : boolean := true;   -- implement general purpose input/output port unit (GPIO)?
-      IO_MTIME_EN                  : boolean := true;   -- implement machine system timer (MTIME)?
-      IO_UART0_EN                  : boolean := true;   -- implement primary universal asynchronous receiver/transmitter (UART0)?
-      IO_UART1_EN                  : boolean := true;   -- implement secondary universal asynchronous receiver/transmitter (UART1)?
-      IO_SPI_EN                    : boolean := true;   -- implement serial peripheral interface (SPI)?
-      IO_TWI_EN                    : boolean := true;   -- implement two-wire interface (TWI)?
-      IO_PWM_NUM_CH                : natural := 4;      -- number of PWM channels to implement (0..60); 0 = disabled
-      IO_WDT_EN                    : boolean := true;   -- implement watch dog timer (WDT)?
+      IO_GPIO_EN                   : boolean := false;  -- implement general purpose input/output port unit (GPIO)?
+      IO_MTIME_EN                  : boolean := false;  -- implement machine system timer (MTIME)?
+      IO_UART0_EN                  : boolean := false;  -- implement primary universal asynchronous receiver/transmitter (UART0)?
+      IO_UART1_EN                  : boolean := false;  -- implement secondary universal asynchronous receiver/transmitter (UART1)?
+      IO_SPI_EN                    : boolean := false;  -- implement serial peripheral interface (SPI)?
+      IO_TWI_EN                    : boolean := false;  -- implement two-wire interface (TWI)?
+      IO_PWM_NUM_CH                : natural := 0;      -- number of PWM channels to implement (0..60); 0 = disabled
+      IO_WDT_EN                    : boolean := false;  -- implement watch dog timer (WDT)?
       IO_TRNG_EN                   : boolean := false;  -- implement true random number generator (TRNG)?
       IO_CFS_EN                    : boolean := false;  -- implement custom functions subsystem (CFS)?
-      IO_CFS_CONFIG                : std_ulogic_vector(31 downto 0) := x"00000000"; -- custom CFS configuration generic
+      IO_CFS_CONFIG                : std_ulogic_vector(31 downto 0) := (others => 'U'); -- custom CFS configuration generic
       IO_CFS_IN_SIZE               : positive := 32;    -- size of CFS input conduit in bits
       IO_CFS_OUT_SIZE              : positive := 32;    -- size of CFS output conduit in bits
-      IO_NEOLED_EN                 : boolean := true    -- implement NeoPixel-compatible smart LED interface (NEOLED)?
+      IO_NEOLED_EN                 : boolean := false;  -- implement NeoPixel-compatible smart LED interface (NEOLED)?
+      IO_NEOLED_TX_FIFO            : natural := 1       -- NEOLED TX FIFO depth, 1..32k, has to be a power of two
     );
     port (
       -- Global control --
-      clk_i          : in  std_ulogic := '0'; -- global clock, rising edge
-      rstn_i         : in  std_ulogic := '0'; -- global reset, low-active, async
+      clk_i          : in  std_ulogic; -- global clock, rising edge
+      rstn_i         : in  std_ulogic; -- global reset, low-active, async
       -- JTAG on-chip debugger interface --
-      jtag_trst_i    : in  std_ulogic := '0'; -- low-active TAP reset (optional)
-      jtag_tck_i     : in  std_ulogic := '0'; -- serial clock
-      jtag_tdi_i     : in  std_ulogic := '0'; -- serial data input
+      jtag_trst_i    : in  std_ulogic := 'U'; -- low-active TAP reset (optional)
+      jtag_tck_i     : in  std_ulogic := 'U'; -- serial clock
+      jtag_tdi_i     : in  std_ulogic := 'U'; -- serial data input
       jtag_tdo_o     : out std_ulogic;        -- serial data output
-      jtag_tms_i     : in  std_ulogic := '0'; -- mode select
+      jtag_tms_i     : in  std_ulogic := 'U'; -- mode select
       -- Wishbone bus interface (available if MEM_EXT_EN = true) --
       wb_tag_o       : out std_ulogic_vector(02 downto 0); -- request tag
       wb_adr_o       : out std_ulogic_vector(31 downto 0); -- address
-      wb_dat_i       : in  std_ulogic_vector(31 downto 0) := (others => '0'); -- read data
+      wb_dat_i       : in  std_ulogic_vector(31 downto 0) := (others => 'U'); -- read data
       wb_dat_o       : out std_ulogic_vector(31 downto 0); -- write data
       wb_we_o        : out std_ulogic; -- read/write
       wb_sel_o       : out std_ulogic_vector(03 downto 0); -- byte enable
       wb_stb_o       : out std_ulogic; -- strobe
       wb_cyc_o       : out std_ulogic; -- valid cycle
       wb_lock_o      : out std_ulogic; -- exclusive access request
-      wb_ack_i       : in  std_ulogic := '0'; -- transfer acknowledge
-      wb_err_i       : in  std_ulogic := '0'; -- transfer error
+      wb_ack_i       : in  std_ulogic := 'L'; -- transfer acknowledge
+      wb_err_i       : in  std_ulogic := 'L'; -- transfer error
       -- Advanced memory control signals (available if MEM_EXT_EN = true) --
       fence_o        : out std_ulogic; -- indicates an executed FENCE operation
       fencei_o       : out std_ulogic; -- indicates an executed FENCEI operation
       -- TX stream interfaces (available if SLINK_NUM_TX > 0) --
       slink_tx_dat_o : out sdata_8x32_t; -- output data
       slink_tx_val_o : out std_ulogic_vector(7 downto 0); -- valid output
-      slink_tx_rdy_i : in  std_ulogic_vector(7 downto 0) := (others => '0'); -- ready to send
+      slink_tx_rdy_i : in  std_ulogic_vector(7 downto 0) := (others => 'L'); -- ready to send
       -- RX stream interfaces (available if SLINK_NUM_RX > 0) --
-      slink_rx_dat_i : in  sdata_8x32_t := (others => (others => '0')); -- input data
-      slink_rx_val_i : in  std_ulogic_vector(7 downto 0) := (others => '0'); -- valid input
+      slink_rx_dat_i : in  sdata_8x32_t := (others => (others => 'U')); -- input data
+      slink_rx_val_i : in  std_ulogic_vector(7 downto 0) := (others => 'L'); -- valid input
       slink_rx_rdy_o : out std_ulogic_vector(7 downto 0); -- ready to receive
       -- GPIO (available if IO_GPIO_EN = true) --
       gpio_o         : out std_ulogic_vector(63 downto 0); -- parallel output
-      gpio_i         : in  std_ulogic_vector(63 downto 0) := (others => '0'); -- parallel input
+      gpio_i         : in  std_ulogic_vector(63 downto 0) := (others => 'U'); -- parallel input
       -- primary UART0 (available if IO_UART0_EN = true) --
       uart0_txd_o    : out std_ulogic; -- UART0 send data
-      uart0_rxd_i    : in  std_ulogic := '0'; -- UART0 receive data
+      uart0_rxd_i    : in  std_ulogic := 'U'; -- UART0 receive data
       uart0_rts_o    : out std_ulogic; -- hw flow control: UART0.RX ready to receive ("RTR"), low-active, optional
-      uart0_cts_i    : in  std_ulogic := '0'; -- hw flow control: UART0.TX allowed to transmit, low-active, optional
+      uart0_cts_i    : in  std_ulogic := 'L'; -- hw flow control: UART0.TX allowed to transmit, low-active, optional
       -- secondary UART1 (available if IO_UART1_EN = true) --
       uart1_txd_o    : out std_ulogic; -- UART1 send data
-      uart1_rxd_i    : in  std_ulogic := '0'; -- UART1 receive data
+      uart1_rxd_i    : in  std_ulogic := 'U'; -- UART1 receive data
       uart1_rts_o    : out std_ulogic; -- hw flow control: UART1.RX ready to receive ("RTR"), low-active, optional
-      uart1_cts_i    : in  std_ulogic := '0'; -- hw flow control: UART1.TX allowed to transmit, low-active, optional
+      uart1_cts_i    : in  std_ulogic := 'L'; -- hw flow control: UART1.TX allowed to transmit, low-active, optional
       -- SPI (available if IO_SPI_EN = true) --
       spi_sck_o      : out std_ulogic; -- SPI serial clock
       spi_sdo_o      : out std_ulogic; -- controller data out, peripheral data in
-      spi_sdi_i      : in  std_ulogic := '0'; -- controller data in, peripheral data out
+      spi_sdi_i      : in  std_ulogic := 'U'; -- controller data in, peripheral data out
       spi_csn_o      : out std_ulogic_vector(07 downto 0); -- SPI CS
       -- TWI (available if IO_TWI_EN = true) --
-      twi_sda_io     : inout std_logic; -- twi serial data line
-      twi_scl_io     : inout std_logic; -- twi serial clock line
+      twi_sda_io     : inout std_logic := 'U'; -- twi serial data line
+      twi_scl_io     : inout std_logic := 'U'; -- twi serial clock line
       -- PWM (available if IO_PWM_NUM_CH > 0) --
       pwm_o          : out std_ulogic_vector(IO_PWM_NUM_CH-1 downto 0); -- pwm channels
       -- Custom Functions Subsystem IO --
-      cfs_in_i       : in  std_ulogic_vector(IO_CFS_IN_SIZE-1  downto 0); -- custom CFS inputs conduit
+      cfs_in_i       : in  std_ulogic_vector(IO_CFS_IN_SIZE-1  downto 0) := (others => 'U'); -- custom CFS inputs conduit
       cfs_out_o      : out std_ulogic_vector(IO_CFS_OUT_SIZE-1 downto 0); -- custom CFS outputs conduit
       -- NeoPixel-compatible smart LED interface (available if IO_NEOLED_EN = true) --
       neoled_o       : out std_ulogic; -- async serial data line
       -- System time --
-      mtime_i        : in  std_ulogic_vector(63 downto 0) := (others => '0'); -- current system time from ext. MTIME (if IO_MTIME_EN = false)
+      mtime_i        : in  std_ulogic_vector(63 downto 0) := (others => 'U'); -- current system time from ext. MTIME (if IO_MTIME_EN = false)
       mtime_o        : out std_ulogic_vector(63 downto 0); -- current system time from int. MTIME (if IO_MTIME_EN = true)
       -- External platform interrupts (available if XIRQ_NUM_CH > 0) --
-      xirq_i         : in  std_ulogic_vector(XIRQ_NUM_CH-1 downto 0) := (others => '0'); -- IRQ channels
+      xirq_i         : in  std_ulogic_vector(XIRQ_NUM_CH-1 downto 0) := (others => 'L'); -- IRQ channels
       -- CPU Interrupts --
-      nm_irq_i       : in  std_ulogic := '0'; -- non-maskable interrupt
-      mtime_irq_i    : in  std_ulogic := '0'; -- machine timer interrupt, available if IO_MTIME_EN = false
-      msw_irq_i      : in  std_ulogic := '0'; -- machine software interrupt
-      mext_irq_i     : in  std_ulogic := '0'  -- machine external interrupt
+      nm_irq_i       : in  std_ulogic := 'L'; -- non-maskable interrupt
+      mtime_irq_i    : in  std_ulogic := 'L'; -- machine timer interrupt, available if IO_MTIME_EN = false
+      msw_irq_i      : in  std_ulogic := 'L'; -- machine software interrupt
+      mext_irq_i     : in  std_ulogic := 'L'  -- machine external interrupt
     );
   end component;
 
@@ -1038,6 +1039,7 @@ package neorv32_package is
       FAST_MUL_EN                  : boolean := false; -- use DSPs for M extension's multiplier
       FAST_SHIFT_EN                : boolean := false; -- use barrel shifter for shift operations
       CPU_CNT_WIDTH                : natural := 64;    -- total width of CPU cycle and instret counters (0..64)
+      CPU_IPB_ENTRIES              : natural := 2;     -- entries is instruction prefetch buffer, has to be a power of 2
       -- Physical Memory Protection (PMP) --
       PMP_NUM_REGIONS              : natural := 0;     -- number of regions (0..64)
       PMP_MIN_GRANULARITY          : natural := 64*1024; -- minimal region granularity in bytes, has to be a power of 2, min 8 bytes
@@ -1047,45 +1049,45 @@ package neorv32_package is
     );
     port (
       -- global control --
-      clk_i          : in  std_ulogic := '0'; -- global clock, rising edge
-      rstn_i         : in  std_ulogic := '0'; -- global reset, low-active, async
+      clk_i          : in  std_ulogic; -- global clock, rising edge
+      rstn_i         : in  std_ulogic; -- global reset, low-active, async
       sleep_o        : out std_ulogic; -- cpu is in sleep mode when set
       -- instruction bus interface --
       i_bus_addr_o   : out std_ulogic_vector(data_width_c-1 downto 0); -- bus access address
-      i_bus_rdata_i  : in  std_ulogic_vector(data_width_c-1 downto 0) := (others => '0'); -- bus read data
+      i_bus_rdata_i  : in  std_ulogic_vector(data_width_c-1 downto 0); -- bus read data
       i_bus_wdata_o  : out std_ulogic_vector(data_width_c-1 downto 0); -- bus write data
       i_bus_ben_o    : out std_ulogic_vector(03 downto 0); -- byte enable
       i_bus_we_o     : out std_ulogic; -- write enable
       i_bus_re_o     : out std_ulogic; -- read enable
       i_bus_lock_o   : out std_ulogic; -- exclusive access request
-      i_bus_ack_i    : in  std_ulogic := '0'; -- bus transfer acknowledge
-      i_bus_err_i    : in  std_ulogic := '0'; -- bus transfer error
+      i_bus_ack_i    : in  std_ulogic; -- bus transfer acknowledge
+      i_bus_err_i    : in  std_ulogic; -- bus transfer error
       i_bus_fence_o  : out std_ulogic; -- executed FENCEI operation
       i_bus_priv_o   : out std_ulogic_vector(1 downto 0); -- privilege level
       -- data bus interface --
       d_bus_addr_o   : out std_ulogic_vector(data_width_c-1 downto 0); -- bus access address
-      d_bus_rdata_i  : in  std_ulogic_vector(data_width_c-1 downto 0) := (others => '0'); -- bus read data
+      d_bus_rdata_i  : in  std_ulogic_vector(data_width_c-1 downto 0); -- bus read data
       d_bus_wdata_o  : out std_ulogic_vector(data_width_c-1 downto 0); -- bus write data
       d_bus_ben_o    : out std_ulogic_vector(03 downto 0); -- byte enable
       d_bus_we_o     : out std_ulogic; -- write enable
       d_bus_re_o     : out std_ulogic; -- read enable
       d_bus_lock_o   : out std_ulogic; -- exclusive access request
-      d_bus_ack_i    : in  std_ulogic := '0'; -- bus transfer acknowledge
-      d_bus_err_i    : in  std_ulogic := '0'; -- bus transfer error
+      d_bus_ack_i    : in  std_ulogic; -- bus transfer acknowledge
+      d_bus_err_i    : in  std_ulogic; -- bus transfer error
       d_bus_fence_o  : out std_ulogic; -- executed FENCE operation
       d_bus_priv_o   : out std_ulogic_vector(1 downto 0); -- privilege level
       -- system time input from MTIME --
-      time_i         : in  std_ulogic_vector(63 downto 0) := (others => '0'); -- current system time
+      time_i         : in  std_ulogic_vector(63 downto 0); -- current system time
       -- non-maskable interrupt --
-      nm_irq_i       : in  std_ulogic := '0'; -- NMI
+      nm_irq_i       : in  std_ulogic; -- NMI
       -- interrupts (risc-v compliant) --
-      msw_irq_i      : in  std_ulogic := '0'; -- machine software interrupt
-      mext_irq_i     : in  std_ulogic := '0'; -- machine external interrupt
-      mtime_irq_i    : in  std_ulogic := '0'; -- machine timer interrupt
+      msw_irq_i      : in  std_ulogic; -- machine software interrupt
+      mext_irq_i     : in  std_ulogic; -- machine external interrupt
+      mtime_irq_i    : in  std_ulogic; -- machine timer interrupt
       -- fast interrupts (custom) --
-      firq_i         : in  std_ulogic_vector(15 downto 0) := (others => '0');
+      firq_i         : in  std_ulogic_vector(15 downto 0);
       -- debug mode (halt) request --
-      db_halt_req_i  : in  std_ulogic := '0'
+      db_halt_req_i  : in  std_ulogic
     );
   end component;
 
@@ -1109,7 +1111,8 @@ package neorv32_package is
       CPU_EXTENSION_RISCV_Zmmul    : boolean := false; -- implement multiply-only M sub-extension?
       CPU_EXTENSION_RISCV_DEBUG    : boolean := false; -- implement CPU debug mode?
       -- Extension Options --
-      CPU_CNT_WIDTH                : natural := 64; -- total width of CPU cycle and instret counters (0..64)
+      CPU_CNT_WIDTH                : natural := 64;    -- total width of CPU cycle and instret counters (0..64)
+      CPU_IPB_ENTRIES              : natural := 2;     -- entries is instruction prefetch buffer, has to be a power of 2
       -- Physical memory protection (PMP) --
       PMP_NUM_REGIONS              : natural := 0;     -- number of regions (0..64)
       PMP_MIN_GRANULARITY          : natural := 64*1024; -- minimal region granularity in bytes, has to be a power of 2, min 8 bytes
@@ -1760,14 +1763,17 @@ package neorv32_package is
       -- interrupt --
       irq_o       : out std_ulogic; -- interrupt request
       -- custom io (conduit) --
-      cfs_in_i    : in  std_ulogic_vector(CFS_IN_SIZE-1 downto 0);  -- custom inputs
-      cfs_out_o   : out std_ulogic_vector(CFS_OUT_SIZE-1 downto 0)  -- custom outputs
+      cfs_in_i    : in  std_ulogic_vector(CFS_IN_SIZE-1 downto 0); -- custom inputs
+      cfs_out_o   : out std_ulogic_vector(CFS_OUT_SIZE-1 downto 0) -- custom outputs
     );
   end component;
 
   -- Component: Smart LED (WS2811/WS2812) Interface (NEOLED) --------------------------------
   -- -------------------------------------------------------------------------------------------
   component neorv32_neoled
+    generic (
+      FIFO_DEPTH : natural := 1 -- TX FIFO depth (1..32k, power of two)
+    );
     port (
       -- host access --
       clk_i       : in  std_ulogic; -- global clock line
@@ -1898,13 +1904,14 @@ package neorv32_package is
       FIFO_DEPTH : natural := 4;     -- number of fifo entries; has to be a power of two; min 1
       FIFO_WIDTH : natural := 32;    -- size of data elements in fifo
       FIFO_RSYNC : boolean := false; -- false = async read; true = sync read
-      FIFO_SAFE  : boolean := false  -- true = allow read/write only if data available
+      FIFO_SAFE  : boolean := false  -- true = allow read/write only if entry available
     );
     port (
       -- control --
       clk_i   : in  std_ulogic; -- clock, rising edge
       rstn_i  : in  std_ulogic; -- async reset, low-active
       clear_i : in  std_ulogic; -- sync reset, high-active
+      level_o : out std_ulogic_vector(index_size_f(FIFO_DEPTH) downto 0); -- fill level
       -- write port --
       wdata_i : in  std_ulogic_vector(FIFO_WIDTH-1 downto 0); -- write data
       we_i    : in  std_ulogic; -- write enable
