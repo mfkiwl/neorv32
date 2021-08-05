@@ -42,7 +42,8 @@ _start:
 .cfi_startproc
 .cfi_undefined ra
 
-  nop
+  lui zero, 0 // dummy instruction that uses no reg-file operands at all
+
 
 // ************************************************************************************************
 // Setup pointers using linker script symbols
@@ -82,6 +83,8 @@ __crt0_cpu_csr_init:
   csrw minstreth, zero
 
 #if defined(__riscv_flen)
+  li   x11, 0x00005000                  // enable FPU (state = initial)
+  csrs mstatus, x11
   csrw fcsr, zero                       // reset floating-point CSR
 #endif
 

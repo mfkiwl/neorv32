@@ -48,29 +48,29 @@ use neorv32.neorv32_package.all;
 entity neorv32_cpu_control is
   generic (
     -- General --
-    HW_THREAD_ID                 : natural := 0;     -- hardware thread id (32-bit)
-    CPU_BOOT_ADDR                : std_ulogic_vector(31 downto 0) := x"00000000"; -- cpu boot address
-    CPU_DEBUG_ADDR               : std_ulogic_vector(31 downto 0) := x"00000000"; -- cpu debug mode start address
+    HW_THREAD_ID                 : natural; -- hardware thread id (32-bit)
+    CPU_BOOT_ADDR                : std_ulogic_vector(31 downto 0); -- cpu boot address
+    CPU_DEBUG_ADDR               : std_ulogic_vector(31 downto 0); -- cpu debug mode start address
     -- RISC-V CPU Extensions --
-    CPU_EXTENSION_RISCV_A        : boolean := false; -- implement atomic extension?
-    CPU_EXTENSION_RISCV_C        : boolean := false; -- implement compressed extension?
-    CPU_EXTENSION_RISCV_E        : boolean := false; -- implement embedded RF extension?
-    CPU_EXTENSION_RISCV_M        : boolean := false; -- implement muld/div extension?
-    CPU_EXTENSION_RISCV_U        : boolean := false; -- implement user mode extension?
-    CPU_EXTENSION_RISCV_Zfinx    : boolean := false; -- implement 32-bit floating-point extension (using INT reg!)
-    CPU_EXTENSION_RISCV_Zicsr    : boolean := true;  -- implement CSR system?
-    CPU_EXTENSION_RISCV_Zifencei : boolean := false; -- implement instruction stream sync.?
-    CPU_EXTENSION_RISCV_Zmmul    : boolean := false; -- implement multiply-only M sub-extension?
-    CPU_EXTENSION_RISCV_DEBUG    : boolean := false; -- implement CPU debug mode?
+    CPU_EXTENSION_RISCV_A        : boolean; -- implement atomic extension?
+    CPU_EXTENSION_RISCV_C        : boolean; -- implement compressed extension?
+    CPU_EXTENSION_RISCV_E        : boolean; -- implement embedded RF extension?
+    CPU_EXTENSION_RISCV_M        : boolean; -- implement muld/div extension?
+    CPU_EXTENSION_RISCV_U        : boolean; -- implement user mode extension?
+    CPU_EXTENSION_RISCV_Zfinx    : boolean; -- implement 32-bit floating-point extension (using INT reg!)
+    CPU_EXTENSION_RISCV_Zicsr    : boolean; -- implement CSR system?
+    CPU_EXTENSION_RISCV_Zifencei : boolean; -- implement instruction stream sync.?
+    CPU_EXTENSION_RISCV_Zmmul    : boolean; -- implement multiply-only M sub-extension?
+    CPU_EXTENSION_RISCV_DEBUG    : boolean; -- implement CPU debug mode?
     -- Extension Options --
-    CPU_CNT_WIDTH                : natural := 64;    -- total width of CPU cycle and instret counters (0..64)
-    CPU_IPB_ENTRIES              : natural := 2;     -- entries is instruction prefetch buffer, has to be a power of 2
+    CPU_CNT_WIDTH                : natural; -- total width of CPU cycle and instret counters (0..64)
+    CPU_IPB_ENTRIES              : natural; -- entries is instruction prefetch buffer, has to be a power of 2
     -- Physical memory protection (PMP) --
-    PMP_NUM_REGIONS              : natural := 0;     -- number of regions (0..64)
-    PMP_MIN_GRANULARITY          : natural := 64*1024; -- minimal region granularity in bytes, has to be a power of 2, min 8 bytes
+    PMP_NUM_REGIONS              : natural; -- number of regions (0..64)
+    PMP_MIN_GRANULARITY          : natural; -- minimal region granularity in bytes, has to be a power of 2, min 8 bytes
     -- Hardware Performance Monitors (HPM) --
-    HPM_NUM_CNTS                 : natural := 0;     -- number of implemented HPM counters (0..29)
-    HPM_CNT_WIDTH                : natural := 40     -- total size of HPM counters (0..64)
+    HPM_NUM_CNTS                 : natural; -- number of implemented HPM counters (0..29)
+    HPM_CNT_WIDTH                : natural  -- total size of HPM counters (0..64)
   );
   port (
     -- global control --
@@ -197,7 +197,7 @@ architecture neorv32_cpu_control_rtl of neorv32_cpu_control is
 
   -- instruction execution engine --
   type execute_engine_state_t is (SYS_WAIT, DISPATCH, TRAP_ENTER, TRAP_EXIT, TRAP_EXECUTE, EXECUTE, ALU_WAIT, BRANCH,
-                                  FENCE_OP,LOADSTORE_0, LOADSTORE_1, LOADSTORE_2, SYS_ENV, CSR_ACCESS);
+                                  FENCE_OP, LOADSTORE_0, LOADSTORE_1, LOADSTORE_2, SYS_ENV, CSR_ACCESS);
   type execute_engine_t is record
     state        : execute_engine_state_t;
     state_nxt    : execute_engine_state_t;
@@ -275,9 +275,11 @@ architecture neorv32_cpu_control_rtl of neorv32_cpu_control is
     wdata             : std_ulogic_vector(data_width_c-1 downto 0); -- csr write data
     rdata             : std_ulogic_vector(data_width_c-1 downto 0); -- csr read data
     --
+    mstatus_fs        : std_ulogic; -- mstatus.FS: FPU status (single-bit, only OFF and DIRTY states)
     mstatus_mie       : std_ulogic; -- mstatus.MIE: global IRQ enable (R/W)
     mstatus_mpie      : std_ulogic; -- mstatus.MPIE: previous global IRQ enable (R/W)
     mstatus_mpp       : std_ulogic_vector(1 downto 0); -- mstatus.MPP: machine previous privilege mode
+    mstatus_tw        : std_ulogic; -- mstatus:TW trigger illegal instruction exception if WFI is executed outside of M-mode
     --
     mie_msie          : std_ulogic; -- mie.MSIE: machine software interrupt enable (R/W)
     mie_meie          : std_ulogic; -- mie.MEIE: machine external interrupt enable (R/W)
@@ -615,16 +617,16 @@ begin
 
   -- Immediate Generator --------------------------------------------------------------------
   -- -------------------------------------------------------------------------------------------
-  imm_gen: process(execute_engine.i_reg, rstn_i, clk_i)
+  imm_gen: process(rstn_i, clk_i)
     variable opcode_v : std_ulogic_vector(6 downto 0);
   begin
-    opcode_v := execute_engine.i_reg(instr_opcode_msb_c downto instr_opcode_lsb_c+2) & "11";
     if (rstn_i = '0') then
       imm_o <= (others => def_rst_val_c);
     elsif rising_edge(clk_i) then
       if (execute_engine.state = BRANCH) then -- next_PC as immediate for jump-and-link operations (=return address) via ALU.MOV_B
         imm_o <= execute_engine.next_pc;
       else -- "normal" immediate from instruction word
+        opcode_v := execute_engine.i_reg(instr_opcode_msb_c downto instr_opcode_lsb_c+2) & "11";
         case opcode_v is -- save some bits here, the two LSBs are always "11" for rv32
           when opcode_store_c => -- S-immediate
             imm_o(31 downto 11) <= (others => execute_engine.i_reg(31)); -- sign extension
@@ -691,7 +693,7 @@ begin
       execute_engine.sleep    <= '0';
       execute_engine.branched <= '1'; -- reset is a branch from "somewhere"
       -- no dedicated RESET required --
-      execute_engine.state_prev <= SYS_WAIT;
+      execute_engine.state_prev <= SYS_WAIT; -- actual reset value is not relevant
       execute_engine.i_reg      <= (others => def_rst_val_c);
       execute_engine.is_ci      <= def_rst_val_c;
       execute_engine.last_pc    <= (others => def_rst_val_c);
@@ -1104,7 +1106,7 @@ begin
 
           when opcode_fop_c => -- floating-point operations
           -- ------------------------------------------------------------
-            if (CPU_EXTENSION_RISCV_Zfinx = true) and (decode_aux.is_float_op = '1') then
+            if (CPU_EXTENSION_RISCV_Zfinx = true) and (decode_aux.is_float_op = '1') and (csr.mstatus_fs = '1') then
               ctrl_nxt(ctrl_cp_id_msb_c downto ctrl_cp_id_lsb_c) <= cp_sel_fpu_c; -- trigger FPU CP
               ctrl_nxt(ctrl_alu_func1_c downto ctrl_alu_func0_c) <= alu_func_cmd_copro_c;
               execute_engine.state_nxt                           <= ALU_WAIT;
@@ -1121,7 +1123,7 @@ begin
 
       when SYS_ENV => -- system environment operation - execution
       -- ------------------------------------------------------------
-        execute_engine.state_nxt <= SYS_WAIT;
+        execute_engine.state_nxt <= SYS_WAIT; -- default
         case decode_aux.sys_env_cmd is -- use a simplified input here (with permanent zeros)
           when funct12_ecall_c  => trap_ctrl.env_call       <= '1'; -- ECALL
           when funct12_ebreak_c => trap_ctrl.break_point    <= '1'; -- EBREAK
@@ -1172,7 +1174,7 @@ begin
         -- get and store return address (only relevant for jump-and-link operations) --
         ctrl_nxt(ctrl_alu_opb_mux_c)                         <= '1'; -- use IMM as ALU.OPB (next_pc from immediate generator = return address)
         ctrl_nxt(ctrl_alu_logic1_c downto ctrl_alu_logic0_c) <= alu_logic_cmd_movb_c; -- MOVB
-        ctrl_nxt(ctrl_alu_func1_c downto ctrl_alu_func0_c)   <= alu_func_cmd_logic_c; -- actual ALU operation = MOVB
+        ctrl_nxt(ctrl_alu_func1_c  downto ctrl_alu_func0_c)  <= alu_func_cmd_logic_c; -- actual ALU operation = MOVB
         ctrl_nxt(ctrl_rf_in_mux_c)                           <= '0'; -- RF input = ALU result
         ctrl_nxt(ctrl_rf_wb_en_c)                            <= execute_engine.i_reg(instr_opcode_lsb_c+2); -- valid RF write-back? (is jump-and-link?)
         -- destination address --
@@ -1192,7 +1194,7 @@ begin
         execute_engine.state_nxt <= SYS_WAIT;
         -- FENCE.I --
         if (CPU_EXTENSION_RISCV_Zifencei = true) then
-          execute_engine.pc_mux_sel <= '0'; -- linear next PC = start *new* instruction fetch with next instruction (only relevant for fence.i)
+          execute_engine.pc_mux_sel <= '0'; -- linear next PC = start *new* instruction fetch with next instruction
           if (execute_engine.i_reg(instr_funct3_lsb_c) = funct3_fencei_c(0)) then
             execute_engine.pc_we        <= '1'; -- update PC
             execute_engine.branched_nxt <= '1'; -- this is an actual branch
@@ -1234,7 +1236,8 @@ begin
         ctrl_nxt(ctrl_bus_mi_we_c) <= '1'; -- keep writing input data to MDI (only relevant for load (and SC.W) operations)
         ctrl_nxt(ctrl_rf_in_mux_c) <= '1'; -- RF input = memory input (only relevant for LOADs)
         -- wait for memory response / exception --
-        if (trap_ctrl.env_start = '1') then -- abort if exception
+        if (trap_ctrl.env_start = '1') and -- only abort if BUS EXCEPTION
+           ((trap_ctrl.cause = trap_lma_c) or (trap_ctrl.cause = trap_lbe_c) or (trap_ctrl.cause = trap_sma_c) or (trap_ctrl.cause = trap_sbe_c)) then
           execute_engine.state_nxt <= SYS_WAIT;
         elsif (bus_d_wait_i = '0') then -- wait for bus to finish transaction
           -- data write-back --
@@ -1282,14 +1285,14 @@ begin
 
       -- floating-point CSRs --
       when csr_fflags_c | csr_frm_c | csr_fcsr_c =>
-        if (CPU_EXTENSION_RISCV_Zfinx = true) then
-          csr_acc_valid <= '1'; -- full access for everyone if Zfinx extension is implemented
+        if (CPU_EXTENSION_RISCV_Zfinx = true) and (csr.mstatus_fs = '1') then -- FPU implemented and enabled?
+          csr_acc_valid <= '1'; -- full access for everyone
         else
           NULL;
         end if;
 
       -- machine trap setup & handling --
-      when csr_mstatus_c | csr_misa_c | csr_mie_c | csr_mtvec_c | csr_mcounteren_c | csr_mscratch_c | csr_mepc_c | csr_mcause_c =>
+      when csr_mstatus_c | csr_mstatush_c | csr_misa_c | csr_mie_c | csr_mtvec_c | csr_mcounteren_c | csr_mscratch_c | csr_mepc_c | csr_mcause_c =>
         csr_acc_valid <= csr.priv_m_mode; -- M-mode only, NOTE: MISA is read-only in the NEORV32 but we do not cause an exception here for compatibility
       when csr_mip_c | csr_mtval_c => -- NOTE: MIP and MTVAL are read-only in the NEORV32!
         csr_acc_valid <= (not csr_wacc_v) and csr.priv_m_mode; -- M-mode only, read-only
@@ -1356,7 +1359,7 @@ begin
 
 
       -- machine information registers & custom (NEORV32-specific) read-only CSRs --
-      when csr_mvendorid_c | csr_marchid_c | csr_mimpid_c | csr_mhartid_c | csr_mzext_c =>
+      when csr_mvendorid_c | csr_marchid_c | csr_mimpid_c | csr_mhartid_c | csr_mconfigptr_c | csr_mzext_c =>
         csr_acc_valid <= (not csr_wacc_v) and csr.priv_m_mode; -- M-mode only, read-only
 
       -- debug mode CSRs --
@@ -1376,7 +1379,7 @@ begin
 
   -- Illegal Instruction Check --------------------------------------------------------------
   -- -------------------------------------------------------------------------------------------
-  illegal_instruction_check: process(execute_engine, decode_aux, csr_acc_valid, debug_ctrl)
+  illegal_instruction_check: process(execute_engine, decode_aux, csr, csr_acc_valid, debug_ctrl)
     variable opcode_v : std_ulogic_vector(6 downto 0);
   begin
     -- illegal instructions are checked in the EXECUTE stage
@@ -1544,7 +1547,7 @@ begin
                (execute_engine.i_reg(instr_funct12_msb_c  downto instr_funct12_lsb_c) = funct12_ebreak_c) or -- EBREAK 
                (execute_engine.i_reg(instr_funct12_msb_c  downto instr_funct12_lsb_c) = funct12_mret_c)   or -- MRET
                ((execute_engine.i_reg(instr_funct12_msb_c downto instr_funct12_lsb_c) = (funct12_dret_c)) and (CPU_EXTENSION_RISCV_DEBUG = true) and (debug_ctrl.running = '1')) or -- DRET
-               (execute_engine.i_reg(instr_funct12_msb_c  downto instr_funct12_lsb_c) = funct12_wfi_c) then  -- WFI
+               ((execute_engine.i_reg(instr_funct12_msb_c  downto instr_funct12_lsb_c) = funct12_wfi_c) and ((csr.priv_m_mode = '1') or (csr.mstatus_tw = '0'))) then -- WFI allowed in M-mode or if mstatus.TW=0
               illegal_instruction <= '0';
             else
               illegal_instruction <= '1';
@@ -1565,7 +1568,7 @@ begin
 
         when opcode_fop_c => -- floating point operations - single/dual operands
         -- ------------------------------------------------------------
-          if (CPU_EXTENSION_RISCV_Zfinx = true) and -- F extension enabled
+          if (CPU_EXTENSION_RISCV_Zfinx = true) and (csr.mstatus_fs = '1') and -- F extension implemented and enabled
              (execute_engine.i_reg(instr_funct7_lsb_c+1 downto instr_funct7_lsb_c) = float_single_c) and -- single-precision operations only
              (decode_aux.is_float_op = '1') then -- is correct/supported floating-point instruction
             illegal_instruction <= '0';
@@ -1920,8 +1923,10 @@ begin
       csr.we           <= '0';
       --
       csr.mstatus_mie  <= '0';
+      csr.mstatus_fs   <= '0';
       csr.mstatus_mpie <= '0';
       csr.mstatus_mpp  <= (others => '0');
+      csr.mstatus_tw   <= '0';
       csr.privilege    <= priv_mode_m_c; -- start in MACHINE mode
       csr.mie_msie     <= def_rst_val_c;
       csr.mie_meie     <= def_rst_val_c;
@@ -1994,6 +1999,10 @@ begin
               if (CPU_EXTENSION_RISCV_U = true) then -- user mode implemented
                 csr.mstatus_mpp(0) <= csr.wdata(11) or csr.wdata(12);
                 csr.mstatus_mpp(1) <= csr.wdata(11) or csr.wdata(12);
+                csr.mstatus_tw     <= csr.wdata(21);
+              end if;
+              if (CPU_EXTENSION_RISCV_Zfinx = true) then -- FPU implemented
+                csr.mstatus_fs <= csr.wdata(14) or csr.wdata(13);
               end if;
             end if;
             -- R/W: mie - machine interrupt enable register --
@@ -2081,7 +2090,7 @@ begin
               csr.mcountinhibit_ir  <= csr.wdata(2); -- enable auto-increment of [m]instret[h] counter
               csr.mcountinhibit_hpm <= csr.wdata(csr.mcountinhibit_hpm'left+3 downto 3); -- enable auto-increment of [m]hpmcounter*[h] counter
             end if;
-            -- machine performance-monitoring event selector --
+            -- machine performance-monitors event selector --
             if (HPM_NUM_CNTS > 0) then
               for i in 0 to HPM_NUM_CNTS-1 loop
                 if (csr.addr(4 downto 0) = std_ulogic_vector(to_unsigned(i+3, 5))) then
@@ -2225,6 +2234,7 @@ begin
       if (CPU_EXTENSION_RISCV_U = false) then
         csr.privilege     <= priv_mode_m_c;
         csr.mstatus_mpp   <= priv_mode_m_c;
+        csr.mstatus_tw    <= '0';
         csr.mcounteren_cy <= '0';
         csr.mcounteren_tm <= '0';
         csr.mcounteren_ir <= '0';
@@ -2254,8 +2264,9 @@ begin
 
       -- floating-point extension disabled --
       if (CPU_EXTENSION_RISCV_Zfinx = false) then
-        csr.fflags <= (others => '0');
-        csr.frm    <= (others => '0');
+        csr.mstatus_fs <= '0';
+        csr.fflags     <= (others => '0');
+        csr.frm        <= (others => '0');
       end if;
 
       -- debug mode disabled --
@@ -2501,6 +2512,10 @@ begin
             csr.rdata(07) <= csr.mstatus_mpie; -- MPIE
             csr.rdata(11) <= csr.mstatus_mpp(0); -- MPP: machine previous privilege mode low
             csr.rdata(12) <= csr.mstatus_mpp(1); -- MPP: machine previous privilege mode high
+            csr.rdata(13) <= csr.mstatus_fs; -- FS(0): FPU status - OFF or DIRTY
+            csr.rdata(14) <= csr.mstatus_fs; -- FS(1): FPU status - OFF or DIRTY
+            csr.rdata(21) <= csr.mstatus_tw; -- TW: WFI timeout wait
+            csr.rdata(31) <= csr.mstatus_fs; -- SD: state dirty (only FPU yet)
           when csr_misa_c => -- misa (r/-): ISA and extensions
             csr.rdata(00) <= bool_to_ulogic_f(CPU_EXTENSION_RISCV_A);     -- A CPU extension
             csr.rdata(02) <= bool_to_ulogic_f(CPU_EXTENSION_RISCV_C);     -- C CPU extension
@@ -2538,7 +2553,7 @@ begin
           when csr_mcause_c => -- mcause (r/w): machine trap cause
             csr.rdata(31) <= csr.mcause(csr.mcause'left);
             csr.rdata(csr.mcause'left-1 downto 0) <= csr.mcause(csr.mcause'left-1 downto 0);
-          when csr_mtval_c => -- mtval (r/w): machine bad address or instruction
+          when csr_mtval_c => -- mtval (r/-): machine bad address or instruction
             csr.rdata <= csr.mtval;
           when csr_mip_c => -- mip (r/-): machine interrupt pending
             csr.rdata(03) <= trap_ctrl.irq_buf(interrupt_msw_irq_c);
@@ -2752,10 +2767,11 @@ begin
 
           -- machine information registers --
           -- --------------------------------------------------------------------
---        when csr_mvendorid_c => csr.rdata <= (others => '0'); -- mvendorid (r/-): vendor ID, implemented but always zero
-          when csr_marchid_c   => csr.rdata(4 downto 0) <= "10011"; -- marchid (r/-): arch ID - official RISC-V open-source arch ID
-          when csr_mimpid_c    => csr.rdata <= hw_version_c; -- mimpid (r/-): implementation ID -- NEORV32 hardware version
-          when csr_mhartid_c   => csr.rdata <= std_ulogic_vector(to_unsigned(HW_THREAD_ID, 32)); -- mhartid (r/-): hardware thread ID
+--        when csr_mvendorid_c  => csr.rdata <= (others => '0'); -- mvendorid (r/-): vendor ID, implemented but always zero
+          when csr_marchid_c    => csr.rdata(4 downto 0) <= "10011"; -- marchid (r/-): arch ID - official RISC-V open-source arch ID
+          when csr_mimpid_c     => csr.rdata <= hw_version_c; -- mimpid (r/-): implementation ID -- NEORV32 hardware version
+          when csr_mhartid_c    => csr.rdata <= std_ulogic_vector(to_unsigned(HW_THREAD_ID, 32)); -- mhartid (r/-): hardware thread ID
+--        when csr_mconfigptr_c => csr.rdata <= (others => '0'); -- mconfigptr (r/-): machine configuration pointer register, implemented but not assigned yet
 
           -- custom machine read-only CSRs --
           -- --------------------------------------------------------------------

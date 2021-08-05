@@ -86,8 +86,8 @@ entity neorv32_SystemTop_axi4lite is
     ICACHE_ASSOCIATIVITY         : natural := 1;      -- i-cache: associativity / number of sets (1=direct_mapped), has to be a power of 2
     -- External Interrupts Controller (XIRQ) --
     XIRQ_NUM_CH                  : natural := 0;      -- number of external IRQ channels (0..32)
-    XIRQ_TRIGGER_TYPE            : std_logic_vector(31 downto 0) := (others => '1'); -- trigger type: 0=level, 1=edge
-    XIRQ_TRIGGER_POLARITY        : std_logic_vector(31 downto 0) := (others => '1'); -- trigger polarity: 0=low-level/falling-edge, 1=high-level/rising-edge
+    XIRQ_TRIGGER_TYPE            : std_logic_vector(31 downto 0) := x"FFFFFFFF"; -- trigger type: 0=level, 1=edge
+    XIRQ_TRIGGER_POLARITY        : std_logic_vector(31 downto 0) := x"FFFFFFFF"; -- trigger polarity: 0=low-level/falling-edge, 1=high-level/rising-edge
     -- Processor peripherals --
     IO_GPIO_EN                   : boolean := true;   -- implement general purpose input/output port unit (GPIO)?
     IO_MTIME_EN                  : boolean := true;   -- implement machine system timer (MTIME)?
@@ -99,7 +99,7 @@ entity neorv32_SystemTop_axi4lite is
     IO_WDT_EN                    : boolean := true;   -- implement watch dog timer (WDT)?
     IO_TRNG_EN                   : boolean := false;  -- implement true random number generator (TRNG)?
     IO_CFS_EN                    : boolean := false;  -- implement custom functions subsystem (CFS)?
-    IO_CFS_CONFIG                : std_logic_vector(31 downto 0); -- custom CFS configuration generic
+    IO_CFS_CONFIG                : std_logic_vector(31 downto 0) := x"00000000"; -- custom CFS configuration generic
     IO_CFS_IN_SIZE               : positive := 32;    -- size of CFS input conduit in bits
     IO_CFS_OUT_SIZE              : positive := 32;    -- size of CFS output conduit in bits
     IO_NEOLED_EN                 : boolean := true    -- implement NeoPixel-compatible smart LED interface (NEOLED)?
@@ -262,7 +262,6 @@ begin
 
   -- Sanity Checks --------------------------------------------------------------------------
   -- -------------------------------------------------------------------------------------------
-  assert not (wb_pipe_mode_c = true) report "NEORV32 PROCESSOR CONFIG ERROR: AXI4-Lite bridge requires STANDARD/CLASSIC Wishbone mode (package.wb_pipe_mode_c = false)." severity error;
   assert not (CPU_EXTENSION_RISCV_A = true) report "NEORV32 PROCESSOR CONFIG WARNING: AXI4-Lite provides NO support for atomic memory operations. LR/SC access via AXI will raise a bus exception." severity warning;
 
 
@@ -310,6 +309,9 @@ begin
     -- External memory interface --
     MEM_EXT_EN                   => true,               -- implement external memory bus interface?
     MEM_EXT_TIMEOUT              => 0,                  -- cycles after a pending bus access auto-terminates (0 = disabled)
+    MEM_EXT_PIPE_MODE            => false,              -- protocol: false=classic/standard wishbone mode, true=pipelined wishbone mode
+    MEM_EXT_BIG_ENDIAN           => false,              -- byte order: true=big-endian, false=little-endian
+    MEM_EXT_ASYNC_RX             => false,              -- use register buffer for RX data when false
     -- External Interrupts Controller (XIRQ) --
     XIRQ_NUM_CH                  => XIRQ_NUM_CH, -- number of external IRQ channels (0..32)
     XIRQ_TRIGGER_TYPE            => XIRQ_TRIGGER_TYPE_INT, -- trigger type: 0=level, 1=edge
