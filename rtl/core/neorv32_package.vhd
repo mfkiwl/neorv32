@@ -64,7 +64,7 @@ package neorv32_package is
   -- Architecture Constants (do not modify!) ------------------------------------------------
   -- -------------------------------------------------------------------------------------------
   constant data_width_c : natural := 32; -- native data path width - do not change!
-  constant hw_version_c : std_ulogic_vector(31 downto 0) := x"01050809"; -- no touchy!
+  constant hw_version_c : std_ulogic_vector(31 downto 0) := x"01050904"; -- no touchy!
   constant archid_c     : natural := 19; -- official NEORV32 architecture ID - hands off!
 
   -- External Interface Types ---------------------------------------------------------------
@@ -195,7 +195,23 @@ package neorv32_package is
 
   -- reserved --
 --constant reserved_base_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff00"; -- base address
---constant reserved_size_c      : natural := 32*4; -- module's address space size in bytes
+--constant reserved_size_c      : natural := 16*4; -- module's address space size in bytes
+
+  -- reserved --
+--constant reserved_base_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff40"; -- base address
+--constant reserved_size_c      : natural := 8*4; -- module's address space size in bytes
+
+  -- reserved --
+--constant reserved_base_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff60"; -- base address
+--constant reserved_size_c      : natural := 4*4; -- module's address space size in bytes
+
+  -- reserved --
+--constant reserved_base_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff70"; -- base address
+--constant reserved_size_c      : natural := 2*4; -- module's address space size in bytes
+
+  -- reserved --
+--constant reserved_base_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff78"; -- base address
+--constant reserved_size_c      : natural := 2*4; -- module's address space size in bytes
 
   -- External Interrupt Controller (XIRQ) --
   constant xirq_base_c          : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffff80"; -- base address
@@ -241,7 +257,7 @@ package neorv32_package is
   constant wdt_size_c           : natural := 1*4; -- module's address space size in bytes
   constant wdt_ctrl_addr_c      : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffffbc";
 
-  -- reserved --
+  -- General Purpose Input/Output Controller (GPIO) --
   constant gpio_base_c          : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffffc0"; -- base address
   constant gpio_size_c          : natural := 4*4; -- module's address space size in bytes
   constant gpio_in_lo_addr_c    : std_ulogic_vector(data_width_c-1 downto 0) := x"ffffffc0";
@@ -501,7 +517,7 @@ package neorv32_package is
   constant csr_frm_c            : std_ulogic_vector(11 downto 0) := x"002";
   constant csr_fcsr_c           : std_ulogic_vector(11 downto 0) := x"003";
   -- machine trap setup --
-  constant csr_class_setup_c    : std_ulogic_vector(07 downto 0) := x"30"; -- trap setup
+  constant csr_class_setup_c    : std_ulogic_vector(08 downto 0) := x"30" & '0'; -- trap setup
   constant csr_mstatus_c        : std_ulogic_vector(11 downto 0) := x"300";
   constant csr_misa_c           : std_ulogic_vector(11 downto 0) := x"301";
   constant csr_mie_c            : std_ulogic_vector(11 downto 0) := x"304";
@@ -542,7 +558,7 @@ package neorv32_package is
   constant csr_mhpmevent30_c    : std_ulogic_vector(11 downto 0) := x"33e";
   constant csr_mhpmevent31_c    : std_ulogic_vector(11 downto 0) := x"33f";
   -- machine trap handling --
-  constant csr_class_trap_c     : std_ulogic_vector(07 downto 0) := x"34"; -- machine trap handling
+  constant csr_class_trap_c     : std_ulogic_vector(08 downto 0) := x"34" & '0'; -- machine trap handling
   constant csr_mscratch_c       : std_ulogic_vector(11 downto 0) := x"340";
   constant csr_mepc_c           : std_ulogic_vector(11 downto 0) := x"341";
   constant csr_mcause_c         : std_ulogic_vector(11 downto 0) := x"342";
@@ -718,8 +734,6 @@ package neorv32_package is
   constant csr_mimpid_c         : std_ulogic_vector(11 downto 0) := x"f13";
   constant csr_mhartid_c        : std_ulogic_vector(11 downto 0) := x"f14";
   constant csr_mconfigptr_c     : std_ulogic_vector(11 downto 0) := x"f15";
-  -- <<< custom (NEORV32-specific) read-only CSRs >>> --
-  constant csr_mzext_c          : std_ulogic_vector(11 downto 0) := x"fc0";
 
   -- Co-Processor IDs -----------------------------------------------------------------------
   -- -------------------------------------------------------------------------------------------
@@ -872,7 +886,6 @@ package neorv32_package is
     generic (
       -- General --
       CLOCK_FREQUENCY              : natural;           -- clock frequency of clk_i in Hz
-      USER_CODE                    : std_ulogic_vector(31 downto 0) := x"00000000"; -- custom user code
       HW_THREAD_ID                 : natural := 0;      -- hardware thread id (32-bit)
       INT_BOOTLOADER_EN            : boolean := false;  -- boot configuration: true = boot explicit bootloader; false = boot from int/ext (I)MEM
       -- On-Chip Debugger (OCD) --
@@ -1856,39 +1869,50 @@ package neorv32_package is
   component neorv32_sysinfo
     generic (
       -- General --
-      CLOCK_FREQUENCY      : natural; -- clock frequency of clk_i in Hz
-      INT_BOOTLOADER_EN    : boolean; -- boot configuration: true = boot explicit bootloader; false = boot from int/ext (I)MEM
-      USER_CODE            : std_ulogic_vector(31 downto 0) := x"00000000"; -- custom user code
+      CLOCK_FREQUENCY              : natural; -- clock frequency of clk_i in Hz
+      INT_BOOTLOADER_EN            : boolean; -- boot configuration: true = boot explicit bootloader; false = boot from int/ext (I)MEM
+      -- RISC-V CPU Extensions --
+      CPU_EXTENSION_RISCV_Zfinx    : boolean; -- implement 32-bit floating-point extension (using INT reg!)
+      CPU_EXTENSION_RISCV_Zicsr    : boolean; -- implement CSR system?
+      CPU_EXTENSION_RISCV_Zifencei : boolean; -- implement instruction stream sync.?
+      CPU_EXTENSION_RISCV_Zmmul    : boolean; -- implement multiply-only M sub-extension?
+      CPU_EXTENSION_RISCV_DEBUG    : boolean; -- implement CPU debug mode?
+      -- Extension Options --
+      CPU_CNT_WIDTH                : natural; -- total width of CPU cycle and instret counters (0..64)
+      -- Physical memory protection (PMP) --
+      PMP_NUM_REGIONS              : natural; -- number of regions (0..64)
+      -- Hardware Performance Monitors (HPM) --
+      HPM_NUM_CNTS                 : natural; -- number of implemented HPM counters (0..29)
       -- Internal Instruction memory --
-      MEM_INT_IMEM_EN      : boolean; -- implement processor-internal instruction memory
-      MEM_INT_IMEM_SIZE    : natural; -- size of processor-internal instruction memory in bytes
+      MEM_INT_IMEM_EN              : boolean; -- implement processor-internal instruction memory
+      MEM_INT_IMEM_SIZE            : natural; -- size of processor-internal instruction memory in bytes
       -- Internal Data memory --
-      MEM_INT_DMEM_EN      : boolean; -- implement processor-internal data memory
-      MEM_INT_DMEM_SIZE    : natural; -- size of processor-internal data memory in bytes
+      MEM_INT_DMEM_EN              : boolean; -- implement processor-internal data memory
+      MEM_INT_DMEM_SIZE            : natural; -- size of processor-internal data memory in bytes
       -- Internal Cache memory --
-      ICACHE_EN            : boolean; -- implement instruction cache
-      ICACHE_NUM_BLOCKS    : natural; -- i-cache: number of blocks (min 2), has to be a power of 2
-      ICACHE_BLOCK_SIZE    : natural; -- i-cache: block size in bytes (min 4), has to be a power of 2
-      ICACHE_ASSOCIATIVITY : natural; -- i-cache: associativity (min 1), has to be a power 2
+      ICACHE_EN                    : boolean; -- implement instruction cache
+      ICACHE_NUM_BLOCKS            : natural; -- i-cache: number of blocks (min 2), has to be a power of 2
+      ICACHE_BLOCK_SIZE            : natural; -- i-cache: block size in bytes (min 4), has to be a power of 2
+      ICACHE_ASSOCIATIVITY         : natural; -- i-cache: associativity (min 1), has to be a power 2
       -- External memory interface --
-      MEM_EXT_EN           : boolean; -- implement external memory bus interface?
-      MEM_EXT_BIG_ENDIAN   : boolean; -- byte order: true=big-endian, false=little-endian
+      MEM_EXT_EN                   : boolean; -- implement external memory bus interface?
+      MEM_EXT_BIG_ENDIAN           : boolean; -- byte order: true=big-endian, false=little-endian
       -- On-Chip Debugger --
-      ON_CHIP_DEBUGGER_EN  : boolean; -- implement OCD?
+      ON_CHIP_DEBUGGER_EN          : boolean; -- implement OCD?
       -- Processor peripherals --
-      IO_GPIO_EN           : boolean; -- implement general purpose input/output port unit (GPIO)?
-      IO_MTIME_EN          : boolean; -- implement machine system timer (MTIME)?
-      IO_UART0_EN          : boolean; -- implement primary universal asynchronous receiver/transmitter (UART0)?
-      IO_UART1_EN          : boolean; -- implement secondary universal asynchronous receiver/transmitter (UART1)?
-      IO_SPI_EN            : boolean; -- implement serial peripheral interface (SPI)?
-      IO_TWI_EN            : boolean; -- implement two-wire interface (TWI)?
-      IO_PWM_NUM_CH        : natural; -- number of PWM channels to implement
-      IO_WDT_EN            : boolean; -- implement watch dog timer (WDT)?
-      IO_TRNG_EN           : boolean; -- implement true random number generator (TRNG)?
-      IO_CFS_EN            : boolean; -- implement custom functions subsystem (CFS)?
-      IO_SLINK_EN          : boolean; -- implement stream link interface?
-      IO_NEOLED_EN         : boolean; -- implement NeoPixel-compatible smart LED interface (NEOLED)?
-      IO_XIRQ_NUM_CH       : natural  -- number of external interrupt (XIRQ) channels to implement
+      IO_GPIO_EN                   : boolean; -- implement general purpose input/output port unit (GPIO)?
+      IO_MTIME_EN                  : boolean; -- implement machine system timer (MTIME)?
+      IO_UART0_EN                  : boolean; -- implement primary universal asynchronous receiver/transmitter (UART0)?
+      IO_UART1_EN                  : boolean; -- implement secondary universal asynchronous receiver/transmitter (UART1)?
+      IO_SPI_EN                    : boolean; -- implement serial peripheral interface (SPI)?
+      IO_TWI_EN                    : boolean; -- implement two-wire interface (TWI)?
+      IO_PWM_NUM_CH                : natural; -- number of PWM channels to implement
+      IO_WDT_EN                    : boolean; -- implement watch dog timer (WDT)?
+      IO_TRNG_EN                   : boolean; -- implement true random number generator (TRNG)?
+      IO_CFS_EN                    : boolean; -- implement custom functions subsystem (CFS)?
+      IO_SLINK_EN                  : boolean; -- implement stream link interface?
+      IO_NEOLED_EN                 : boolean; -- implement NeoPixel-compatible smart LED interface (NEOLED)?
+      IO_XIRQ_NUM_CH               : natural  -- number of external interrupt (XIRQ) channels to implement
     );
     port (
       -- host access --

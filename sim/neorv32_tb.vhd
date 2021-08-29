@@ -219,7 +219,7 @@ begin
     if ci_mode then
       -- No need to send the full expectation in one big chunk
       check_uart(net, uart1_rx_handle, nul & nul);
-      check_uart(net, uart1_rx_handle, "0/45" & cr & lf);
+      check_uart(net, uart1_rx_handle, "0/46" & cr & lf);
     end if;
 
     -- Apply some random data on each SLINK inputs and expect it to
@@ -278,7 +278,6 @@ begin
   generic map (
     -- General --
     CLOCK_FREQUENCY              => f_clock_c,     -- clock frequency of clk_i in Hz
-    USER_CODE                    => x"12345678",   -- custom user code
     HW_THREAD_ID                 => 0,             -- hardware thread id (hartid) (32-bit)
     INT_BOOTLOADER_EN            => false,         -- boot configuration: true = boot explicit bootloader; false = boot from int/ext (I)MEM
     -- On-Chip Debugger (OCD) --

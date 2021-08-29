@@ -1,6 +1,4 @@
-OSFLOW := ../osflow
-EXAMPLES := ../examples
-TEMPLATES := ../../rtl/templates
+TEMPLATES := ../../rtl/processor_templates
 MV := mv
 
 .DEFAULT_GOAL := help
@@ -17,14 +15,14 @@ UPduino_REV ?= v3
 
 run:
 	$(eval TASK ?= clean $(BITSTREAM))
-	$(MAKE) -C $(OSFLOW) -f common.mk \
-	  BOARD_SRC=$(EXAMPLES)/neorv32_$(BOARD)_BoardTop_$(DESIGN).vhd \
+	$(MAKE) -f common.mk \
+	  BOARD_SRC=./board_tops/neorv32_$(BOARD)_BoardTop_$(DESIGN).vhd \
 	  TOP=neorv32_$(BOARD)_BoardTop_$(DESIGN) \
 	  ID=$(DESIGN) \
 	  $(TASK)
 	IMPL="$${BITSTREAM%%.*}"; for item in ".bit" ".svf"; do \
-	  if [ -f "$(OSFLOW)/$$IMPL$$item" ]; then \
-	    $(MV) "$(OSFLOW)/$$IMPL$$item" ./; \
+	  if [ -f "./$$IMPL$$item" ]; then \
+	    $(MV) "./$$IMPL$$item" ./; \
 	  fi \
 	done
 
@@ -62,26 +60,26 @@ OrangeCrab:
 Minimal:
 	$(MAKE) \
 	  DESIGN=$@ \
-	  DESIGN_SRC=$(TEMPLATES)/processor/neorv32_ProcessorTop_Minimal*.vhd \
+	  DESIGN_SRC=$(TEMPLATES)/neorv32_ProcessorTop_Minimal*.vhd \
 	  $(BOARD)
 
 MinimalBoot:
 	$(MAKE) \
 	  DESIGN=$@ \
-	  DESIGN_SRC=$(TEMPLATES)/processor/neorv32_ProcessorTop_MinimalBoot.vhd \
+	  DESIGN_SRC=$(TEMPLATES)/neorv32_ProcessorTop_MinimalBoot.vhd \
 	  $(BOARD)
 
 UP5KDemo:
 	$(MAKE) \
 	  DESIGN=$@ \
-	  DESIGN_SRC=$(TEMPLATES)/processor/neorv32_ProcessorTop_UP5KDemo.vhd \
+	  DESIGN_SRC=$(TEMPLATES)/neorv32_ProcessorTop_UP5KDemo.vhd \
 	  $(BOARD)
 
 MixedLanguage:
 	$(MAKE) \
 	  DESIGN=$@ \
-	  DESIGN_SRC=$(TEMPLATES)/processor/neorv32_ProcessorTop_Minimal*.vhd \
-	  NEORV32_VERILOG_SRC='devices/ice40/sb_ice40_components.v ../examples/neorv32_Fomu_MixedLanguage_ClkGen.v' \
+	  DESIGN_SRC=$(TEMPLATES)/neorv32_ProcessorTop_Minimal*.vhd \
+	  NEORV32_VERILOG_SRC='devices/ice40/sb_ice40_components.v board_tops/neorv32_Fomu_MixedLanguage_ClkGen.v' \
 	  $(BOARD)
 
 # Help
