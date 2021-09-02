@@ -48,7 +48,7 @@ header "Starting RISC-V architecture tests"
 ./work/sim/ghdl.setup.sh
 
 # work in progress FIXME
-#printf "\n\e[1;33mWARNING! 'rv32e' tests are work in progress! \e[0m\n\n"
+printf "\n\e[1;33mWARNING! 'rv32e/*' tests are work in progress! \e[0m\n\n"
 
 makeArgs="-C ../sw/isa-test/riscv-arch-test NEORV32_ROOT=$(pwd)/.. XLEN=32 RISCV_TARGET=neorv32"
 makeTargets='clean build run verify'
@@ -62,6 +62,10 @@ for suite in $SUITES; do
     M) make --silent $makeArgs SIM_TIME=800us RISCV_DEVICE=M $makeTargets;;
     privilege) make --silent $makeArgs SIM_TIME=200us RISCV_DEVICE=privilege $makeTargets;;
     Zifencei) make --silent $makeArgs SIM_TIME=200us RISCV_DEVICE=Zifencei RISCV_TARGET_FLAGS=-DNEORV32_NO_DATA_INIT $makeTargets;;
+
+    rv32e_C) make --silent $makeArgs SIM_TIME=200us RISCV_DEVICE=../rv32e_unratified/C $makeTargets;;
+    rv32e_E) make --silent $makeArgs SIM_TIME=200us RISCV_DEVICE=../rv32e_unratified/E $makeTargets;;
+    rv32e_M) make --silent $makeArgs SIM_TIME=200us RISCV_DEVICE=../rv32e_unratified/M $makeTargets;;
   esac
 done
 
