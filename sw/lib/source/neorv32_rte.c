@@ -277,7 +277,7 @@ void neorv32_rte_print_hw_config(void) {
 
   // Processor - general stuff
   neorv32_uart0_printf("\n=== << General >> ===\n"
-                       "Clock speed:   %u Hz\n");
+                       "Clock speed:   %u Hz\n", SYSINFO_CLK);
   neorv32_uart0_printf("Full HW reset: "); __neorv32_rte_print_true_false(SYSINFO_FEATURES & (1 << SYSINFO_FEATURES_HW_RESET));
   neorv32_uart0_printf("Boot Config.:  Boot ");
   if (SYSINFO_FEATURES & (1 << SYSINFO_FEATURES_BOOTLOADER)) {
@@ -339,6 +339,9 @@ void neorv32_rte_print_hw_config(void) {
   }
   if (tmp & (1<<SYSINFO_CPU_ZMMUL)) {
     neorv32_uart0_printf("Zmmul ");
+  }
+  if (tmp & (1<<SYSINFO_CPU_ZBB)) {
+    neorv32_uart0_printf("Zbb ");
   }
 
   if (tmp & (1<<SYSINFO_CPU_ZFINX)) {

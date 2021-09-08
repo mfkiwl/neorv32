@@ -257,7 +257,7 @@ begin
 
     -- Wait a bit more if some extra unexpected data is produced. If so,
     -- uart_rx will fail
-    wait for (20 * 1e9 / baud0_rate_c) * ns;
+    wait for (20 * (1e9 / baud0_rate_c)) * ns;
 
     test_runner_cleanup(runner);
   end process;
@@ -288,6 +288,7 @@ begin
     CPU_EXTENSION_RISCV_E        => false,         -- implement embedded RF extension?
     CPU_EXTENSION_RISCV_M        => true,          -- implement muld/div extension?
     CPU_EXTENSION_RISCV_U        => true,          -- implement user mode extension?
+    CPU_EXTENSION_RISCV_Zbb      => true,          -- implement basic bit-manipulation sub-extension?
     CPU_EXTENSION_RISCV_Zfinx    => true,          -- implement 32-bit floating-point extension (using INT reg!)
     CPU_EXTENSION_RISCV_Zicsr    => true,          -- implement CSR system?
     CPU_EXTENSION_RISCV_Zifencei => true,          -- implement instruction stream sync.?
