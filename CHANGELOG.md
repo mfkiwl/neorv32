@@ -25,6 +25,10 @@ defined by the `hw_version_c` constant in the main VHDL package file [`rtl/core/
 
 | Date (*dd.mm.yyyy*) | Version | Comment |
 |:----------:|:-------:|:--------|
+| 11.09.2021 | [**:rocket:1.6.0**](https://github.com/stnolting/neorv32/releases/tag/v1.6.0) | **New release** |
+| 11.09.2021 | 1.5.9.9 | removed `mstatus.SD` flag (is always 0 for `Zfinx` extension as the current state is already defined entirely by the `x` register file); tied `mstatus.fs` as it must not affect trapping of `Zfinx` instructions (according to RISC-V specs.) |
+| 09.09.2021 | 1.5.9.8 | added flags to `SYSINFO` module to determine configuration of `FAST_MUL_EN` and `FAST_SHIFT_EN` generics by software |
+| 09.09.2021 | 1.5.9.7 | `FAST_SHIFT_EN` option will now also implement full-parallel computation logic (like barel shifters) for _all_ `Zbb` shift-related instructions (population count, count leading/trailing zeros, circular shifts) |
 | 08.09.2021 | 1.5.9.6 | :sparkles: added support for RISC-V `Zbb` CPU extension (**basic bit-manipulation operations**), enabled via new top generic `CPU_EXTENSION_RISCV_Zbb`; added example software project providing a `Zbb` "intrinsic" library |
 | 08.09.2021 | 1.5.9.5 | :bug: fixed missing `flash_sdi_i` in Radiant-related example setups and processor wrappers |
 | 19.08.2021 | 1.5.9.4 | :warning: removed custom `mzext` CPU CSR, moved all information flags to new `SYSINFO_CPU` register in the system information memory module (`SYSINFO`) |

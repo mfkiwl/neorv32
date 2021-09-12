@@ -64,7 +64,7 @@ package neorv32_package is
   -- Architecture Constants (do not modify!) ------------------------------------------------
   -- -------------------------------------------------------------------------------------------
   constant data_width_c : natural := 32; -- native data path width - do not change!
-  constant hw_version_c : std_ulogic_vector(31 downto 0) := x"01050906"; -- no touchy!
+  constant hw_version_c : std_ulogic_vector(31 downto 0) := x"01060000"; -- no touchy!
   constant archid_c     : natural := 19; -- official NEORV32 architecture ID - hands off!
 
   -- External Interface Types ---------------------------------------------------------------
@@ -102,6 +102,8 @@ package neorv32_package is
   function bswap32_f(input : std_ulogic_vector) return std_ulogic_vector;
   function char_to_lower_f(ch : character) return character;
   function str_equal_f(str0 : string; str1 : string) return boolean;
+  function popcount_f(input : std_ulogic_vector) return natural;
+  function leading_zeros_f(input : std_ulogic_vector) return natural;
   impure function mem32_init_f(init : mem32_t; depth : natural) return mem32_t;
 
   -- Internal (auto-generated) Configurations -----------------------------------------------
@@ -189,7 +191,7 @@ package neorv32_package is
   constant pwm_duty13_addr_c    : std_ulogic_vector(data_width_c-1 downto 0) := x"fffffeb8";
   constant pwm_duty14_addr_c    : std_ulogic_vector(data_width_c-1 downto 0) := x"fffffebc";
 
-  -- Stream link interface (SLINK) --
+  -- Stream Link Interface (SLINK) --
   constant slink_base_c         : std_ulogic_vector(data_width_c-1 downto 0) := x"fffffec0"; -- base address
   constant slink_size_c         : natural := 16*4; -- module's address space size in bytes
 
@@ -724,7 +726,6 @@ package neorv32_package is
   constant csr_cycle_c          : std_ulogic_vector(11 downto 0) := x"c00";
   constant csr_time_c           : std_ulogic_vector(11 downto 0) := x"c01";
   constant csr_instret_c        : std_ulogic_vector(11 downto 0) := x"c02";
-  --
   constant csr_cycleh_c         : std_ulogic_vector(11 downto 0) := x"c80";
   constant csr_timeh_c          : std_ulogic_vector(11 downto 0) := x"c81";
   constant csr_instreth_c       : std_ulogic_vector(11 downto 0) := x"c82";
@@ -737,9 +738,9 @@ package neorv32_package is
 
   -- Co-Processor IDs -----------------------------------------------------------------------
   -- -------------------------------------------------------------------------------------------
-  constant cp_sel_shifter_c  : std_ulogic_vector(1 downto 0) := "00"; -- shift operation
-  constant cp_sel_muldiv_c   : std_ulogic_vector(1 downto 0) := "01"; -- multiplication/division operations ('M' extension)
-  constant cp_sel_bitmanip_c : std_ulogic_vector(1 downto 0) := "10"; -- bit manipulation ('B' extension)
+  constant cp_sel_shifter_c  : std_ulogic_vector(1 downto 0) := "00"; -- shift operations (base ISA)
+  constant cp_sel_muldiv_c   : std_ulogic_vector(1 downto 0) := "01"; -- multiplication/division operations ('M' extensions)
+  constant cp_sel_bitmanip_c : std_ulogic_vector(1 downto 0) := "10"; -- bit manipulation ('B' extensions)
   constant cp_sel_fpu_c      : std_ulogic_vector(1 downto 0) := "11"; -- floating-point unit ('Zfinx' extension)
 
   -- ALU Function Codes ---------------------------------------------------------------------
@@ -1284,6 +1285,9 @@ package neorv32_package is
   -- Component: CPU Co-Processor Bit-Manipulation Unit ('B' extension) ----------------------
   -- -------------------------------------------------------------------------------------------
   component neorv32_cpu_cp_bitmanip is
+    generic (
+      FAST_SHIFT_EN : boolean -- use barrel shifter for shift operations
+    );
     port (
       -- global control --
       clk_i   : in  std_ulogic; -- global clock, rising edge
@@ -1902,6 +1906,8 @@ package neorv32_package is
       CPU_EXTENSION_RISCV_Zmmul    : boolean; -- implement multiply-only M sub-extension?
       CPU_EXTENSION_RISCV_DEBUG    : boolean; -- implement CPU debug mode?
       -- Extension Options --
+      FAST_MUL_EN                  : boolean; -- use DSPs for M extension's multiplier
+      FAST_SHIFT_EN                : boolean; -- use barrel shifter for shift operations
       CPU_CNT_WIDTH                : natural; -- total width of CPU cycle and instret counters (0..64)
       -- Physical memory protection (PMP) --
       PMP_NUM_REGIONS              : natural; -- number of regions (0..64)
@@ -2312,6 +2318,36 @@ package body neorv32_package is
       end if;
     end if;
   end function str_equal_f;
+
+  -- Function: Population count (number of set bits) ----------------------------------------
+  -- -------------------------------------------------------------------------------------------
+  function popcount_f(input : std_ulogic_vector) return natural is
+    variable cnt_v : natural range 0 to input'length;
+  begin
+    cnt_v := 0;
+    for i in input'length-1 downto 0 loop
+      if (input(i) = '1') then
+        cnt_v := cnt_v + 1;
+      end if;
+    end loop; -- i
+    return cnt_v;
+  end function popcount_f;
+
+  -- Function: Count leading zeros ----------------------------------------------------------
+  -- -------------------------------------------------------------------------------------------
+  function leading_zeros_f(input : std_ulogic_vector) return natural is
+    variable cnt_v : natural range 0 to input'length;
+  begin
+    cnt_v := 0;
+    for i in input'length-1 downto 0 loop
+      if (input(i) = '0') then
+        cnt_v := cnt_v + 1;
+      else
+        exit;
+      end if;
+    end loop; -- i
+    return cnt_v;
+  end function leading_zeros_f;
 
   -- Function: Initialize mem32_t array from another mem32_t array --------------------------
   -- -------------------------------------------------------------------------------------------

@@ -280,10 +280,7 @@ enum NEORV32_CSR_MSTATUS_enum {
   CSR_MSTATUS_MPIE  =  7, /**< CPU mstatus CSR  (7): MPIE - Machine previous interrupt enable bit (r/w) */
   CSR_MSTATUS_MPP_L = 11, /**< CPU mstatus CSR (11): MPP_L - Machine previous privilege mode bit low (r/w) */
   CSR_MSTATUS_MPP_H = 12, /**< CPU mstatus CSR (12): MPP_H - Machine previous privilege mode bit high (r/w) */
-  CSR_MSTATUS_FS_L  = 13, /**< CPU mstatus CSR (13): FS_L - FPU state bit low (r/w) */
-  CSR_MSTATUS_FS_H  = 14, /**< CPU mstatus CSR (14): FS_H - FPU state bit high (r/w) */
   CSR_MSTATUS_TW    = 21, /**< CPU mstatus CSR (21): TW - timeout wait (trigger illegal instruction exception if WFI is executed outside of m-mode when set) (r/w) */
-  CSR_MSTATUS_SD    = 31  /**< CPU mstatus CSR (31): SD - extension's state summary (set = non-clean) (r/-) */
 };
 
 
@@ -1132,7 +1129,10 @@ enum NEORV32_SYSINFO_CPU_enum {
   SYSINFO_CPU_ZXNOCNT   =  7, /**< SYSINFO_CPU (7): Custom extension - NO CPU counters: "cycle" & "instret" CSRs are NOT available at all when set (r/-) */
   SYSINFO_CPU_PMP       =  8, /**< SYSINFO_CPU (8): PMP (physical memory protection) extension available when set (r/-) */
   SYSINFO_CPU_HPM       =  9, /**< SYSINFO_CPU (9): HPM (hardware performance monitors) extension available when set (r/-) */
-  SYSINFO_CPU_DEBUGMODE = 10  /**< SYSINFO_CPU (10): RISC-V CPU debug mode available when set (r/-) */
+  SYSINFO_CPU_DEBUGMODE = 10, /**< SYSINFO_CPU (10): RISC-V CPU debug mode available when set (r/-) */
+
+  SYSINFO_CPU_FASTMUL   = 30, /**< SYSINFO_CPU (30): fast multiplications (via FAST_MUL_EN generic) available when set (r/-) */
+  SYSINFO_CPU_FASTSHIFT = 31  /**< SYSINFO_CPU (31): fast shifts (via FAST_SHIFT_EN generic) available when set (r/-) */
 };
 
 /**********************************************************************//**

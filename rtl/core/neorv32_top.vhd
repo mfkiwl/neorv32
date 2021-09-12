@@ -5,7 +5,10 @@
 -- # and define all the configuration generics according to your needs or use one of the           #
 -- # pre-defined template wrappers.                                                                #
 -- #                                                                                               #
--- # Check out the processor's documentation for more information.                                 #
+-- # Check out the processor's online documentation for more information:                          #
+-- #  HQ:         https://github.com/stnolting/neorv32                                             #
+-- #  Data Sheet: https://stnolting.github.io/neorv32                                              #
+-- #  User Guide: https://stnolting.github.io/neorv32/ug                                           #
 -- # ********************************************************************************************* #
 -- # BSD 3-Clause License                                                                          #
 -- #                                                                                               #
@@ -535,10 +538,10 @@ begin
   msw_irq_ff   <= msw_irq_i   when rising_edge(clk_i);
   mext_irq_ff  <= mext_irq_i  when rising_edge(clk_i);
   -- rising-edge detector --
-  x_nm_irq    <= nm_irq_i    and (not nm_irq_ff);
-  x_mtime_irq <= mtime_irq_i and (not mtime_irq_ff);
-  x_msw_irq   <= msw_irq_i   and (not msw_irq_ff);
-  x_mext_irq  <= mext_irq_i  and (not mext_irq_ff);
+  x_nm_irq     <= nm_irq_i    and (not nm_irq_ff);
+  x_mtime_irq  <= mtime_irq_i and (not mtime_irq_ff);
+  x_msw_irq    <= msw_irq_i   and (not msw_irq_ff);
+  x_mext_irq   <= mext_irq_i  and (not mext_irq_ff);
 
   -- fast interrupts --
   fast_irq(00) <= wdt_irq;       -- HIGHEST PRIORITY - watchdog timeout
@@ -1369,6 +1372,8 @@ begin
     CPU_EXTENSION_RISCV_Zmmul    => CPU_EXTENSION_RISCV_Zmmul,    -- implement multiply-only M sub-extension?
     CPU_EXTENSION_RISCV_DEBUG    => ON_CHIP_DEBUGGER_EN,          -- implement CPU debug mode?
     -- Extension Options --
+    FAST_MUL_EN                  => FAST_MUL_EN,          -- use DSPs for M extension's multiplier
+    FAST_SHIFT_EN                => FAST_SHIFT_EN,        -- use barrel shifter for shift operations
     CPU_CNT_WIDTH                => CPU_CNT_WIDTH,        -- total width of CPU cycle and instret counters (0..64)
     -- Physical memory protection (PMP) --
     PMP_NUM_REGIONS              => PMP_NUM_REGIONS,      -- number of regions (0..64)

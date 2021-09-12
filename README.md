@@ -50,7 +50,8 @@ at [GitHub-pages](https://stnolting.github.io/neorv32/sw/files.html).
 To see the changes between *official* releases visit the project's [release page](https://github.com/stnolting/neorv32/releases).
 
 :package: The [`setups`](https://github.com/stnolting/neorv32/tree/master/setups) folder provides exemplary setups targeting
-various FPGA boards and toolchains to get you started.
+various FPGA boards and toolchains to get you started. Several example programs to be run on your setup can be found in
+[`sw/example`](https://github.com/stnolting/neorv32/tree/master/sw/example).
 
 :spiral_notepad: Check out the [project boards](https://github.com/stnolting/neorv32/projects) for a list of current **ideas**,
 **TODOs**, features being **planned** and **work-in-progress**.
@@ -193,7 +194,11 @@ documentation section). Note that the `X` extension is always enabled.
 [[`Zifencei`](https://stnolting.github.io/neorv32/#_zifencei_instruction_stream_synchronization)]
 [[`Zmmul`](https://stnolting.github.io/neorv32/#_zmmul_integer_multiplication)]
 [[`PMP`](https://stnolting.github.io/neorv32/#_pmp_physical_memory_protection)]
-[[`HPM`](https://stnolting.github.io/neorv32/#_hpm_hardware_performance_monitors)]**
+[[`HPM`](https://stnolting.github.io/neorv32/#_hpm_hardware_performance_monitors)]
+[[`DEBUG`](https://stnolting.github.io/neorv32/#_cpu_debug_mode)]**
+
+:warning: The `Zbb`, `Zfinx` and `Zmmul` RISC-V extensions are frozen but not officially ratified yet. Hence, there is no
+upstream gcc support. To circumvence this, the NEORV32 software framework provides _intrinsic_ libraries for these extensions.
 
 [[back to top](#The-NEORV32-RISC-V-Processor)]
 
@@ -212,7 +217,7 @@ Results generated for hardware version [`1.5.7.10`](https://github.com/stnolting
 | `rv32i_Zicsr`                                     | 1729 |  813 |        1024 |            0 | 124 MHz |
 | `rv32imac_Zicsr`                                  | 2511 | 1074 |        1024 |            0 | 124 MHz |
 
-:information_source: An incrmental list of CPU exntension's hardware utilization can found in
+:information_source: An incremental list of CPU exntension's hardware utilization can found in
 [online documentation - _"FPGA Implementation Results - CPU"_](https://stnolting.github.io/neorv32/#_cpu).
 
 :information_source: The CPU provides options to further reduce the footprint (for example by constraining
@@ -299,7 +304,7 @@ This overview provides some *quick links* to the most important sections of the
   * [SoC Modules](https://stnolting.github.io/neorv32/#_processor_internal_modules) - available IO/peripheral modules and memories
   * [On-Chip Debugger](https://stnolting.github.io/neorv32/#_on_chip_debugger_ocd) - online & in-system debugging of the processor via JTAG
 
-* [NEORV32 CPU](https://stnolting.github.io/neorv32/#_neorv32_central_processing_unit_cpu) - the RISC-V core
+* [NEORV32 CPU](https://stnolting.github.io/neorv32/#_neorv32_central_processing_unit_cpu) - the CPU
   * [RISC-V compatibility](https://stnolting.github.io/neorv32/#_risc_v_compatibility) - what is compatible to the specs. and what is not
   * [ISA and Extensions](https://stnolting.github.io/neorv32/#_instruction_sets_and_extensions) - available RISC-V ISA extensions
   * [CSRs](https://stnolting.github.io/neorv32/#_control_and_status_registers_csrs) - control and status registers
@@ -321,6 +326,8 @@ This overview provides some *quick links* to the most important sections of the
 * [Upload via Bootloader](https://stnolting.github.io/neorv32/ug/#_uploading_and_starting_of_a_binary_executable_image_via_uart) - upload and execute executables
 * [Application-Specific Processor Configuration](https://stnolting.github.io/neorv32/ug/#_application_specific_processor_configuration) - tailor the processor to your needs
 * [Debugging via the On-Chip Debugger](https://stnolting.github.io/neorv32/ug/#_debugging_using_the_on_chip_debugger) - step through code *online* and *in-system*
+* [Simulation](https://stnolting.github.io/neorv32/ug/#_simulating_the_processor) - simulate the whole SoC
+  * [Hello World!](https://stnolting.github.io/neorv32/ug/index.html#_hello_world) - run a quick _"hello world"_ simulation
 
 ### :copyright: Legal
 

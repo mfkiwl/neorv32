@@ -203,6 +203,7 @@ neorv32_top.vhd                  - NEORV32 Processor top entity
 │
 ├neorv32_cpu.vhd                 - NEORV32 CPU top entity
 │├neorv32_cpu_alu.vhd            - Arithmetic/logic unit
+││├neorv32_cpu_cp_bitmanip.vhd   - Bit-manipulation co-processor (B ext.)
 ││├neorv32_cpu_cp_fpu.vhd        - Floating-point co-processor (Zfinx ext.)
 ││├neorv32_cpu_cp_muldiv.vhd     - Mul/Div co-processor (M extension)
 ││└neorv32_cpu_cp_shifter.vhd    - Bit-shift co-processor
@@ -275,7 +276,8 @@ No HPM counters and no PMP regions were implemented for generating these results
 [TIP]
 The CPU provides further options to reduce the area footprint (for example by constraining the CPU-internal
 counter sizes) or to increase performance (for example by using a barrel-shifter; at cost of extra hardware).
-See section <<_processor_top_entity_generics>> for more information.
+See section <<_processor_top_entity_generics>> for more information. Also, take a look at the User Guide section
+https://stnolting.github.io/neorv32/ug/#_application_specific_processor_configuration[Application-Specific Processor Configuration].
 
 
 :sectnums:

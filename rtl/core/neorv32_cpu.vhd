@@ -4,16 +4,20 @@
 -- # NEORV32 CPU:                                                                                  #
 -- # * neorv32_cpu.vhd                   - CPU top entity                                          #
 -- #   * neorv32_cpu_alu.vhd             - Arithmetic/logic unit                                   #
+-- #     * neorv32_cpu_cp_bitmanip.vhd   - Bit-manipulation co-processor                           #
+-- #     * neorv32_cpu_cp_fpu.vhd        - Single-precision FPU co-processor                       #
+-- #     * neorv32_cpu_cp_muldiv.vhd     - Integer multiplier/divider co-processor                 #
+-- #     * neorv32_cpu_cp_shifter.vhd    - Base ISA shifter unit                                   #
 -- #   * neorv32_cpu_bus.vhd             - Instruction and data bus interface unit                 #
--- #   * neorv32_cpu_cp_bitmanip.vhd     - Bit-manipulation co-processor ('B')                     #
--- #   * neorv32_cpu_cp_fpu.vhd          - Single-precision FPU co-processor ('Zfinx')             #
--- #   * neorv32_cpu_cp_muldiv.vhd       - Integer multiplier/divider co-processor ('M')           #
--- #   * neorv32_cpu_ctrl.vhd            - CPU control and CSR system                              #
+-- #   * neorv32_cpu_control.vhd         - CPU control and CSR system                              #
 -- #     * neorv32_cpu_decompressor.vhd  - Compressed instructions decoder                         #
 -- #   * neorv32_cpu_regfile.vhd         - Data register file                                      #
 -- # * neorv32_package.vhd               - Main CPU & Processor package file                       #
 -- #                                                                                               #
--- # Check out the processor's data sheet for more information: docs/NEORV32.pdf                   #
+-- # Check out the CPU's online documentation for more information:                                #
+-- #  HQ:         https://github.com/stnolting/neorv32                                             #
+-- #  Data Sheet: https://stnolting.github.io/neorv32                                              #
+-- #  User Guide: https://stnolting.github.io/neorv32/ug                                           #
 -- # ********************************************************************************************* #
 -- # BSD 3-Clause License                                                                          #
 -- #                                                                                               #
@@ -203,7 +207,7 @@ begin
   assert not (cp_timeout_en_c = true) report "NEORV32 CPU CONFIG WARNING! Co-processor timeout counter enabled. This should be used for debugging/simulation only." severity warning;
 
   -- PMP regions check --
-  assert not (PMP_NUM_REGIONS > 64) report "NEORV32 CPU CONFIG ERROR! Number of PMP regions <PMP_NUM_REGIONS> out xf valid range (0..64)." severity error;
+  assert not (PMP_NUM_REGIONS > 64) report "NEORV32 CPU CONFIG ERROR! Number of PMP regions <PMP_NUM_REGIONS> out of valid range (0..64)." severity error;
   -- PMP granularity --
   assert not ((is_power_of_two_f(PMP_MIN_GRANULARITY) = false) and (PMP_NUM_REGIONS > 0)) report "NEORV32 CPU CONFIG ERROR! <PMP_MIN_GRANULARITY> has to be a power of two." severity error;
   assert not ((PMP_MIN_GRANULARITY < 8) and (PMP_NUM_REGIONS > 0)) report "NEORV32 CPU CONFIG ERROR! <PMP_MIN_GRANULARITY> has to be >= 8 bytes." severity error;
@@ -217,16 +221,16 @@ begin
   assert not ((CPU_EXTENSION_RISCV_Zicsr = false) and (HPM_NUM_CNTS > 0)) report "NEORV32 CPU CONFIG ERROR! Hardware performance monitors (HPM) require <CPU_EXTENSION_RISCV_Zicsr> extension to be enabled." severity error;
 
   -- Mul-extension --
-  assert not ((CPU_EXTENSION_RISCV_Zmmul = true) and (CPU_EXTENSION_RISCV_M = true)) report "NEORV32 CPU CONFIG ERROR! <M> and <ZMMUL> extensions cannot co-exist!" severity error;
+  assert not ((CPU_EXTENSION_RISCV_Zmmul = true) and (CPU_EXTENSION_RISCV_M = true)) report "NEORV32 CPU CONFIG ERROR! <M> and <Zmmul> extensions cannot co-exist!" severity error;
 
   -- Debug mode --
   assert not ((CPU_EXTENSION_RISCV_DEBUG = true) and (CPU_EXTENSION_RISCV_Zicsr = false)) report "NEORV32 CPU CONFIG ERROR! Debug mode requires <CPU_EXTENSION_RISCV_Zicsr> extension to be enabled." severity error;
 
   -- fast multiplication option --
-  assert not (FAST_MUL_EN = true) report "NEORV32 CPU CONFIG NOTE: <FAST_MUL_EN> set. Trying to use DSP blocks for std. multiplications." severity note;
+  assert not (FAST_MUL_EN = true) report "NEORV32 CPU CONFIG NOTE: <FAST_MUL_EN> set. Trying to use DSP blocks for base ISA multiplications." severity note;
 
   -- fast shift option --
-  assert not (FAST_SHIFT_EN = true) report "NEORV32 CPU CONFIG NOTE: <FAST_SHIFT_EN> set. Implementing barrel shifters." severity note;
+  assert not (FAST_SHIFT_EN = true) report "NEORV32 CPU CONFIG NOTE: <FAST_SHIFT_EN> set. Implementing full-parallel logic / barrel shifters." severity note;
 
 
   -- Control Unit ---------------------------------------------------------------------------
