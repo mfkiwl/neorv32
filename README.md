@@ -12,7 +12,7 @@
 
 [![license](https://img.shields.io/github/license/stnolting/neorv32?longCache=true&style=flat-square)](https://github.com/stnolting/neorv32/blob/master/LICENSE)
 [![release](https://img.shields.io/github/v/release/stnolting/neorv32?longCache=true&style=flat-square&logo=GitHub)](https://github.com/stnolting/neorv32/releases)
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.5121427.svg)](https://doi.org/10.5281/zenodo.5121427)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.5018888.svg)](https://doi.org/10.5281/zenodo.5018888)
 
 [![datasheet (pdf)](https://img.shields.io/badge/data%20sheet-PDF-ffbd00?longCache=true&style=flat-square&logo=asciidoctor)](https://github.com/stnolting/neorv32/releases/tag/nightly)
 [![datasheet (html)](https://img.shields.io/badge/-HTML-ffbd00?longCache=true&style=flat-square)](https://stnolting.github.io/neorv32)
@@ -20,19 +20,20 @@
 [![userguide (html)](https://img.shields.io/badge/-HTML-ffbd00?longCache=true&style=flat-square)](https://stnolting.github.io/neorv32/ug)
 [![doxygen](https://img.shields.io/badge/doxygen-HTML-ffbd00?longCache=true&style=flat-square&logo=Doxygen)](https://stnolting.github.io/neorv32/sw/files.html)
 
-* [Overview](#Overview)
-* [Processor/SoC Features](#NEORV32-Processor-Features)
-  * [FPGA Implementation Results](#FPGA-Implementation-Results---Processor)
-* [CPU Features](#NEORV32-CPU-Features)
-  * [Available ISA Extensions](#Available-ISA-Extensions)
-  * [FPGA Implementation Results](#FPGA-Implementation-Results---CPU)
-  * [Performance](#Performance)
-* [Software Framework & Tooling](#Software-Framework-and-Tooling)
-* [**Getting Started**](#Getting-Started) :rocket:
+1. [Overview](#1-Overview)
+   1. [Key Features](#Project-Key-Features)
+2. [Processor/SoC Features](#2-NEORV32-Processor-Features)
+   1. [FPGA Implementation Results](#FPGA-Implementation-Results---Processor)
+3. [CPU Features](#3-NEORV32-CPU-Features)
+   1. [Available ISA Extensions](#Available-ISA-Extensions)
+   2. [FPGA Implementation Results](#FPGA-Implementation-Results---CPU)
+   3. [Performance](#Performance)
+4. [Software Framework & Tooling](#4-Software-Framework-and-Tooling)
+5. [**Getting Started**](#5-Getting-Started) :rocket:
 
 
 
-## Overview
+## 1. Overview
 
 ![neorv32 Overview](https://raw.githubusercontent.com/stnolting/neorv32/master/docs/figures/neorv32_processor.png)
 
@@ -68,19 +69,19 @@ setting up your NEORV32 setup!
 
 ### Project Key Features
 
-* [CPU](#NEORV32-CPU-Features) plus [Processor/SoC](#NEORV32-Processor-Features) plus [Software Framework & Tooling](#Software-Framework-and-Tooling)
-* completely described in behavioral, platform-independent VHDL - no primitives, macros, etc.
-* fully synchronous design, no latches, no gated clocks
-* be as small as possible (while being as RISC-V-compliant as possible) – but with a reasonable size-performance trade-off
+- [x] all-in-one: [CPU](#NEORV32-CPU-Features) plus [Processor/SoC](#NEORV32-Processor-Features) plus [Software Framework & Tooling](#Software-Framework-and-Tooling)
+- [x] completely described in behavioral, platform-independent VHDL - no primitives, macros, etc.
+- [x] fully synchronous design, no latches, no gated clocks
+- [x] be as small as possible (while being as RISC-V-compliant as possible) – but with a reasonable size-performance trade-off
 (the processor has to fit in a Lattice iCE40 UltraPlus 5k low-power FPGA running at 22+ MHz)
-* from zero to `printf("hello world!");` - completely open source and documented
-* easy to use even for FPGA/RISC-V starters – intended to work *out of the box*
+- [x] from zero to `printf("hello world!");` - completely open source and documented
+- [x] easy to use even for FPGA/RISC-V starters – intended to work *out of the box*
 
 [[back to top](#The-NEORV32-RISC-V-Processor)]
 
 
 
-## NEORV32 Processor Features
+## 2. NEORV32 Processor Features
 
 The NEORV32 Processor (top entity: [`rtl/core/neorv32_top.vhd`](https://github.com/stnolting/neorv32/blob/master/rtl/core/neorv32_top.vhd))
 provides a full-featured SoC build around the NEORV32 CPU. It is highly configurable via generics
@@ -116,7 +117,7 @@ cache ([iCACHE](https://stnolting.github.io/neorv32/#_processor_internal_instruc
 * 32-bit external bus interface, Wishbone b4 compatible
 ([WISHBONE](https://stnolting.github.io/neorv32/#_processor_external_memory_interface_wishbone_axi4_lite))
   * [wrapper](https://github.com/stnolting/neorv32/blob/master/rtl/system_integration/neorv32_SystemTop_axi4lite.vhd) for AXI4-Lite master interface
-* 32-bit stram link interface with up to 8 independent RX and TX links
+* 32-bit stream link interface with up to 8 independent RX and TX links
 ([SLINK](https://stnolting.github.io/neorv32/#_stream_link_interface_slink))
   * AXI4-Stream compatible
 * external interrupt controller with up to 32 channels
@@ -141,38 +142,38 @@ the default bootloader and software framework. From this base you can start buil
 
 ### FPGA Implementation Results - Processor
 
-The hardware resources used by a specifc processor setup is defined by the implemented CPU extensions
+The hardware resources used by a specific processor setup is defined by the implemented CPU extensions
 ([see below](#FPGA-Implementation-Results---CPU)), the configuration of the peripheral modules and some "glue logic".
 Section [_"FPGA Implementation Results - Processor Modules"_](https://stnolting.github.io/neorv32/#_processor_modules)
-of the online datasheet shows the ressource utilization of each optional processor module to allow an
+of the online datasheet shows the resource utilization of each optional processor module to allow an
 estimation of the actual setup's hardware requirements.
 
 :information_source: The [`setups`](https://github.com/stnolting/neorv32/tree/master/setups) folder provides exemplary FPGA
-setups targeting various FPGA boards and toolchains. These setups also provide ressource utilization reports for different
+setups targeting various FPGA boards and toolchains. These setups also provide resource utilization reports for different
 SoC configurations
 
 [[back to top](#The-NEORV32-RISC-V-Processor)]
 
 
 
-## NEORV32 CPU Features
+## 3. NEORV32 CPU Features
 
 :books: In-depth detailed information regarding the CPU can be found in the
 [online documentation - _"NEORV32 Central Processing Unit"_](https://stnolting.github.io/neorv32/#_neorv32_central_processing_unit_cpu).
 
 The CPU (top entity: [`rtl/core/neorv32_cpu.vhd`](https://github.com/stnolting/neorv32/blob/master/rtl/core/neorv32_cpu.vhd))
-implements the RISC-V 32-bit `rv32` ISA with optional extensions (see below). It is compatible to a subset of the
+implements the RISC-V 32-bit `rv32` ISA with optional extensions (see below). It is compatible to subsets of the
 *Unprivileged ISA Specification* [(Version 2.2)](https://github.com/stnolting/neorv32/blob/master/docs/references/riscv-spec.pdf)
-and a subset of the *Privileged Architecture Specification* [(Version 1.12-draft)](https://github.com/stnolting/neorv32/blob/master/docs/references/riscv-privileged.pdf).
-Compatiility is checked by passing the [official RISC-V architecture tests](https://github.com/riscv/riscv-arch-test)
+and the *Privileged Architecture Specification* [(Version 1.12-draft)](https://github.com/stnolting/neorv32/blob/master/docs/references/riscv-privileged.pdf).
+Compatibility is checked by passing the [official RISC-V architecture tests](https://github.com/riscv/riscv-arch-test)
 (see [`sim/README`](sim/README.md)).
 
-The core implements a little-endian von-Neumann architecture using two pipeline stages. Each stage uses a multi-cycle processing
-scheme. The CPU supports three privilege levels (`machine` and optional `user` and `debug_mode`), three standard RISC-V machine
-interrupts (`MTI`, `MEI`, `MSI`), a single non-maskable interrupt plus 16 _fast interrupt requests_ as custom extensions.
+The core implements a little-endian Von-Neumann architecture using two pipeline stages, where each stage can operate in a multi-cycle processing
+scheme. The CPU supports three privilege levels (`machine` and optional `user` and `debug_mode`), the three standard RISC-V machine
+interrupts (`MTI`, `MEI`, `MSI`) plus 16 _fast interrupt requests_ as custom extensions.
 It also supports **all** standard RISC-V exceptions (instruction/load/store misaligned address & bus access fault, illegal
-instruction, breakpoint, environment call)
-(see :books: [_"Full Virtualization"_](https://stnolting.github.io/neorv32/#_full_virtualization)).
+instruction, breakpoint, environment calls). See :books: [_"Full Virtualization"_](https://stnolting.github.io/neorv32/#_full_virtualization)
+for more information.
 
 
 ### Available ISA Extensions
@@ -198,7 +199,7 @@ documentation section). Note that the `X` extension is always enabled.
 [[`DEBUG`](https://stnolting.github.io/neorv32/#_cpu_debug_mode)]**
 
 :warning: The `Zbb`, `Zfinx` and `Zmmul` RISC-V extensions are frozen but not officially ratified yet. Hence, there is no
-upstream gcc support. To circumvence this, the NEORV32 software framework provides _intrinsic_ libraries for these extensions.
+upstream gcc support. To circumvent this, the NEORV32 software framework provides _intrinsic_ libraries for these extensions.
 
 [[back to top](#The-NEORV32-RISC-V-Processor)]
 
@@ -217,7 +218,7 @@ Results generated for hardware version [`1.5.7.10`](https://github.com/stnolting
 | `rv32i_Zicsr`                                     | 1729 |  813 |        1024 |            0 | 124 MHz |
 | `rv32imac_Zicsr`                                  | 2511 | 1074 |        1024 |            0 | 124 MHz |
 
-:information_source: An incremental list of CPU exntension's hardware utilization can found in
+:information_source: An incremental list of CPU extension's hardware utilization can found in
 [online documentation - _"FPGA Implementation Results - CPU"_](https://stnolting.github.io/neorv32/#_cpu).
 
 :information_source: The CPU provides options to further reduce the footprint (for example by constraining
@@ -228,7 +229,7 @@ the CPU-internal counters). See the [online data](https://stnolting.github.io/ne
 
 ### Performance
 
-The NEORV32 CPU is based on a two-stages pipelined architecutre. Since both stage use a multi-cycle processing scheme,
+The NEORV32 CPU is based on a two-stages pipelined architecture. Since both stage use a multi-cycle processing scheme,
 each instruction requires several clock cycles to execute (2 cycles for ALU operations, up to 40 cycles for divisions).
 The average CPI (cycles per instruction) depends on the instruction mix of a specific applications and also on the
 available CPU extensions.
@@ -263,7 +264,7 @@ Results generated for hardware version [`1.5.7.10`](https://github.com/stnolting
 
 
 
-## Software Framework and Tooling
+## 4. Software Framework and Tooling
 
 :books: In-depth detailed information regarding the software framework can be found in the
 [online documentation - _"Software Framework"_](https://stnolting.github.io/neorv32/#_software_framework).
@@ -287,7 +288,7 @@ developed and debugged with open source tooling
 
 
 
-## Getting Started
+## 5. Getting Started
 
 This overview provides some *quick links* to the most important sections of the
 [online Data Sheet](https://stnolting.github.io/neorv32) and the
@@ -325,6 +326,7 @@ This overview provides some *quick links* to the most important sections of the
 * [Application Compilation](https://stnolting.github.io/neorv32/ug/#_application_program_compilation) - compile an application using `make`
 * [Upload via Bootloader](https://stnolting.github.io/neorv32/ug/#_uploading_and_starting_of_a_binary_executable_image_via_uart) - upload and execute executables
 * [Application-Specific Processor Configuration](https://stnolting.github.io/neorv32/ug/#_application_specific_processor_configuration) - tailor the processor to your needs
+* [Adding Custom Hardware Modules](https://stnolting.github.io/neorv32/ug/#_adding_custom_hardware_modules) - add _your_ custom hardware
 * [Debugging via the On-Chip Debugger](https://stnolting.github.io/neorv32/ug/#_debugging_using_the_on_chip_debugger) - step through code *online* and *in-system*
 * [Simulation](https://stnolting.github.io/neorv32/ug/#_simulating_the_processor) - simulate the whole SoC
   * [Hello World!](https://stnolting.github.io/neorv32/ug/index.html#_hello_world) - run a quick _"hello world"_ simulation
@@ -349,4 +351,4 @@ Continous integration provided by [:octocat: GitHub Actions](https://github.com/
 
 --------
 
-Made with :coffee: in Hannover, Germany :eu:
+Made with :coffee: in Hanover, Germany :eu:

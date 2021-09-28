@@ -99,23 +99,22 @@ since all control signals have defined level.
 4+^| **Two-Wire Interface Controller (<<_two_wire_serial_interface_controller_twi,TWI>>)**
 | `twi_sda_io` | 1 | inout | TWI serial data line
 | `twi_scl_io` | 1 | inout | TWI serial clock line
+4+^| **Pulse-Width Modulation Channels (<<_pulse_width_modulation_controller_pwm,PWM>>)**
+| `pwm_o` | 0..60 | out | pulse-width modulated channels
 4+^| **Custom Functions Subsystem (<<_custom_functions_subsystem_cfs,CFS>>)**
 | `cfs_in_i`  | 32 | in | custom CFS input signal conduit
 | `cfs_out_o` | 32 | out | custom CFS output signal conduit
-4+^| **Pulse-Width Modulation Channels (<<_pulse_width_modulation_controller_pwm,PWM>>)**
-| `pwm_o` | 4 | out | pulse-width modulated channels
 4+^| **Smart LED Interface - NeoPixel(TM) compatible (<<_smart_led_interface_neoled,NEOLED>>)**
 | `neoled_o` | 1 | out | asynchronous serial data output
 4+^| **System time (<<_machine_system_timer_mtime,MTIME>>)**
 | `mtime_i` | 64 | in  | machine timer time (to `time[h]` CSRs) from _external MTIME_ unit if the processor-internal _MTIME_ unit is NOT implemented
 | `mtime_o` | 64 | out | machine timer time from _internal MTIME_ unit if processor-internal _MTIME_ unit IS implemented
-4+^| **<<_processor_interrupts, External Interrupts>>**
+4+^| **External Interrupts (<<_processor_interrupts, XIRQ>>)**
 | `xirq_i` | 32 | in | external interrupt requests (up to 32 channels)
-4+^| **<<_processor_interrupts, CPU Interrupts>>**
-| `nm_irq_i`    | 1 | in | non-maskable interrupt, rising-edge-triggered
-| `mtime_irq_i` | 1 | in | machine timer interrupt13 (RISC-V), rising-edge-triggered
-| `msw_irq_i`   | 1 | in | machine software interrupt (RISC-V), rising-edge-triggered
-| `mext_irq_i`  | 1 | in | machine external interrupt (RISC-V), rising-edge-triggered
+4+^| **RISC-V Machine-Level <<_processor_interrupts, CPU Interrupts>>**
+| `mtime_irq_i` | 1 | in | machine timer interrupt13 (RISC-V), high-active
+| `msw_irq_i`   | 1 | in | machine software interrupt (RISC-V), high-active
+| `mext_irq_i`  | 1 | in | machine external interrupt (RISC-V), high-active
 |=======================
 
 
@@ -137,7 +136,7 @@ https://stnolting.github.io/neorv32/ug/#_application_specific_processor_configur
 
 [TIP]
 Privileged software can determine the actual CPU and processor configuration via the `misa` and the 
-i_SYSINFO_CPU_ <<_system_configuration_information_memory_sysinfo, SYSINFO>> register.
+<<_system_configuration_information_memory_sysinfo, SYSINFO>> registers.
 
 [NOTE]
 If optional modules (like CPU extensions or peripheral devices) are *not enabled* the according circuitry
@@ -397,7 +396,7 @@ shift-related operations of the <<_zbb_basic_bit_manipulation_operations>> exten
 [frame="all",grid="none"]
 |======
 | **CPU_CNT_WIDTH** | _natural_ | 64
-3+| This generic configures the total size of the CPU's `cycle` and `instret` CSRs (low word + high word).
+3+| This generic configures the total size of the CPU's `[m]cycle` and `[m]instret` CSRs (low word + high word).
 The maximum value is 64, the minimum value is 0. See section <<_machine_counters_and_timers>> for more information.
 Note: configurations with <<_cpu_cnt_width>> less than 64 bits do not comply to the RISC-V specs.
 |======
@@ -432,7 +431,7 @@ See section <<_pmp_physical_memory_protection>> for more information.
 | **PMP_NUM_REGIONS** | _natural_ | 0
 3+| Total number of implemented protections regions (0..64). If this generics is zero no physical memory
 protection logic will be implemented at all. Setting <<_pmp_num_regions>>_ > 0 will set the _SYSINFO_CPU_PMP_ flag
-in the _SYSINFO_CPU_ <<_system_configuration_information_memory_sysinfo, SYSINFO>> register.
+in the `CPU` <<_system_configuration_information_memory_sysinfo, SYSINFO>> register.
 |======
 
 
@@ -463,7 +462,7 @@ See section <<_hpm_hardware_performance_monitors>> for more information.
 | **HPM_NUM_CNTS** | _natural_ | 0
 3+| Total number of implemented hardware performance monitor counters (0..29). If this generics is zero, no
 hardware performance monitor logic will be implemented at all. Setting <<_hpm_num_cnts>> > 0 will set the _SYSINFO_CPU_HPM_ flag
-in the _SYSINFO_CPU_ <<_system_configuration_information_memory_sysinfo, SYSINFO>> register.
+in the `CPU` <<_system_configuration_information_memory_sysinfo, SYSINFO>> register.
 |======
 
 
@@ -963,26 +962,10 @@ specifications. However, bare-metal system can also repurpose these interrupts. 
 | `mext_irq_i`  | 1 | Machine external interrupt. This interrupt is used for any processor-external interrupt source (like a platform interrupt controller).
 |=======================
 
+.Trigger type
 [IMPORTANT]
-These IRQs trigger on a **rising-edge**.
-
-
-:sectnums:
-==== Non-Maskable Interrupt
-
-[cols="<3,^2,<11"]
-[options="header",grid="rows"]
-|=======================
-| Top signal | Width | Description
-| `nm_irq_i` | 1 | Non-maskable interrupt.
-|=======================
-
-The processor features a single non-maskable interrupt source via the `nm_irq_i` top
-entity signal that can be used to signal _critical system conditions_. This interrupt source _cannot_ be masked/disabled.
-See CPU section <<_traps_exceptions_and_interrupts>> for more information.
-
-[IMPORTANT]
-This IRQ triggers on a **rising-edge**.
+These IRQs trigger on **high-level** and must _stay asserted_ until explicitly acknowledged by the CPU (for example
+by writing to a specific memory-mapped register).
 
 
 :sectnums:
@@ -999,9 +982,11 @@ The processor provides an optional interrupt controller for up to 32 user-define
 (see section <<_external_interrupt_controller_xirq>>). These external IRQs are mapped to a _single_ CPU
 fast interrupt request so a software handler is required to differentiate / prioritize these interrupts.
 
-[NOTE]
+.Trigger type
+[IMPORTANT]
 The trigger for these interrupt can be defined via generics. See section
-<<_external_interrupt_controller_xirq>> for more information.
+<<_external_interrupt_controller_xirq>> for more information. Depending on the trigger type, users can
+implement custom acknowledge mechanisms.
 
 
 :sectnums:
@@ -1033,6 +1018,11 @@ the according FIRQ priority; 0 = highest, 15 = lowest):
 | 11      | <<_stream_link_interface_slink,SLINK>> | TX data send
 | 12:15   | - | _reserved_, will never fire
 |=======================
+
+.Trigger type
+[IMPORTANT]
+The fast interrupt request channel trigger on a single **rising-edge** and do not require any kind of explicit
+acknowledgment at all.
 
 
 
@@ -1313,6 +1303,11 @@ accessed using a memory-mapped scheme. A special linker script as well as the NE
 library abstract the specific memory layout for the user.
 
 [IMPORTANT]
+The base address of each component/module has to be aligned to the
+total size of the module's occupied address space! The occupied address space
+has to be a power of two (minimum 4 bytes)! Address spaces must not overlap!
+
+[IMPORTANT]
 When accessing an IO device that hast not been implemented (via the according _IO_x_EN_ generic), a
 load/store access fault exception is triggered.
 
@@ -1332,14 +1327,31 @@ Most of the IO devices do not have a hardware reset. Instead, the devices are re
 writing zero to the unit's control register. A general software-based reset of all devices is done by the
 application start-up code `crt0.S`.
 
+**Interrupts of Processor-Internal Modules**
+
+Most peripheral/IO devices provide some kind of interrupt (for example to signal available incoming data). These
+interrupts are entirely mapped to the CPU's <<_custom_fast_interrupt_request_lines>>. Note that all these
+interrupt lines are triggered by a "one-shot" signal (hich for exactly one cycle) and _do not_ require any
+explicit acknowledgment.
+
 **Nomenclature for the Peripheral / IO Devices Listing**
 
 Each peripheral device chapter features a register map showing accessible control and data registers of the
-according device including the implemented control and status bits. You can directly interact with these
-registers/bits via the provided _C-code defines_. These defines are set in the main processor core library
-include file `sw/lib/include/neorv32.h`. The registers and/or register bits, which can be accessed
-directly using plain C-code, are marked with a "[C]".
+according device including the implemented control and status bits. C-language code can directly interact with these
+registers via pre-defined `struct`. Each IO/peripheral module provides a unique `struct`. All accessible
+interface registers of this module are defined as members of this `struct`. The pre-defined `struct` are defined int the
+main processor core library include file `sw/lib/include/neorv32.h`.
 
+The naming scheme of these low-level hardware access structs is `NEORV32_<module_name>.<register_name>`.
+
+.Low-level hardware access example in C using the pre-defined `struct`
+[source,c]
+----
+// Read from SYSINFO "CLK" register
+uint32_t temp = NEORV32_SYSINFO.CLK;
+----
+
+The registers and/or register bits, which can be accessed directly using plain C-code, are marked with a "[C]".
 Not all registers or register bits can be arbitrarily read/written. The following read/write access types are
 available:
 

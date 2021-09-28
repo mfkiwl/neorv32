@@ -68,6 +68,9 @@ CSRs with the following notes ...
 | 0x001   | <<_fflags>>     | _CSR_FFLAGS_     | r/w | Floating-point accrued exceptions | 
 | 0x002   | <<_frm>>        | _CSR_FRM_        | r/w | Floating-point dynamic rounding mode | 
 | 0x003   | <<_fcsr>>       | _CSR_FCSR_       | r/w | Floating-point control and status (`frm` + `fflags`) | 
+6+^| **<<_machine_configuration>>**
+| 0x30a   | <<_menvcfg>>    | _CSR_MENVCFG_    | r/- | Machine environment configuration register - low word | `R`
+| 0x31a   | <<_menvcfgh>>   | _CSR_MENVCFGH_   | r/- | Machine environment configuration register - low word | `R`
 6+^| **<<_machine_trap_setup>>**
 | 0x300   | <<_mstatus>>    | _CSR_MSTATUS_    | r/w | Machine status register - low word | `C`
 | 0x301   | <<_misa>>       | _CSR_MISA_       | r/- | Machine CPU ISA and extensions | `R`
@@ -79,14 +82,14 @@ CSRs with the following notes ...
 | 0x340   | <<_mscratch>>   | _CSR_MSCRATCH_   | r/w | Machine scratch register | 
 | 0x341   | <<_mepc>>       | _CSR_MEPC_       | r/w | Machine exception program counter | 
 | 0x342   | <<_mcause>>     | _CSR_MCAUSE_     | r/w | Machine trap cause | `X`
-| 0x343   | <<_mtval>>      | _CSR_MTVAL_      | r/- | Machine bad address or instruction | `R`
+| 0x343   | <<_mtval>>      | _CSR_MTVAL_      | r/- | Machine bad address or instruction | `XR`
 | 0x344   | <<_mip>>        | _CSR_MIP_        | r/- | Machine interrupt pending register | `XR`
 6+^| **<<_machine_physical_memory_protection>>**
 | 0x3a0 .. 0x3af | <<_pmpcfg, `pmpcfg0`>> .. <<_pmpcfg, `pmpcfg15`>>     | _CSR_PMPCFG0_ .. _CSR_PMPCFG15_   | r/w | Physical memory protection config. for region 0..63 | `C`
 | 0x3b0 .. 0x3ef | <<_pmpaddr, `pmpaddr0`>> .. <<_pmpaddr, `pmpaddr63`>> | _CSR_PMPADDR0_ .. _CSR_PMPADDR63_ | r/w | Physical memory protection addr. register region 0..63 | 
 6+^| **<<_machine_counters_and_timers>>**
 | 0xb00   | <<_mcycleh, `mcycle`>>      | _CSR_MCYCLE_     | r/w | Machine cycle counter low word | 
-| 0xb02   | <<_minstreth, `minstret`>> | _CSR_MINSTRET_   | r/w | Machine instruction-retired counter low word | 
+| 0xb02   | <<_minstreth, `minstret`>> | _CSR_MINSTRET_    | r/w | Machine instruction-retired counter low word | 
 | 0xb80   | <<_mcycleh>>                | _CSR_MCYCLE_     | r/w | Machine cycle counter high word | 
 | 0xb82   | <<_minstreth>>              | _CSR_MINSTRET_   | r/w | Machine instruction-retired counter high word |
 | 0xc00   | <<_cycleh, `cycle`>>        | _CSR_CYCLE_      | r/- | Cycle counter low word | 
@@ -165,6 +168,37 @@ RISC-V ISA spec for more information.
 <<<
 // ####################################################################################################################
 :sectnums:
+==== Machine Configuration
+
+:sectnums!:
+===== **`menvcfg`**
+
+[cols="4,27,>7"]
+[frame="topbot",grid="none"]
+|======
+| 0x30a | **Machine environment configuration register** | `menvcfg`
+3+| Reset value: _0x00000000_
+3+| The features of this CSR are not implemented yet. The register is read-only. NOTE: This register
+only exists if the `U` ISA extensions is enabled.
+|======
+
+
+:sectnums!:
+===== **`menvcfgh`**
+
+[cols="4,27,>7"]
+[frame="topbot",grid="none"]
+|======
+| 0x31a | **Machine environment configuration register - high word** | `menvcfgh`
+3+| Reset value: _0x00000000_
+3+| The features of this CSR are not implemented yet. The register is read-only. NOTE: This register
+only exists if the `U` ISA extensions is enabled.
+|======
+
+
+<<<
+// ####################################################################################################################
+:sectnums:
 ==== Machine Trap Setup
 
 :sectnums!:
@@ -184,7 +218,6 @@ The following bits are implemented (all remaining bits are always zero and are r
 [options="header",grid="rows"]
 |=======================
 | Bit   | Name [C] | R/W | Function
-| 31    | _CSR_MSTATUS_SD_ | r/- | Read-only bit that is set if the FS field is not all-zero (state _OFF_)
 | 21    | _CSR_MSTATUS_TW_ | r/w | Timeout wait: raise illegal instruction exception if `WFI` instruction is executed outside of M-mode when set
 | 12:11 | _CSR_MSTATUS_MPP_H_ : _CSR_MSTATUS_MPP_L_ | r/w | Previous machine privilege level, 11 = machine (M) level, 00 = user (U) level
 | 7     | _CSR_MSTATUS_MPIE_ | r/w | Previous machine global interrupt enable flag state
@@ -210,7 +243,7 @@ CPU extensions. The following bits are implemented (all remaining bits are alway
 [IMPORTANT]
 The `misa` CSR is not fully RISC-V-compatible as it is read-only. Hence, implemented CPU
 extensions cannot be switch on/off during runtime. For compatibility reasons any write access to this
-CSR is simply ignored and will NOT cause an illegal instruction exception.
+CSR is simply ignored and will _NOT_ cause an illegal instruction exception.
 
 .Machine ISA and extension register
 [cols="^1,<3,^1,<5"]
@@ -229,7 +262,7 @@ CSR is simply ignored and will NOT cause an illegal instruction exception.
 
 [TIP]
 Information regarding the implemented RISC-V `Z*` _sub-extensions_ (like `Zicsr` or `Zfinx`) can be found
-in the _SYSINFO_CPU_ <<_system_configuration_information_memory_sysinfo, SYSINFO>> register.
+in the `CPU` <<_system_configuration_information_memory_sysinfo, SYSINFO>> register.
 
 
 :sectnums!:
@@ -268,7 +301,7 @@ globally enabled via the `CSR_MSTATUS_MIE` flag of the `mstatus` CSR. The follow
 3+| Reset value: _UNDEFINED_
 3+| The `mtvec` CSR is compatible to the RISC-V specifications. It stores the base address for ALL machine
 traps. Thus, it defines the main entry point for exception/interrupt handling regardless of the actual trap
-source. The lowest two bits of this register are always zero and cannot be modified (= fixed address mode).
+source. The lowest two bits of this register are always zero and cannot be modified (= address mode only).
 |======
 
 .Machine trap-handler base address
@@ -292,8 +325,7 @@ source. The lowest two bits of this register are always zero and cannot be modif
 3+| The `mcounteren` CSR is compatible to the RISC-V specifications. The bits of this CSR define which
 counter/timer CSR can be accessed (read) from code running in a less-privileged modes. For example,
 if user-level code tries to read from a counter/timer CSR without enabled access, an illegal instruction
-exception is raised. If user mode in not implemented (_CPU_EXTENSION_RISCV_U_ = _false_) all bits of the
-`mcounteren` CSR are tied to zero.
+exception is raised. NOTE: If the `U` ISA extension is not enabled this CSR does not exist.
 |======
 
 .Machine counter enable register
@@ -301,7 +333,7 @@ exception is raised. If user mode in not implemented (_CPU_EXTENSION_RISCV_U_ = 
 [options="header",grid="rows"]
 |=======================
 | Bit   | Name [C] | R/W | Function
-| 31:16 | `0`                 | r/- | Always zero: user-level code is **not** allowed to read HPM counters
+| 31:3  | `0`                 | r/- | Always zero: user-level code is **not** allowed to read HPM counters
 | 2     | _CSR_MCOUNTEREN_IR_ | r/w | User-level code is allowed to read `cycle[h]` CSRs when set
 | 1     | _CSR_MCOUNTEREN_TM_ | r/w | User-level code is allowed to read `time[h]` CSRs when set
 | 0     | _CSR_MCOUNTEREN_CY_ | r/w | User-level code is allowed to read `instret[h]` CSRs when set
@@ -404,7 +436,7 @@ instructions). For interrupts the CSR is set to zero.
 |=======================
 
 [IMPORTAN]
-The NEORV32 `mtval` CSR is read-only. A write access will raise an illegal instruction exception.
+The NEORV32 `mtval` CSR is read-only. However, a write access will _NOT_ raise an illegal instruction exception.
 
 :sectnums!:
 ===== **`mip`**
@@ -415,8 +447,8 @@ The NEORV32 `mtval` CSR is read-only. A write access will raise an illegal instr
 | 0x344 | **Machine interrupt Pending** | `mip`
 3+| Reset value: _0x00000000_
 3+| The `mip` CSR is _partly_ compatible to the RISC-V specifications and also provides custom extensions. It shows currently pending interrupts. Since this register is
-read-only, pending interrupt can only be cleared by disabling and re-enabling the according `mie` CSr bit. Writing to this CSR will
-raise an illegal instruction exception. The following CSR bits are implemented (all remaining bits are always zero and are read-only).
+read-only, pending interrupts of processor-internal modules can only be cleared by disabling and re-enabling the according `mie` CSR bit.
+The following CSR bits are implemented (all remaining bits are always zero and are read-only).
 |======
 
 .Machine interrupt pending register
@@ -429,6 +461,9 @@ raise an illegal instruction exception. The following CSR bits are implemented (
 | 7     | _CSR_MIP_MTIP_ | r/- | machine _timer_ interrupt pending
 | 3     | _CSR_MIP_MSIP_ | r/- | machine _software_ interrupt pending
 |=======================
+
+[IMPORTAN]
+The NEORV32 `mip` CSR is read-only. However, a write access will _NOT_ raise an illegal instruction exception.
 
 
 <<<
@@ -499,25 +534,27 @@ before modifying `pmpaddr*`.
 :sectnums:
 ==== (Machine) Counters and Timers
 
-[IMPORTANT]
+[NOTE]
 The <<_cpu_cnt_width>> generic defines the total size of the CPU's <<_cycleh>> and <<_instreth>>
 / <<_mcycleh>> and <<_minstreth>>
-counter CSRs (low and high words combined); the time CSRs are not affected by this generic. Any
+counter CSRs (low and high words combined); the time CSRs are not affected by this generic. Note that any
 configuration with <<_cpu_cnt_width>> less than 64 is not RISC-V compliant.
 
+.Effective CPU counter width (`[m]cycle` & `[m]instret`)
 [IMPORTANT]
 If _CPU_CNT_WIDTH_ is less than 64 (the default value) and greater than or equal 32, the according
 MSBs of `[m]cycleh` and `[m]instreth` are read-only and always read as zero. This configuration
-will also set the _SYSINFO_CPU_ZXSCNT_ flag in the _SYSINFO_CPU_ <<_system_configuration_information_memory_sysinfo, SYSINFO>> register. +
+will also set the _SYSINFO_CPU_ZXSCNT_ flag ("small counters") in the `CPU`
+<<_system_configuration_information_memory_sysinfo, SYSINFO>> register. +
  +
-If _CPU_CNT_WIDTH_ is less than 32 and greater than 0, the `[m]cycleh` and `[m]instreth` do not
-exist and any access will raise an illegal instruction exception. Furthermore, the according MSBs of
-`[m]cycle` and `[m]instret` are read-only and always read as zero. This configuration will also
-set the _SYSINFO_CPU_ZXSCNT_ flag in the _SYSINFO_CPU_ <<_system_configuration_information_memory_sysinfo, SYSINFO>> register. +
+If _CPU_CNT_WIDTH_ is less than 32 and greater than 0, the `[m]cycleh` and `[m]instreth` CSRs are hardwired to zero
+and any write access to them is ignored. Furthermore, the according MSBs of `[m]cycle` and `[m]instret` are read-only
+and always read as zero. This configuration will also set the _SYSINFO_CPU_ZXSCNT_ flag ("small counters") in
+the `CPU` <<_system_configuration_information_memory_sysinfo, SYSINFO>> register. +
  +
-If _CPU_CNT_WIDTH_ is 0, <<_cycleh>> and <<_instreth>> / <<_mcycleh>> and <<_minstreth>> do not
-exist and any access will raise an illegal instruction exception. This configuration will also set the
-_SYSINFO_CPU_ZXNOCNT_ flag in the _SYSINFO_CPU_ <<_system_configuration_information_memory_sysinfo, SYSINFO>> register.
+If _CPU_CNT_WIDTH_ is 0, the <<_cycleh>> and <<_instreth>> / <<_mcycleh>> and <<_minstreth>> CSRs are hardwired to zero
+and any write access to them is ignored. This configuration will also set the _SYSINFO_CPU_ZXNOCNT_ flag ("no counters") in the
+`CPU` <<_system_configuration_information_memory_sysinfo, SYSINFO>> register.
 
 
 :sectnums!:
