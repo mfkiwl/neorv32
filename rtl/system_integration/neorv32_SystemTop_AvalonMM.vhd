@@ -54,13 +54,15 @@ entity neorv32_top_avalonmm is
 
     -- RISC-V CPU Extensions --
     CPU_EXTENSION_RISCV_A        : boolean := false;  -- implement atomic extension?
+    CPU_EXTENSION_RISCV_B        : boolean := false;  -- implement bit-manipulation extension?
     CPU_EXTENSION_RISCV_C        : boolean := false;  -- implement compressed extension?
     CPU_EXTENSION_RISCV_E        : boolean := false;  -- implement embedded RF extension?
     CPU_EXTENSION_RISCV_M        : boolean := false;  -- implement mul/div extension?
     CPU_EXTENSION_RISCV_U        : boolean := false;  -- implement user mode extension?
-    CPU_EXTENSION_RISCV_Zbb      : boolean := false;  -- implement basic bit-manipulation sub-extension?
     CPU_EXTENSION_RISCV_Zfinx    : boolean := false;  -- implement 32-bit floating-point extension (using INT regs!)
     CPU_EXTENSION_RISCV_Zicsr    : boolean := true;   -- implement CSR system?
+    CPU_EXTENSION_RISCV_Zicntr   : boolean := true;   -- implement base counters?
+    CPU_EXTENSION_RISCV_Zihpm    : boolean := false;  -- implement hardware performance monitors?
     CPU_EXTENSION_RISCV_Zifencei : boolean := false;  -- implement instruction stream sync.?
     CPU_EXTENSION_RISCV_Zmmul    : boolean := false;  -- implement multiply-only M sub-extension?
 
@@ -107,7 +109,11 @@ entity neorv32_top_avalonmm is
     IO_GPIO_EN                   : boolean := false;  -- implement general purpose input/output port unit (GPIO)?
     IO_MTIME_EN                  : boolean := false;  -- implement machine system timer (MTIME)?
     IO_UART0_EN                  : boolean := false;  -- implement primary universal asynchronous receiver/transmitter (UART0)?
+    IO_UART0_RX_FIFO             : natural := 1;      -- RX fifo depth, has to be a power of two, min 1
+    IO_UART0_TX_FIFO             : natural := 1;      -- TX fifo depth, has to be a power of two, min 1
     IO_UART1_EN                  : boolean := false;  -- implement secondary universal asynchronous receiver/transmitter (UART1)?
+    IO_UART1_RX_FIFO             : natural := 1;      -- RX fifo depth, has to be a power of two, min 1
+    IO_UART1_TX_FIFO             : natural := 1;      -- TX fifo depth, has to be a power of two, min 1
     IO_SPI_EN                    : boolean := false;  -- implement serial peripheral interface (SPI)?
     IO_TWI_EN                    : boolean := false;  -- implement two-wire interface (TWI)?
     IO_PWM_NUM_CH                : natural := 0;      -- number of PWM channels to implement (0..60); 0 = disabled
@@ -118,7 +124,8 @@ entity neorv32_top_avalonmm is
     IO_CFS_IN_SIZE               : positive := 32;    -- size of CFS input conduit in bits
     IO_CFS_OUT_SIZE              : positive := 32;    -- size of CFS output conduit in bits
     IO_NEOLED_EN                 : boolean := false;  -- implement NeoPixel-compatible smart LED interface (NEOLED)?
-    IO_NEOLED_TX_FIFO            : natural := 1       -- NEOLED TX FIFO depth, 1..32k, has to be a power of two
+    IO_NEOLED_TX_FIFO            : natural := 1;      -- NEOLED TX FIFO depth, 1..32k, has to be a power of two
+    IO_GPTMR_EN                  : boolean := false   -- implement general purpose timer (GPTMR)?
   );
   port (
     -- Global control --
@@ -207,18 +214,18 @@ end neorv32_top_avalonmm;
 
 architecture neorv32_top_avalonmm_rtl of neorv32_top_avalonmm is
 
--- Wishbone bus interface (available if MEM_EXT_EN = true) --
-signal  wb_tag_o       : std_ulogic_vector(02 downto 0); -- request tag
-signal  wb_adr_o       : std_ulogic_vector(31 downto 0); -- address
-signal  wb_dat_i       : std_ulogic_vector(31 downto 0) := (others => 'U'); -- read data
-signal  wb_dat_o       : std_ulogic_vector(31 downto 0); -- write data
-signal  wb_we_o        : std_ulogic; -- read/write
-signal  wb_sel_o       : std_ulogic_vector(03 downto 0); -- byte enable
-signal  wb_stb_o       : std_ulogic; -- strobe
-signal  wb_cyc_o       : std_ulogic; -- valid cycle
-signal  wb_lock_o      : std_ulogic; -- exclusive access request
-signal  wb_ack_i       : std_ulogic := 'L'; -- transfer acknowledge
-signal  wb_err_i       : std_ulogic := 'L'; -- transfer error
+  -- Wishbone bus interface (available if MEM_EXT_EN = true) --
+  signal wb_tag_o  : std_ulogic_vector(02 downto 0); -- request tag
+  signal wb_adr_o  : std_ulogic_vector(31 downto 0); -- address
+  signal wb_dat_i  : std_ulogic_vector(31 downto 0) := (others => 'U'); -- read data
+  signal wb_dat_o  : std_ulogic_vector(31 downto 0); -- write data
+  signal wb_we_o   : std_ulogic; -- read/write
+  signal wb_sel_o  : std_ulogic_vector(03 downto 0); -- byte enable
+  signal wb_stb_o  : std_ulogic; -- strobe
+  signal wb_cyc_o  : std_ulogic; -- valid cycle
+  signal wb_lock_o : std_ulogic; -- exclusive access request
+  signal wb_ack_i  : std_ulogic := 'L'; -- transfer acknowledge
+  signal wb_err_i  : std_ulogic := 'L'; -- transfer error
 
 begin
 
@@ -234,13 +241,15 @@ begin
 
     -- RISC-V CPU Extensions --
     CPU_EXTENSION_RISCV_A => CPU_EXTENSION_RISCV_A,
+    CPU_EXTENSION_RISCV_B => CPU_EXTENSION_RISCV_B,
     CPU_EXTENSION_RISCV_C => CPU_EXTENSION_RISCV_C,
     CPU_EXTENSION_RISCV_E => CPU_EXTENSION_RISCV_E,
     CPU_EXTENSION_RISCV_M => CPU_EXTENSION_RISCV_M,
     CPU_EXTENSION_RISCV_U => CPU_EXTENSION_RISCV_U,
-    CPU_EXTENSION_RISCV_Zbb => CPU_EXTENSION_RISCV_Zbb,
     CPU_EXTENSION_RISCV_Zfinx => CPU_EXTENSION_RISCV_Zfinx,
     CPU_EXTENSION_RISCV_Zicsr => CPU_EXTENSION_RISCV_Zicsr,
+    CPU_EXTENSION_RISCV_Zicntr => CPU_EXTENSION_RISCV_Zicntr,
+    CPU_EXTENSION_RISCV_Zihpm => CPU_EXTENSION_RISCV_Zihpm,
     CPU_EXTENSION_RISCV_Zifencei => CPU_EXTENSION_RISCV_Zifencei,
     CPU_EXTENSION_RISCV_Zmmul => CPU_EXTENSION_RISCV_Zmmul,
 
@@ -294,7 +303,11 @@ begin
     IO_GPIO_EN => IO_GPIO_EN,
     IO_MTIME_EN => IO_MTIME_EN,
     IO_UART0_EN => IO_UART0_EN,
+    IO_UART0_RX_FIFO => IO_UART0_RX_FIFO,
+    IO_UART0_TX_FIFO => IO_UART0_TX_FIFO,
     IO_UART1_EN => IO_UART1_EN,
+    IO_UART1_RX_FIFO => IO_UART1_RX_FIFO,
+    IO_UART1_TX_FIFO => IO_UART1_TX_FIFO,
     IO_SPI_EN => IO_SPI_EN,
     IO_TWI_EN => IO_TWI_EN,
     IO_PWM_NUM_CH => IO_PWM_NUM_CH,
@@ -305,7 +318,9 @@ begin
     IO_CFS_IN_SIZE => IO_CFS_IN_SIZE,
     IO_CFS_OUT_SIZE => IO_CFS_OUT_SIZE,
     IO_NEOLED_EN => IO_NEOLED_EN,
-    IO_NEOLED_TX_FIFO => IO_NEOLED_TX_FIFO)
+    IO_NEOLED_TX_FIFO => IO_NEOLED_TX_FIFO,
+    IO_GPTMR_EN => IO_GPTMR_EN
+    )
   port map (
     -- Global control --
     clk_i => clk_i,
@@ -391,9 +406,10 @@ begin
     -- CPU interrupts --
     mtime_irq_i => mtime_irq_i,
     msw_irq_i => msw_irq_i,
-    mext_irq_i => mext_irq_i);
+    mext_irq_i => mext_irq_i
+  );
   
-  -- Wishbone to AvalonMM brdige
+  -- Wishbone to AvalonMM bridge
   read_o <= '1' when (wb_stb_o = '1' and wb_we_o = '0') else '0';
   write_o <= '1' when (wb_stb_o = '1' and wb_we_o = '1') else '0';
   address_o <= std_logic_vector(wb_adr_o);

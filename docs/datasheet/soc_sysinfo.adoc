@@ -17,7 +17,7 @@
 The SYSINFO allows the application software to determine the setting of most of the processor's top entity
 generics that are related to processor/SoC configuration. All registers of this unit are read-only.
 
-This device is always implemented – regardless of the actual hardware configuration. The bootloader as well
+This device is always implemented - regardless of the actual hardware configuration. The bootloader as well
 as the NEORV32 software runtime environment require information from this device (like memory layout
 and default clock speed) for correct operation.
 
@@ -47,7 +47,6 @@ and default clock speed) for correct operation.
 | `0`  | _SYSINFO_CPU_ZICSR_     | `Zicsr` extension (`I` sub-extension) available when set (via top's <<_cpu_extension_riscv_zicsr>> generic)
 | `1`  | _SYSINFO_CPU_ZIFENCEI_  | `Zifencei` extension (`I` sub-extension) available when set (via top's <<_cpu_extension_riscv_zifencei>> generic)
 | `2`  | _SYSINFO_CPU_ZMMUL_     | `Zmmul` extension (`M` sub-extension) available when set (via top's <<_cpu_extension_riscv_zmmul>> generic)
-| `3`  | _SYSINFO_CPU_ZBB_       | `Zbb` extension (`B` sub-extension) available when set (via top's <<_cpu_extension_riscv_zbb>> generic)
 | `5`  | _SYSINFO_CPU_ZFINX_     | `Zfinx` extension (`F` sub-/alternative-extension) available when set (via top's <<_cpu_extension_riscv_zfinx>> generic)
 | `6`  | _SYSINFO_CPU_ZXSCNT_    | Custom extension - _Small_ CPU counters: `[m]cycle` & `[m]instret` CSRs have less than 64-bit when set (via top's <<_cpu_cnt_width>> generic)
 | `7`  | _SYSINFO_CPU_ZXNOCNT_   | Custom extension - _NO_ CPU counters: `[m]cycle` & `[m]instret` CSRs are NOT available at all when set (via top's <<_cpu_cnt_width>> generic)

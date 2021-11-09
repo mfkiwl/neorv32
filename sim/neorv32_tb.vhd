@@ -284,13 +284,15 @@ begin
     ON_CHIP_DEBUGGER_EN          => true,          -- implement on-chip debugger
     -- RISC-V CPU Extensions --
     CPU_EXTENSION_RISCV_A        => true,          -- implement atomic extension?
+    CPU_EXTENSION_RISCV_B        => true,          -- implement bit-manipulation extension?
     CPU_EXTENSION_RISCV_C        => true,          -- implement compressed extension?
     CPU_EXTENSION_RISCV_E        => false,         -- implement embedded RF extension?
     CPU_EXTENSION_RISCV_M        => true,          -- implement muld/div extension?
     CPU_EXTENSION_RISCV_U        => true,          -- implement user mode extension?
-    CPU_EXTENSION_RISCV_Zbb      => true,          -- implement basic bit-manipulation sub-extension?
     CPU_EXTENSION_RISCV_Zfinx    => true,          -- implement 32-bit floating-point extension (using INT reg!)
     CPU_EXTENSION_RISCV_Zicsr    => true,          -- implement CSR system?
+    CPU_EXTENSION_RISCV_Zicntr   => true,          -- implement base counters?
+    CPU_EXTENSION_RISCV_Zihpm    => true,          -- implement hardware performance monitors?
     CPU_EXTENSION_RISCV_Zifencei => true,          -- implement instruction stream sync.?
     -- Extension Options --
     FAST_MUL_EN                  => false,         -- use DSPs for M extension's multiplier
@@ -329,7 +331,11 @@ begin
     IO_GPIO_EN                   => true,          -- implement general purpose input/output port unit (GPIO)?
     IO_MTIME_EN                  => true,          -- implement machine system timer (MTIME)?
     IO_UART0_EN                  => true,          -- implement primary universal asynchronous receiver/transmitter (UART0)?
+    IO_UART0_RX_FIFO             => 32,            -- RX fifo depth, has to be a power of two, min 1
+    IO_UART0_TX_FIFO             => 32,            -- TX fifo depth, has to be a power of two, min 1
     IO_UART1_EN                  => true,          -- implement secondary universal asynchronous receiver/transmitter (UART1)?
+    IO_UART1_RX_FIFO             => 1,             -- RX fifo depth, has to be a power of two, min 1
+    IO_UART1_TX_FIFO             => 1,             -- TX fifo depth, has to be a power of two, min 1
     IO_SPI_EN                    => true,          -- implement serial peripheral interface (SPI)?
     IO_TWI_EN                    => true,          -- implement two-wire interface (TWI)?
     IO_PWM_NUM_CH                => 30,            -- number of PWM channels to implement (0..60); 0 = disabled
@@ -339,7 +345,9 @@ begin
     IO_CFS_CONFIG                => (others => '0'), -- custom CFS configuration generic
     IO_CFS_IN_SIZE               => 32,            -- size of CFS input conduit in bits
     IO_CFS_OUT_SIZE              => 32,            -- size of CFS output conduit in bits
-    IO_NEOLED_EN                 => true           -- implement NeoPixel-compatible smart LED interface (NEOLED)?
+    IO_NEOLED_EN                 => true,          -- implement NeoPixel-compatible smart LED interface (NEOLED)?
+    IO_NEOLED_TX_FIFO            => 8,             -- NEOLED TX FIFO depth, 1..32k, has to be a power of two
+    IO_GPTMR_EN                  => true           -- implement general purpose timer (GPTMR)?
   )
   port map (
     -- Global control --

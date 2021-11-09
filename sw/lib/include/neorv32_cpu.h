@@ -69,13 +69,13 @@ extern int __neorv32_crt0_after_main(int32_t return_code) __attribute__ ((weak))
 
 
 /**********************************************************************//**
- * Store unsigned word to address space.
+ * Store unsigned word to address space if atomic access reservation is still valid.
  *
  * @note An unaligned access address will raise an alignment exception.
  *
  * @param[in] addr Address (32-bit).
  * @param[in] wdata Data word (32-bit) to store.
- * @return Operation status (32-bit).
+ * @return Operation status (32-bit, zero if success).
  **************************************************************************/
 inline uint32_t __attribute__ ((always_inline)) neorv32_cpu_store_conditional(uint32_t addr, uint32_t wdata) {
 
@@ -94,7 +94,7 @@ inline uint32_t __attribute__ ((always_inline)) neorv32_cpu_store_conditional(ui
 
 
 /**********************************************************************//**
- * Conditional store unsigned word to address space if atomic access reservation is valid.
+ * Conditional store unsigned word to address space.
  *
  * @note An unaligned access address will raise an alignment exception.
  *
@@ -254,9 +254,9 @@ inline void __attribute__ ((always_inline)) neorv32_cpu_csr_write(const int csr_
 /**********************************************************************//**
  * Put CPU into "sleep" mode.
  *
- * @note This function executes the WFI insstruction.
+ * @note This function executes the WFI instruction.
  * The WFI (wait for interrupt) instruction will make the CPU stall until
- * an interupt request is detected. Interrupts have to be globally enabled
+ * an interrupt request is detected. Interrupts have to be globally enabled
  * and at least one external source must be enabled (like the MTI machine
  * timer interrupt) to allow the CPU to wake up again. If 'Zicsr' CPU extension is disabled,
  * this will permanently stall the CPU.
