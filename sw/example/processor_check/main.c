@@ -151,6 +151,13 @@ int main() {
   // intro
   PRINT_STANDARD("\n<< PROCESSOR CHECK >>\n");
   PRINT_STANDARD("build: "__DATE__" "__TIME__"\n");
+  PRINT_STANDARD("is simulation: ");
+  if (NEORV32_SYSINFO.SOC & (1 << SYSINFO_SOC_IS_SIM)) {
+    PRINT_STANDARD("yes\n");
+  }
+  else {
+    PRINT_STANDARD("no\n");
+  }
 
 
   // reset performance counter
@@ -1156,8 +1163,8 @@ int main() {
 
     cnt_test++;
 
-    // configure TWI, fastest clock, no peripheral clock stretching
-    neorv32_twi_setup(CLK_PRSC_2, 0);
+    // configure TWI, fastest clock
+    neorv32_twi_setup(CLK_PRSC_2);
 
     // enable TWI FIRQ
     neorv32_cpu_irq_enable(CSR_MIE_FIRQ7E);

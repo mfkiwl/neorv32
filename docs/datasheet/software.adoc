@@ -51,6 +51,9 @@ Just include the main NEORV32 library file in your application's source file(s):
 #include <neorv32.h>
 ----
 
+[TIP]
+A CMSIS-SVD-compatible **System View Description (SVD)** file including all peripherals is available in `sw/svd`.
+
 Together with the makefile, this will automatically include all the processor's header files located in
 `sw/lib/include` into your application. The actual source files of the core libraries are located in
 `sw/lib/source` and are automatically included into the source list of your software project. The following
@@ -65,8 +68,7 @@ files are currently part of the NEORV32 core library:
 | `neorv32_cpu.c`    | `neorv32_cpu.h`        | HW driver functions for the NEORV32 **CPU**
 | `neorv32_gpio.c`   | `neorv32_gpio.h`       | HW driver functions for the **GPIO**
 | `neorv32_gptmr.c`  | `neorv32_gptmr.h`      | HW driver functions for the **GPTRM**
-| -                  | `neorv32_intrinsics.h` | macros for custom intrinsics/instructions
-| -                  | `neorv32_legacy.h`     | legacy back-compatibility layer
+| -                  | `neorv32_intrinsics.h` | macros for (custom) intrinsics/instructions
 | `neorv32_mtime.c`  | `neorv32_mtime.h`      | HW driver functions for the **MTIME**
 | `neorv32_neoled.c` | `neorv32_neoled.h`     | HW driver functions for the **NEOLED**
 | `neorv32_pwm.c`    | `neorv32_pwm.h`        | HW driver functions for the **PWM**
@@ -506,8 +508,8 @@ corresponding operation:
 * `h`: Show the help text (again)
 * `r`: Restart the bootloader and the auto-boot sequence
 * `u`: Upload new program executable (`neorv32_exe.bin`) via UART into the instruction memory
-* `s`: Store executable to SPI flash at `spi_csn_o(0)`
-* `l`: Load executable from SPI flash at `spi_csn_o(0)`
+* `s`: Store executable to SPI flash at `spi_csn_o(0)` (little-endian byte order)
+* `l`: Load executable from SPI flash at `spi_csn_o(0)` (little-endian byte order)
 * `e`: Start the application, which is currently stored in the instruction memory (IMEM)
 
 A new executable can be uploaded via UART by executing the `u` command. After that, the executable can be directly

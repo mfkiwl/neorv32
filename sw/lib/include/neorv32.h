@@ -970,7 +970,7 @@ enum NEORV32_UART_DATA_enum {
   UART_DATA_PERR  = 28, /**< UART receive/transmit data register(18) (r/-): RX parity error detected when set */
   UART_DATA_FERR  = 29, /**< UART receive/transmit data register(29) (r/-): RX frame error (no valid stop bit) detected when set */
   UART_DATA_OVERR = 30, /**< UART receive/transmit data register(30) (r/-): RX data overrun when set */
-  UART_DATA_AVAIL = 31  /**< UART receive/transmit data register(31) (r/-): RX data available when set  */
+  UART_DATA_AVAIL = 31  /**< UART receive/transmit data register(31) (r/-): RX data available when set */
 };
 /**@}*/
 
@@ -1027,17 +1027,16 @@ typedef struct __attribute__((packed,aligned(4))) {
 
 /** TWI control register bits */
 enum NEORV32_TWI_CTRL_enum {
-  TWI_CTRL_EN     =  0, /**< TWI control register(0) (r/w): TWI enable */
-  TWI_CTRL_START  =  1, /**< TWI control register(1) (-/w): Generate START condition, auto-clears */
-  TWI_CTRL_STOP   =  2, /**< TWI control register(2) (-/w): Generate STOP condition, auto-clears */
-  TWI_CTRL_PRSC0  =  3, /**< TWI control register(3) (r/w): Clock prescaler select bit 0 */
-  TWI_CTRL_PRSC1  =  4, /**< TWI control register(4) (r/w): Clock prescaler select bit 1 */
-  TWI_CTRL_PRSC2  =  5, /**< TWI control register(5) (r/w): Clock prescaler select bit 2 */
-  TWI_CTRL_MACK   =  6, /**< TWI control register(6) (r/w): Generate controller ACK for each transmission */
-  TWI_CTRL_CKSTEN =  7, /**< TWI control register(7) (r/w): Enable clock stretching (by peripheral) */
+  TWI_CTRL_EN    =  0, /**< TWI control register(0) (r/w): TWI enable */
+  TWI_CTRL_START =  1, /**< TWI control register(1) (-/w): Generate START condition, auto-clears */
+  TWI_CTRL_STOP  =  2, /**< TWI control register(2) (-/w): Generate STOP condition, auto-clears */
+  TWI_CTRL_PRSC0 =  3, /**< TWI control register(3) (r/w): Clock prescaler select bit 0 */
+  TWI_CTRL_PRSC1 =  4, /**< TWI control register(4) (r/w): Clock prescaler select bit 1 */
+  TWI_CTRL_PRSC2 =  5, /**< TWI control register(5) (r/w): Clock prescaler select bit 2 */
+  TWI_CTRL_MACK  =  6, /**< TWI control register(6) (r/w): Generate ACK by controller for each transmission */
 
-  TWI_CTRL_ACK    = 30, /**< TWI control register(30) (r/-): ACK received when set */
-  TWI_CTRL_BUSY   = 31  /**< TWI control register(31) (r/-): Transfer in progress, busy flag */
+  TWI_CTRL_ACK   = 30, /**< TWI control register(30) (r/-): ACK received when set */
+  TWI_CTRL_BUSY  = 31  /**< TWI control register(31) (r/-): Transfer in progress, busy flag */
 };
 
 /** WTD receive/transmit data register bits */
@@ -1181,7 +1180,7 @@ typedef struct __attribute__((packed,aligned(4))) {
 	const uint32_t CACHE;       /**< offset 12: cache configuration (#NEORV32_SYSINFO_CACHE_enum) */
 	const uint32_t ISPACE_BASE; /**< offset 16: instruction memory address space base */
 	const uint32_t DSPACE_BASE; /**< offset 20: data memory address space base */
-	const uint32_t IMEM_SIZE;   /**< offset 24: internal instruction memory (IMEM) size in bytes  */
+	const uint32_t IMEM_SIZE;   /**< offset 24: internal instruction memory (IMEM) size in bytes */
 	const uint32_t DMEM_SIZE;   /**< offset 28: internal data memory (DMEM) size in bytes */
 } neorv32_sysinfo_t;
 
@@ -1196,7 +1195,7 @@ enum NEORV32_SYSINFO_CPU_enum {
 
   SYSINFO_CPU_ZFINX     =  5, /**< SYSINFO_CPU (5): Zfinx extension (F sub-/alternative-extension) available when set (r/-) */
   SYSINFO_CPU_ZXSCNT    =  6, /**< SYSINFO_CPU (6): Custom extension - Small CPU counters: "cycle" & "instret" CSRs have less than 64-bit when set (r/-) */
-  SYSINFO_CPU_ZICNTR    =  7, /**< SYSINFO_CPU (7): Basie CPU counters available when set (r/-) */
+  SYSINFO_CPU_ZICNTR    =  7, /**< SYSINFO_CPU (7): Basic CPU counters available when set (r/-) */
   SYSINFO_CPU_PMP       =  8, /**< SYSINFO_CPU (8): PMP (physical memory protection) extension available when set (r/-) */
   SYSINFO_CPU_ZIHPM     =  9, /**< SYSINFO_CPU (9): HPM (hardware performance monitors) extension available when set (r/-) */
   SYSINFO_CPU_DEBUGMODE = 10, /**< SYSINFO_CPU (10): RISC-V CPU debug mode available when set (r/-) */
@@ -1214,6 +1213,7 @@ enum NEORV32_SYSINFO_SOC_enum {
   SYSINFO_SOC_MEM_EXT_ENDIAN =  4, /**< SYSINFO_FEATURES  (4) (r/-): External bus interface uses BIG-endian byte-order when 1 (via MEM_EXT_BIG_ENDIAN generic) */
   SYSINFO_SOC_ICACHE         =  5, /**< SYSINFO_FEATURES  (5) (r/-): Processor-internal instruction cache implemented when 1 (via ICACHE_EN generic) */
 
+  SYSINFO_SOC_IS_SIM         = 13, /**< SYSINFO_FEATURES (13) (r/-): Set during simulation (not guaranteed) */
   SYSINFO_SOC_OCD            = 14, /**< SYSINFO_FEATURES (14) (r/-): On-chip debugger implemented when 1 (via ON_CHIP_DEBUGGER_EN generic) */
   SYSINFO_SOC_HW_RESET       = 15, /**< SYSINFO_FEATURES (15) (r/-): Dedicated hardware reset of core registers implemented when 1 (via package's dedicated_reset_c constant) */
 
@@ -1261,9 +1261,6 @@ enum NEORV32_SYSINFO_SOC_enum {
 // ----------------------------------------------------------------------------
 // Include all IO driver headers
 // ----------------------------------------------------------------------------
-// legacy compatibility layer
-#include "neorv32_legacy.h"
-
 // cpu core
 #include "neorv32_cpu.h"
 
